@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     debug_otp: bool = False
 
     minio_endpoint: str
+    minio_public_endpoint: str
     minio_root_user: str
     minio_root_password: str
     minio_bucket: str

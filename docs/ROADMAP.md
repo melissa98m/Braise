@@ -6,8 +6,10 @@ Référence stack : cahier des charges, section D.11.
 
 - [x] **Phase 0 — Environnement.** Docker Compose (Postgres, MinIO, backend FastAPI, Adminer,
   conteneur Flutter en attente), Alembic, smoke tests pytest, README de démarrage.
-- [ ] **Phase 1 — Module 1 Identité & Profils.** Séparation profil public/privé, avatar-sigil
-  généré côté serveur (dégradé déterministe, pas de service externe), complétion de l'auth OTP.
+- [x] **Phase 1 — Module 1 Identité & Profils.** Séparation profil public (`PublicProfile` :
+  display_name, bio, intérêts, avatar-sigil déterministe régénérable) / privé (`PrivateProfile` :
+  jusqu'à 3 photos, stockées chiffrées dans MinIO, URLs signées à courte durée de vie),
+  `GET /auth/me` pour compléter l'auth OTP. Contrôle d'âge (18+) au niveau schéma Pydantic.
 - [ ] **Phase 2 — Module 2 Matching & Découverte.** Scoring de compatibilité (intérêts communs +
   questionnaire court), feed de découverte, floutage progressif piloté par le nombre de flammes.
 - [ ] **Phase 3 — Module 3 Messagerie & Flammes.** Chat WebSocket custom, question quotidienne,

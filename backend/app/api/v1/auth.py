@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.auth import OTPRequest, OTPRequestResponse, OTPVerify, TokenResponse
 from app.services import otp as otp_service
 
@@ -27,3 +29,8 @@ def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Code invalide ou expiré.")
     token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token)
+
+
+@router.get("/me")
+def read_me(user: User = Depends(get_current_user)):
+    return {"id": str(user.id), "phone": user.phone, "is_verified": user.is_verified}

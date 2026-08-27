@@ -65,10 +65,30 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   and must be imported in `app/models/__init__.py` — Alembic's `env.py` only sees models that have
   been imported into `Base.metadata` by the time it runs.
 - `services/` holds the actual business logic per module (e.g. `otp.py` for request/verify OTP,
-  `storage.py` for the MinIO client). Routers stay thin: parse request → call a service → shape
+  `storage.py` for the MinIO client, `profiles.py` for public/private profile CRUD, `avatar.py` for
+  the deterministic avatar-sigil). Routers stay thin: parse request → call a service → shape
   response.
+- `api/deps.py` — `get_current_user` is the one auth dependency every protected route uses (decodes
+  the bearer JWT, loads the `User`). Any new protected endpoint takes
+  `user: User = Depends(get_current_user)`, nothing bespoke per-router.
 - Migrations are in `app/migrations/versions/`, generated with `alembic revision --autogenerate`
   against the live dev Postgres — don't hand-write migration files; let Alembic diff the models.
+- **Profiles** (`models/profile.py`): `PublicProfile` (display_name, bio, interests, `avatar_seed`)
+  and `PrivateProfile` (`photo_keys`, up to 3, in MinIO under `private/{user_id}/...`) are separate
+  tables, one-to-one with `User`, matching the product's public/private split. `PublicProfileOut`
+  only ever exposes computed `age`, never `birth_date` — don't add a raw-birthdate field to any
+  public-facing schema, that's the exact de-anonymization risk the spec (A.6) calls out. The avatar
+  is never a stored image: `services/avatar.py` derives a gradient spec (two hex colors + angle)
+  deterministically from `avatar_seed` via `hashlib.sha256`, so "regenerate" is just a new random
+  seed — actual gradient rendering happens client-side (Phase 6) using `docs/DESIGN_TOKENS.md`.
+- **MinIO has two clients in `services/storage.py`**, both pointed at the same server: `_client`
+  uses `MINIO_ENDPOINT` (`minio:9000`, the Docker service name — for uploads/deletes from the
+  backend container) and `_public_client` uses `MINIO_PUBLIC_ENDPOINT` (`localhost:9000` — the only
+  host a browser or the Flutter app can actually resolve) for `presigned_get_url` only. Both pin
+  `region="us-east-1"` explicitly — without it, minio-py does a network round-trip to look up the
+  bucket region before signing, which fails when this code runs *inside* the backend container and
+  tries to reach `localhost:9000` (that's the container itself, not MinIO). Don't merge these two
+  clients back into one; presigned URLs must stay signed against the externally-reachable host.
 
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):
@@ -85,6 +105,11 @@ that runs `infra/minio/init.sh` to create the `braise-photos` bucket via `mc`), 
 `backend`, `adminer` for DB inspection, and a `mobile` service behind the `mobile` Compose profile
 (not started by default — its `entrypoint.sh` runs `flutter create` on first launch since the
 Flutter SDK is never installed on the host, only inside that container).
+
+**Tests run against the real dev Postgres/MinIO, not a throwaway database** — there's no
+per-test transaction rollback or fixture teardown. Any test that creates a `User` (i.e. touches
+auth) must call `tests.helpers.unique_phone()` rather than a hardcoded number, or it will pass once
+and then fail on every rerun once that phone number already has data attached to it.
 
 **Build order**: the repo is being built phase-by-phase per `docs/ROADMAP.md` (Identité & Profils →
 Matching & Découverte → Messagerie & Flammes → Confiance & Modération → Monétisation/Sécurité →

@@ -1,0 +1,127 @@
+import uuid
+from datetime import date, datetime, timezone
+
+from fastapi import HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
+
+from app.models.profile import PrivateProfile, PublicProfile
+from app.models.user import User
+from app.schemas.profile import PublicProfileIn
+from app.services import storage
+from app.services.avatar import avatar_spec_from_seed, generate_avatar_seed
+
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
+MAX_PHOTOS = 3
+MAX_PHOTO_BYTES = 8 * 1024 * 1024
+
+
+def _compute_age(birth_date: date) -> int:
+    today = date.today()
+    return today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+
+
+def get_or_create_public_profile(db: Session, user: User) -> PublicProfile:
+    profile = db.get(PublicProfile, user.id)
+    if profile is None:
+        profile = PublicProfile(
+            user_id=user.id,
+            display_name="",
+            birth_date=date(2000, 1, 1),
+            bio="",
+            interests=[],
+            avatar_seed=generate_avatar_seed(),
+            is_published=False,
+        )
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+    return profile
+
+
+def upsert_public_profile(db: Session, user: User, data: PublicProfileIn) -> PublicProfile:
+    profile = get_or_create_public_profile(db, user)
+    profile.display_name = data.display_name
+    profile.birth_date = data.birth_date
+    profile.bio = data.bio
+    profile.interests = data.interests
+    profile.is_published = data.is_published
+    profile.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+def regenerate_avatar(db: Session, user: User) -> dict:
+    profile = get_or_create_public_profile(db, user)
+    profile.avatar_seed = generate_avatar_seed()
+    db.commit()
+    db.refresh(profile)
+    return avatar_spec_from_seed(profile.avatar_seed)
+
+
+def to_public_profile_out(profile: PublicProfile) -> dict:
+    return {
+        "display_name": profile.display_name,
+        "age": _compute_age(profile.birth_date),
+        "bio": profile.bio,
+        "interests": profile.interests,
+        "avatar": avatar_spec_from_seed(profile.avatar_seed),
+        "is_published": profile.is_published,
+    }
+
+
+def get_or_create_private_profile(db: Session, user: User) -> PrivateProfile:
+    profile = db.get(PrivateProfile, user.id)
+    if profile is None:
+        profile = PrivateProfile(user_id=user.id, photo_keys=[])
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+    return profile
+
+
+async def add_private_photo(db: Session, user: User, upload: UploadFile) -> PrivateProfile:
+    profile = get_or_create_private_profile(db, user)
+    if len(profile.photo_keys) >= MAX_PHOTOS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Maximum 3 photos dans le profil privé."
+        )
+    if upload.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Format d'image non supporté.")
+
+    data = await upload.read()
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Photo trop volumineuse (8 Mo max).")
+
+    ext = ALLOWED_IMAGE_TYPES[upload.content_type]
+    object_key = f"private/{user.id}/{uuid.uuid4().hex}.{ext}"
+    storage.upload_private_photo(object_key, data, upload.content_type)
+
+    profile.photo_keys = [*profile.photo_keys, object_key]
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+def remove_private_photo(db: Session, user: User, object_key: str) -> PrivateProfile:
+    profile = get_or_create_private_profile(db, user)
+    if object_key not in profile.photo_keys:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo introuvable.")
+
+    storage.delete_object(object_key)
+    profile.photo_keys = [key for key in profile.photo_keys if key != object_key]
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+def to_private_profile_out(profile: PrivateProfile) -> dict:
+    return {
+        "photos": [
+            {"key": key, "url": storage.presigned_get_url(key)} for key in profile.photo_keys
+        ]
+    }
