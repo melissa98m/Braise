@@ -1,0 +1,24 @@
+# Secrets locaux
+.env
+
+# Overrides Claude Code personnels (pas partagés)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Flutter / Dart
+mobile/braise_app/.dart_tool/
+mobile/braise_app/.flutter-plugins
+mobile/braise_app/.flutter-plugins-dependencies
+mobile/braise_app/build/
+mobile/braise_app/.packages
+
+# Éditeurs
+.vscode/
+.idea/
+
