@@ -191,7 +191,46 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 that runs `infra/minio/init.sh` to create the `braise-photos` bucket via `mc`), the FastAPI
 `backend`, `adminer` for DB inspection, and a `mobile` service behind the `mobile` Compose profile
 (not started by default — its `entrypoint.sh` runs `flutter create` on first launch since the
-Flutter SDK is never installed on the host, only inside that container).
+Flutter SDK is never installed on the host, only inside that container). The backend has
+`CORSMiddleware` enabled (`main.py`, origins from `Settings.cors_origin_list` / `CORS_ORIGINS` env
+var, default `http://localhost:5000`) so the Flutter web app can call it cross-origin.
+
+**Mobile** (`mobile/braise_app/`, Flutter web, all commands run in the `mobile` container — the
+Flutter SDK is never installed on the host):
+- Every container-side Flutter command (`flutter create`, `flutter pub get`, `flutter run`, ...)
+  writes files as root, since the `ghcr.io/cirruslabs/flutter:stable` image runs as root. Run
+  `docker compose run --rm --entrypoint bash mobile -c "chown -R 1000:1000 /app/braise_app"`
+  afterwards or the host user can't edit those files.
+- `lib/theme/braise_tokens.dart` (`BraiseTokens.dark`/`.light`, `BraiseSpacing`, `BraiseRadii`) and
+  `lib/theme/braise_theme.dart` (`buildBraiseTheme(Brightness)`) port `docs/DESIGN_TOKENS.md` 1:1 —
+  don't hand-pick colors/spacing in a screen, add a token first if one's missing. Dark is the
+  default (`ThemeMode.dark` in `main.dart`), matching the spec.
+- `lib/api/` is a thin typed wrapper per backend module (`auth_api.dart`, `profiles_api.dart`,
+  etc.) over `api_client.dart`, which injects `Authorization: Bearer <token>` via a `tokenProvider`
+  closure and throws `ApiException` (with `isUnauthorized`/`isForbidden`/`isPaymentRequired`
+  getters) on non-2xx, using FastAPI's `detail` string as the message. `messaging_api.dart` also
+  has `ChatSocket`, which connects to `/messaging/ws/{match_id}?token=...` — the same
+  token-in-query-string pattern as the backend (Phase 3), because a browser can't set an
+  `Authorization` header on a WebSocket handshake.
+- `lib/state/app_services.dart` (`AppServices`) wires every API client plus `AuthController`
+  (`ChangeNotifier`, JWT persisted via `shared_preferences` under `braise_token`) into one
+  `Provider`-injected bundle; the circular dependency (the API client needs a token from the auth
+  controller, which needs an API client) is resolved with a `late final` + closure, not a second
+  bespoke wiring pattern.
+- Screens live under `lib/screens/<module>/`, one subfolder per backend module, and are adapted
+  from the mockups rather than copied verbatim where the backend doesn't match: OTP entry replaces
+  the mockup's KYC/ID-scan step (no KYC exists), discovery is a single-card feed rather than a
+  swipe grid (the spec's "no catalog" principle), the private-photo grid and GDPR export/delete
+  actions were added with no mockup equivalent because otherwise those Phase 1/5 endpoints had no
+  UI at all, and root navigation is 3 tabs (Découvrir/Échanges/Moi) rather than the mockup's 4 —
+  no screen justifies a dedicated "Braises" tab beyond what Échanges/Moi already show.
+- `test/widget_test.dart` exercises the theme system (background tokens per brightness, WCAG
+  contrast ratio on `inkFloor`) rather than pumping the full `BraiseApp`, which would make a real
+  network call via `restoreSession()` with no HTTP-mocking infrastructure in place. It uses
+  `testWidgets`/`pumpAndSettle`, not a bare `test()` — `buildBraiseTheme` calls into `google_fonts`,
+  which resolves fonts asynchronously outside the widget-test zone and fails the test late
+  ("failed after it had already completed") under plain `test()`. `GoogleFonts.config
+  .allowRuntimeFetching = false` keeps tests offline (silent fallback font, never a real fetch).
 
 **Tests run against the real dev Postgres/MinIO, not a throwaway database** — there's no
 per-test transaction rollback or fixture teardown. Any test that creates a `User` (i.e. touches
@@ -205,5 +244,5 @@ shared helpers rather than re-inlining the same setup in a new test file.
 
 **Build order**: the repo was built phase-by-phase per `docs/ROADMAP.md` (Identité & Profils →
 Matching & Découverte → Messagerie & Flammes → Confiance & Modération → Monétisation/Sécurité →
-Mobile) — all backend phases (0-5) are done; only Mobile (Phase 6) remains. Check that file's
-checkboxes for the current state and what each phase deliberately left out of scope.
+Mobile) — all 7 phases (0-6) are done. Check that file's checkboxes for what each phase deliberately
+left out of scope.

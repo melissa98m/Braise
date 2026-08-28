@@ -44,8 +44,23 @@ Référence stack : cahier des charges, section D.11.
   l'oubli (`DELETE /auth/me`, anonymisation — pas de cascade destructive sur les données d'un
   tiers). Refactor : `get_match_or_404`/`other_user_id`, dupliqués trois fois depuis la Phase 3,
   centralisés dans `services/matches.py`.
-- [ ] **Phase 6 — Mobile.** Flutter (dans son conteneur, cible web d'abord) implémente les écrans
-  01→08 dans l'ordre du cahier des charges, à partir de `docs/DESIGN_TOKENS.md`.
+- [x] **Phase 6 — Mobile.** Flutter (conteneur `ghcr.io/cirruslabs/flutter:stable`, cible web,
+  servi sur `localhost:5000`) implémente les 8 écrans du cahier des charges avec fidélité
+  fonctionnelle sur le thème dark/light complet (`docs/DESIGN_TOKENS.md` porté 1:1 dans
+  `BraiseTokens`/`buildBraiseTheme`) — hors polish d'animation, explicitement laissé de côté pour
+  cette passe. Écran d'onboarding adapté en saisie OTP (pas de scan KYC : le backend n'en a pas).
+  Découverte à carte unique, pas de grille de swipe (principe "pas de catalogue" du cahier des
+  charges). Conversation branchée sur le WebSocket réel (`ChatSocket`, même schéma token-en-query
+  que le backend Phase 3) fusionné à l'historique REST, question quotidienne, bannières de
+  déblocage et de notation. Écran Profil/Confiance ajouté avec upload/suppression des 3 photos
+  privées et actions RGPD (export, suppression de compte) : aucune UI n'exposait ces endpoints
+  avant cette phase. Navigation à 3 onglets (Découvrir/Échanges/Moi) au lieu des 4 de la maquette —
+  pas d'onglet "Braises" séparé sans contenu propre côté backend. `CORSMiddleware` ajouté au
+  backend (`CORS_ORIGINS`, `core/config.py`) pour l'appel cross-origin depuis le web Flutter.
+  Vérifié : `flutter analyze` propre, `flutter test` (3/3, thème + contraste WCAG), rendu live
+  confirmé par capture d'écran de l'app servie contre le backend réel. Pas de tests HTTP mockés en
+  Dart pour cette passe (aucune infra de mock construite) — l'app démarre contre l'API réelle,
+  observée manuellement plutôt qu'automatisée bout en bout.
 
 Chaque phase se clôt par une vérification locale gratuite (pytest + un passage Swagger UI, puis
 `run`/`audit` une fois le mobile en jeu) avant de passer à la suivante. Détail complet des choix
