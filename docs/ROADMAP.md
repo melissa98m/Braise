@@ -10,8 +10,11 @@ Référence stack : cahier des charges, section D.11.
   display_name, bio, intérêts, avatar-sigil déterministe régénérable) / privé (`PrivateProfile` :
   jusqu'à 3 photos, stockées chiffrées dans MinIO, URLs signées à courte durée de vie),
   `GET /auth/me` pour compléter l'auth OTP. Contrôle d'âge (18+) au niveau schéma Pydantic.
-- [ ] **Phase 2 — Module 2 Matching & Découverte.** Scoring de compatibilité (intérêts communs +
-  questionnaire court), feed de découverte, floutage progressif piloté par le nombre de flammes.
+- [x] **Phase 2 — Module 2 Matching & Découverte.** Feed de découverte scoré par recouvrement
+  d'intérêts (Jaccard), swipe like/pass (`Swipe`, contrainte unique anti-double-vote), match mutuel
+  (`Match`, id de paire canonique) exposant l'état de déblocage (`flame_count`/`unlock_threshold` —
+  l'incrémentation par la question quotidienne arrive en Phase 3). Pas de filtres démographiques
+  (âge/genre/distance) : hors du périmètre choisi pour cette phase, à reconsidérer plus tard.
 - [ ] **Phase 3 — Module 3 Messagerie & Flammes.** Chat WebSocket custom, question quotidienne,
   compteur de flammes, seuil de déblocage.
 - [ ] **Phase 4 — Module 4 Confiance & Modération.** Notation (note + commentaire ≥ 4 mots

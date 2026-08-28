@@ -15,7 +15,7 @@ class PublicProfile(Base):
     bio = Column(String(90), nullable=False, default="")
     interests = Column(JSONB, nullable=False, default=list)
     avatar_seed = Column(String, nullable=False)
-    is_published = Column(Boolean, nullable=False, default=False)
+    is_published = Column(Boolean, nullable=False, default=False, index=True)
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

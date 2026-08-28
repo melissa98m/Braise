@@ -19,7 +19,7 @@ MAX_PHOTOS = 3
 MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
 
-def _compute_age(birth_date: date) -> int:
+def compute_age(birth_date: date) -> int:
     today = date.today()
     return today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
 
@@ -66,7 +66,7 @@ def regenerate_avatar(db: Session, user: User) -> dict:
 def to_public_profile_out(profile: PublicProfile) -> dict:
     return {
         "display_name": profile.display_name,
-        "age": _compute_age(profile.birth_date),
+        "age": compute_age(profile.birth_date),
         "bio": profile.bio,
         "interests": profile.interests,
         "avatar": avatar_spec_from_seed(profile.avatar_seed),

@@ -4,17 +4,13 @@ from datetime import date
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.helpers import unique_phone
+from tests.helpers import auth_headers, unique_phone
 
 client = TestClient(app)
 
 
 def _auth_headers(phone: str) -> dict:
-    request = client.post("/auth/request-otp", json={"phone": phone})
-    code = request.json()["debug_code"]
-    verify = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
-    token = verify.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    return auth_headers(client, phone)
 
 
 def test_public_profile_round_trip():

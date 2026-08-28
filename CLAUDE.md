@@ -90,6 +90,22 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   tries to reach `localhost:9000` (that's the container itself, not MinIO). Don't merge these two
   clients back into one; presigned URLs must stay signed against the externally-reachable host.
 
+- **Discovery & matching** (`models/swipe.py`, `models/match.py`, `services/discovery.py`):
+  `Swipe` (from_user_id, to_user_id, decision, unique pair constraint) records like/pass; a mutual
+  `like` creates a `Match` with a *canonical* pair ordering (`_ordered_pair`, smaller UUID string
+  first) so `(A,B)` and `(B,A)` can never both insert. Match creation happens inside
+  `db.begin_nested()` (a SAVEPOINT): if two mutual "like" requests race, the loser's `IntegrityError`
+  is caught without rolling back the swipe that was already flushed — don't replace this with a bare
+  `try/db.rollback()`, that would also discard the swipe. The feed (`get_feed`) scores candidates by
+  Jaccard similarity of `interests` computed in Python after a *bounded* DB fetch
+  (`MAX_CANDIDATE_POOL = 200` rows, further capped to `limit` ≤ 50 in the response) — this keeps
+  per-request cost predictable without needing a JSONB-array-overlap SQL query at MVP scale.
+  `list_my_matches` batches the other-side profile lookup into one `IN (...)` query instead of
+  N+1. A swipe target that doesn't exist and one that exists but isn't `is_published` return the
+  *same* 404 — don't let that distinction leak through, it's a user-enumeration vector. No
+  age/gender/distance filtering yet (cahier des charges A.5 lists it as MVP scope; deliberately
+  deferred, see `docs/ROADMAP.md` Phase 2).
+
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):
 - OTP: no SMS provider. `services/otp.py` logs the code to stdout and the API returns it directly
