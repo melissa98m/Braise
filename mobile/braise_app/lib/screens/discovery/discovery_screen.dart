@@ -16,10 +16,19 @@ class DiscoveryScreen extends StatefulWidget {
   State<DiscoveryScreen> createState() => _DiscoveryScreenState();
 }
 
-class _DiscoveryScreenState extends State<DiscoveryScreen> {
+class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProviderStateMixin {
   List<DiscoveryCandidate> _feed = [];
   bool _loading = true;
   String? _error;
+
+  late final AnimationController _exitController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+  );
+  // -1 = "Passer" (sort à gauche), 1 = "Répondre" (sort à droite) — même sens que le swipe
+  // Tinder classique, même si le geste de glisser n'existe pas ici (cahier des charges A.7).
+  int _exitSign = 0;
+  bool _isSwiping = false;
 
   @override
   void initState() {
@@ -47,24 +56,48 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }
 
   Future<void> _swipe(String decision) async {
-    if (_feed.isEmpty) return;
+    if (_feed.isEmpty || _isSwiping) return;
     final candidate = _feed.first;
     final services = context.read<AppServices>();
+    setState(() {
+      _isSwiping = true;
+      _exitSign = decision == 'like' ? 1 : -1;
+    });
+    final exitAnimation = _exitController.forward(from: 0);
     try {
       final matched = await services.discoveryApi.swipe(candidate.userId, decision);
-      setState(() => _feed = _feed.sublist(1));
+      // La carte doit avoir fini de sortir de l'écran avant qu'on ne dévoile la suivante —
+      // sinon la fin d'animation coupe une requête réseau lente, jamais l'inverse.
+      await exitAnimation;
+      if (!mounted) return;
+      setState(() {
+        _feed = _feed.sublist(1);
+        _isSwiping = false;
+      });
+      _exitController.value = 0;
       if (matched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Vous avez matché avec ${candidate.displayName} !')),
         );
       }
     } on ApiException catch (e) {
+      // Refusé (ex. 402 limite gratuite) : la carte revient à sa place plutôt que de rester
+      // hors-écran — l'utilisateur garde ce profil sous les yeux pour décider quoi faire.
+      await _exitController.reverse();
+      if (!mounted) return;
+      setState(() => _isSwiping = false);
       if (e.isPaymentRequired && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
       } else {
         setState(() => _error = e.message);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _exitController.dispose();
+    super.dispose();
   }
 
   @override
@@ -110,9 +143,26 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                           child: child,
                         ),
                       ),
-                      child: _CandidateCard(
+                      // La sortie "swipe" (glisser + pivoter + s'effacer) est pilotée à part par
+                      // _exitController, pas par la transition d'AnimatedSwitcher : celle-ci ne se
+                      // déclenche qu'une fois la carte suivante dévoilée (clé différente), donc son
+                      // fondu d'entrée reste inchangé pendant que la carte active s'envole.
+                      child: AnimatedBuilder(
                         key: ValueKey(_feed.first.userId),
-                        candidate: _feed.first,
+                        animation: _exitController,
+                        builder: (context, child) {
+                          final t = Curves.easeInCubic.transform(_exitController.value);
+                          final dx = _exitSign * t * 520;
+                          final angle = _exitSign * t * 0.24;
+                          return Transform.translate(
+                            offset: Offset(dx, 0),
+                            child: Transform.rotate(
+                              angle: angle,
+                              child: Opacity(opacity: 1 - t, child: child),
+                            ),
+                          );
+                        },
+                        child: _CandidateCard(candidate: _feed.first),
                       ),
                     ),
                   ),
@@ -121,7 +171,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => _swipe('pass'),
+                          onPressed: _isSwiping ? null : () => _swipe('pass'),
                           child: const Text('Passer'),
                         ),
                       ),
@@ -129,7 +179,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
-                          onPressed: () => _swipe('like'),
+                          onPressed: _isSwiping ? null : () => _swipe('like'),
                           child: Text('Répondre à ${_feed.first.displayName}'),
                         ),
                       ),
@@ -147,7 +197,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 }
 
 class _CandidateCard extends StatelessWidget {
-  const _CandidateCard({super.key, required this.candidate});
+  const _CandidateCard({required this.candidate});
 
   final DiscoveryCandidate candidate;
 
