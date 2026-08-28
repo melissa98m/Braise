@@ -1,0 +1,183 @@
+import uuid
+from datetime import date
+
+from fastapi.testclient import TestClient
+
+from app.db.session import SessionLocal
+from app.main import app
+from app.models.daily_question import DailyQuestion
+from tests.helpers import auth_headers, auth_token, create_match, unique_phone
+
+client = TestClient(app)
+
+
+def _peek_correct_answer(match_id: str, for_user_id: str) -> str:
+    # La bonne réponse n'est jamais exposée par l'API avant d'avoir répondu (voir
+    # services/messaging.py) : on va la lire directement en base pour pouvoir tester le chemin
+    # "bonne réponse" de façon déterministe, sans affaiblir l'API elle-même.
+    db = SessionLocal()
+    try:
+        question = (
+            db.query(DailyQuestion)
+            .filter(
+                DailyQuestion.match_id == uuid.UUID(match_id),
+                DailyQuestion.for_user_id == uuid.UUID(for_user_id),
+                DailyQuestion.question_date == date.today(),
+            )
+            .one()
+        )
+        return question.correct_answer
+    finally:
+        db.close()
+
+
+def test_daily_question_correct_answer_increments_shared_flame_count():
+    match = create_match(client, interests_a=["cinéma"], interests_b=["escalade", "poterie-x"])
+
+    question = client.get(
+        f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"]
+    )
+    assert question.status_code == 200
+    body = question.json()
+    assert len(body["options"]) >= 2
+    assert body["answered"] is False
+
+    correct = _peek_correct_answer(match["match_id"], match["id_a"])
+    assert correct in body["options"]
+
+    answer = client.post(
+        f"/messaging/matches/{match['match_id']}/daily-question/answer",
+        headers=match["headers_a"],
+        json={"selected": correct},
+    )
+    assert answer.status_code == 200
+    result = answer.json()
+    assert result["correct"] is True
+    assert result["correct_answer"] == correct
+    assert result["flame_count"] == 1
+
+    matches = client.get("/discovery/matches", headers=match["headers_a"]).json()
+    updated = next(m for m in matches if m["match_id"] == match["match_id"])
+    assert updated["flame_count"] == 1
+    assert updated["unlock_pct"] == round(1 / updated["unlock_threshold"] * 100)
+
+
+def test_daily_question_wrong_answer_does_not_increment_flames():
+    match = create_match(client, interests_a=[], interests_b=["escalade", "poterie-x"])
+
+    question = client.get(
+        f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"]
+    ).json()
+    correct = _peek_correct_answer(match["match_id"], match["id_a"])
+    wrong = next(opt for opt in question["options"] if opt != correct)
+
+    answer = client.post(
+        f"/messaging/matches/{match['match_id']}/daily-question/answer",
+        headers=match["headers_a"],
+        json={"selected": wrong},
+    )
+    assert answer.status_code == 200
+    assert answer.json()["correct"] is False
+    assert answer.json()["flame_count"] == 0
+
+
+def test_daily_question_double_answer_rejected():
+    match = create_match(client, interests_a=[], interests_b=["escalade", "poterie-x"])
+    client.get(f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"])
+    correct = _peek_correct_answer(match["match_id"], match["id_a"])
+
+    first = client.post(
+        f"/messaging/matches/{match['match_id']}/daily-question/answer",
+        headers=match["headers_a"],
+        json={"selected": correct},
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        f"/messaging/matches/{match['match_id']}/daily-question/answer",
+        headers=match["headers_a"],
+        json={"selected": correct},
+    )
+    assert second.status_code == 409
+
+
+def test_daily_question_invalid_option_rejected():
+    match = create_match(client, interests_a=[], interests_b=["escalade", "poterie-x"])
+    client.get(f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"])
+
+    response = client.post(
+        f"/messaging/matches/{match['match_id']}/daily-question/answer",
+        headers=match["headers_a"],
+        json={"selected": "une réponse qui n'a jamais été proposée"},
+    )
+    assert response.status_code == 400
+
+
+def test_daily_question_missing_when_target_has_no_interests():
+    match = create_match(client, interests_a=[], interests_b=[])
+    response = client.get(
+        f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"]
+    )
+    assert response.status_code == 404
+
+
+def test_daily_question_requires_match_participant():
+    match = create_match(client, interests_a=[], interests_b=["escalade", "poterie-x"])
+    outsider_headers = auth_headers(client, unique_phone())
+
+    response = client.get(
+        f"/messaging/matches/{match['match_id']}/daily-question", headers=outsider_headers
+    )
+    assert response.status_code == 404
+
+
+def test_message_history_requires_participant():
+    match = create_match(client)
+    outsider_headers = auth_headers(client, unique_phone())
+
+    response = client.get(
+        f"/messaging/matches/{match['match_id']}/messages", headers=outsider_headers
+    )
+    assert response.status_code == 404
+
+
+def test_websocket_chat_round_trip_and_history():
+    match = create_match(client)
+    url_a = f"/messaging/ws/{match['match_id']}?token={match['token_a']}"
+    url_b = f"/messaging/ws/{match['match_id']}?token={match['token_b']}"
+
+    with client.websocket_connect(url_a) as ws_a, client.websocket_connect(url_b) as ws_b:
+        ws_a.send_json({"body": "Le grésillement d'une cassette."})
+
+        received_a = ws_a.receive_json()
+        received_b = ws_b.receive_json()
+        assert received_a["body"] == "Le grésillement d'une cassette."
+        assert received_b["body"] == "Le grésillement d'une cassette."
+        assert received_a["sender_id"] == match["id_a"]
+
+    history = client.get(
+        f"/messaging/matches/{match['match_id']}/messages", headers=match["headers_a"]
+    ).json()
+    assert any(m["body"] == "Le grésillement d'une cassette." for m in history)
+
+
+def test_websocket_rejects_invalid_token():
+    match = create_match(client)
+    url = f"/messaging/ws/{match['match_id']}?token=not-a-real-token"
+    try:
+        with client.websocket_connect(url):
+            raise AssertionError("la connexion aurait dû être refusée")
+    except Exception:
+        pass
+
+
+def test_websocket_rejects_non_participant():
+    match = create_match(client)
+    outsider_token = auth_token(client, unique_phone())
+
+    url = f"/messaging/ws/{match['match_id']}?token={outsider_token}"
+    try:
+        with client.websocket_connect(url):
+            raise AssertionError("la connexion aurait dû être refusée")
+    except Exception:
+        pass

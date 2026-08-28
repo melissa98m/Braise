@@ -7,12 +7,15 @@ def unique_phone() -> str:
     return "+336" + uuid.uuid4().hex[:8]
 
 
-def auth_headers(client, phone: str) -> dict:
+def auth_token(client, phone: str) -> str:
     request = client.post("/auth/request-otp", json={"phone": phone})
     code = request.json()["debug_code"]
     verify = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
-    token = verify.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    return verify.json()["access_token"]
+
+
+def auth_headers(client, phone: str) -> dict:
+    return {"Authorization": f"Bearer {auth_token(client, phone)}"}
 
 
 def create_published_user(
@@ -35,3 +38,49 @@ def create_published_user(
         },
     )
     return headers, me["id"]
+
+
+def create_match(
+    client,
+    interests_a: list[str] | None = None,
+    interests_b: list[str] | None = None,
+) -> dict:
+    token_a = auth_token(client, unique_phone())
+    token_b = auth_token(client, unique_phone())
+    headers_a = {"Authorization": f"Bearer {token_a}"}
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+
+    id_a = client.get("/auth/me", headers=headers_a).json()["id"]
+    id_b = client.get("/auth/me", headers=headers_b).json()["id"]
+
+    for headers, interests in ((headers_a, interests_a), (headers_b, interests_b)):
+        client.put(
+            "/profiles/me/public",
+            headers=headers,
+            json={
+                "display_name": "Match test",
+                "birth_date": "1996-01-01",
+                "bio": "",
+                "interests": interests or [],
+                "is_published": True,
+            },
+        )
+
+    client.post("/discovery/swipe", headers=headers_a, json={"to_user_id": id_b, "decision": "like"})
+    second = client.post(
+        "/discovery/swipe", headers=headers_b, json={"to_user_id": id_a, "decision": "like"}
+    )
+    assert second.json()["matched"] is True
+
+    matches = client.get("/discovery/matches", headers=headers_a).json()
+    match_id = next(m["match_id"] for m in matches if m["other_user_id"] == id_b)
+
+    return {
+        "token_a": token_a,
+        "headers_a": headers_a,
+        "id_a": id_a,
+        "token_b": token_b,
+        "headers_b": headers_b,
+        "id_b": id_b,
+        "match_id": match_id,
+    }

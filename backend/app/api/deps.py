@@ -12,9 +12,7 @@ from app.models.user import User
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/verify-otp", auto_error=False)
 
 
-def get_current_user(
-    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
-) -> User:
+def user_from_token(token: str | None, db: Session) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Identifiants invalides ou expirés.",
@@ -33,3 +31,9 @@ def get_current_user(
     if user is None:
         raise credentials_error
     return user
+
+
+def get_current_user(
+    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User:
+    return user_from_token(token, db)

@@ -15,8 +15,12 @@ Référence stack : cahier des charges, section D.11.
   (`Match`, id de paire canonique) exposant l'état de déblocage (`flame_count`/`unlock_threshold` —
   l'incrémentation par la question quotidienne arrive en Phase 3). Pas de filtres démographiques
   (âge/genre/distance) : hors du périmètre choisi pour cette phase, à reconsidérer plus tard.
-- [ ] **Phase 3 — Module 3 Messagerie & Flammes.** Chat WebSocket custom, question quotidienne,
-  compteur de flammes, seuil de déblocage.
+- [x] **Phase 3 — Module 3 Messagerie & Flammes.** Chat WebSocket custom (`/messaging/ws/{match_id}`,
+  auth par token en query string, diffusion en mémoire — un seul process backend pour l'instant),
+  historique REST paginé. Question quotidienne dérivée des intérêts publics de l'autre (QCM à 4
+  choix, seed déterministe, une par utilisateur/match/jour) ; bonne réponse = +1 flamme partagée
+  sur le `Match` posé en Phase 2. Pas de statut de lecture ni d'indicateur de saisie : reporté,
+  pas nécessaire pour valider le cœur du mécanisme flammes/déblocage.
 - [ ] **Phase 4 — Module 4 Confiance & Modération.** Notation (note + commentaire ≥ 4 mots
   obligatoire), classifieur scikit-learn (authenticité), signalement + file de revue humaine.
 - [ ] **Phase 5 — Modules 5/6 Monétisation (stub) & Sécurité.** Toggle Premium local, URLs signées

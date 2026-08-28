@@ -106,6 +106,26 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   age/gender/distance filtering yet (cahier des charges A.5 lists it as MVP scope; deliberately
   deferred, see `docs/ROADMAP.md` Phase 2).
 
+- **Messaging & daily question** (`models/message.py`, `models/daily_question.py`,
+  `ws/connection_manager.py`, `services/messaging.py`): `ConnectionManager` is an in-memory
+  `dict[match_id, set[WebSocket]]` — correct for a single backend process (this MVP), but it must
+  be swapped for a shared pub/sub (Centrifugo/Redis, per cahier des charges D.4) before running more
+  than one backend replica, or messages silently stop reaching participants connected to a different
+  instance. WebSocket auth can't use the `Authorization` header (browsers can't set it on the
+  handshake), so the JWT travels as a `?token=` query param and is checked manually
+  (`api/deps.user_from_token`) *before* `websocket.accept()` — a rejected connection is closed with
+  `WS_1008_POLICY_VIOLATION`, never accepted-then-closed. `_get_match_or_404` gates every messaging
+  endpoint (REST and WS) the same way discovery gates swipes: a match that doesn't exist and one
+  that exists but isn't yours both 404. The daily question is deterministic
+  (`random.Random(f"{match_id}:{for_user_id}:{date}")`) so repeated `GET`s the same day return the
+  identical question without needing to read it back from the DB first, but it's still persisted on
+  first read (`DailyQuestion`, unique on match+user+day, `IntegrityError` on the race between two
+  concurrent first `GET`s is caught and re-read, not treated as a bug). The correct answer is never
+  in the `GET` response — only revealed in the `POST .../answer` result, after that day's attempt is
+  consumed. A correct answer increments `Match.flame_count` (shared, not per-user), matching "bonne
+  réponse = +1 flamme pour vous deux" in the mockups; `Match.flame_count` already existed from
+  Phase 2, this phase just started writing to it.
+
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):
 - OTP: no SMS provider. `services/otp.py` logs the code to stdout and the API returns it directly
