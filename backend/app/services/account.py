@@ -1,0 +1,123 @@
+import uuid
+from datetime import date, datetime, timezone
+
+from sqlalchemy.orm import Session
+
+from app.models.match import Match
+from app.models.message import Message
+from app.models.profile import PrivateProfile, PublicProfile
+from app.models.rating import Rating
+from app.models.report import Report
+from app.models.user import User
+from app.services import storage
+from app.services.matches import other_user_id
+
+# Placeholder utilisé partout où un profil "vidé" a besoin d'une birth_date non nulle — même
+# valeur que get_or_create_public_profile pour un profil jamais rempli (voir services/profiles.py).
+_UNSET_BIRTH_DATE = date(2000, 1, 1)
+
+
+def export_my_data(db: Session, user: User) -> dict:
+    """Droit à la portabilité (cahier des charges A.9) : un export JSON de tout ce que ce compte
+    a produit sur la plateforme. Ne contient pas les octets des photos, seulement leurs clés —
+    exporter le contenu binaire n'apporte rien à l'utilisateur au-delà de ce que
+    /profiles/me/private lui donne déjà à la demande.
+    """
+    public_profile = db.get(PublicProfile, user.id)
+    private_profile = db.get(PrivateProfile, user.id)
+
+    matches = (
+        db.query(Match).filter((Match.user_a_id == user.id) | (Match.user_b_id == user.id)).all()
+    )
+    match_ids = [m.id for m in matches]
+
+    messages = (
+        db.query(Message).filter(Message.match_id.in_(match_ids)).order_by(Message.created_at)
+        if match_ids
+        else []
+    )
+    ratings_given = db.query(Rating).filter(Rating.rater_id == user.id).all()
+    ratings_received = db.query(Rating).filter(Rating.ratee_id == user.id).all()
+    reports_filed = db.query(Report).filter(Report.reporter_id == user.id).all()
+
+    return {
+        "account": {
+            "id": str(user.id),
+            "phone": user.phone,
+            "is_verified": user.is_verified,
+            "created_at": user.created_at.isoformat(),
+        },
+        "public_profile": (
+            {
+                "display_name": public_profile.display_name,
+                "bio": public_profile.bio,
+                "interests": public_profile.interests,
+                "is_published": public_profile.is_published,
+            }
+            if public_profile
+            else None
+        ),
+        "private_profile": (
+            {"photo_keys": private_profile.photo_keys} if private_profile else None
+        ),
+        "matches": [
+            {
+                "match_id": str(m.id),
+                "other_user_id": str(other_user_id(m, user)),
+                "matched_at": m.matched_at.isoformat(),
+                "flame_count": m.flame_count,
+                "unlocked_at": m.unlocked_at.isoformat() if m.unlocked_at else None,
+            }
+            for m in matches
+        ],
+        "messages_sent": [
+            {"match_id": str(msg.match_id), "body": msg.body, "created_at": msg.created_at.isoformat()}
+            for msg in messages
+            if msg.sender_id == user.id
+        ],
+        "ratings_given": [
+            {"match_id": str(r.match_id), "score": r.score, "comment": r.comment}
+            for r in ratings_given
+        ],
+        "ratings_received": [
+            {"score": r.score, "comment": r.comment, "suspected_rancor": r.suspected_rancor}
+            for r in ratings_received
+        ],
+        "reports_filed": [
+            {"reason": r.reason, "status": r.status, "created_at": r.created_at.isoformat()}
+            for r in reports_filed
+        ],
+    }
+
+
+def delete_my_account(db: Session, user: User) -> None:
+    """Droit à l'oubli (cahier des charges A.9) : anonymisation, pas un hard-delete cascadé — les
+    Match/Rating d'un tiers restent intacts, seul le contenu qui *identifie ce compte* est scrubé.
+    """
+    private_profile = db.get(PrivateProfile, user.id)
+    if private_profile is not None:
+        for object_key in private_profile.photo_keys:
+            storage.delete_object(object_key)
+        private_profile.photo_keys = []
+
+    public_profile = db.get(PublicProfile, user.id)
+    if public_profile is not None:
+        public_profile.display_name = ""
+        public_profile.bio = ""
+        public_profile.interests = []
+        public_profile.birth_date = _UNSET_BIRTH_DATE
+        public_profile.is_published = False
+
+    # Les messages restent lisibles par l'autre participant (c'est aussi sa conversation), mais
+    # leur contenu ne doit plus être attribuable à ce compte après suppression.
+    db.query(Message).filter(Message.sender_id == user.id).update(
+        {"body": "[message supprimé]"}
+    )
+
+    now = datetime.now(timezone.utc)
+    user.phone = f"deleted-{uuid.uuid4().hex}"
+    user.otp_code = None
+    user.otp_expires_at = None
+    user.deleted_at = now
+
+    db.commit()

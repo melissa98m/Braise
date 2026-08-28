@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
 
 def unique_phone() -> str:
@@ -121,3 +122,20 @@ def create_match_with(client, other_headers: dict, other_id: str) -> dict:
     match_id = next(m["match_id"] for m in matches if m["other_user_id"] == other_id)
 
     return {"token": token, "headers": headers, "id": my_id, "match_id": match_id}
+
+
+def force_match_unlocked(match_id: str, hours_ago: float = 1) -> None:
+    # Atteindre unlock_threshold flammes par le vrai flux (une question/jour/utilisateur) prendrait
+    # plusieurs jours réels : on pose directement l'état "match débloqué depuis X" en base plutôt
+    # que de simuler des jours de questions quotidiennes.
+    from app.db.session import SessionLocal
+    from app.models.match import Match
+
+    db = SessionLocal()
+    try:
+        match = db.get(Match, uuid.UUID(match_id))
+        match.flame_count = match.unlock_threshold
+        match.unlocked_at = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+        db.commit()
+    finally:
+        db.close()

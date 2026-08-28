@@ -41,6 +41,7 @@ class PublicProfileOut(BaseModel):
     interests: list[str]
     avatar: AvatarSpec
     is_published: bool
+    is_premium: bool
 
 
 class PrivatePhotoOut(BaseModel):

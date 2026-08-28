@@ -32,8 +32,18 @@ Référence stack : cahier des charges, section D.11.
   charges A.9). Signalement avec motif qualifié + commentaire libre, statut `pending` systématique
   — pas de tri automatique ni d'interface de revue humaine : hors périmètre MVP (cahier des charges
   C.1/C.2), à consulter via Adminer en attendant un vrai outillage de modération.
-- [ ] **Phase 5 — Modules 5/6 Monétisation (stub) & Sécurité.** Toggle Premium local, URLs signées
-  courtes pour les photos privées (MinIO), chiffrement au repos.
+- [x] **Phase 5 — Modules 5/6 Monétisation (stub) & Sécurité.** Palier Premium unique
+  (`Subscription`, activation `/subscriptions/debug-activate` en attendant une vraie build store —
+  D.8), limite de 5 matchs gratuits appliquée au moment du "like" (contournée par Premium), badge
+  `is_premium` sur le profil public. Déblocage réel des photos privées d'un match
+  (`GET /profiles/matches/{id}/partner-photos`, verrouillé tant que `Match.unlocked_at` est vide —
+  la pièce manquante du parcours flammes → déblocage posé en Phases 2-3), journalisé
+  (`PhotoAccessLog`, seulement les accès à *autrui*). Chiffrement au repos réel des photos
+  (SSE-S3 via la clé KMS locale `MINIO_KMS_SECRET_KEY`, aucune dépendance externe), vérifié en
+  direct via `mc stat` (`Encryption: SSE-S3`). Droit à la portabilité (`GET /auth/me/export`) et à
+  l'oubli (`DELETE /auth/me`, anonymisation — pas de cascade destructive sur les données d'un
+  tiers). Refactor : `get_match_or_404`/`other_user_id`, dupliqués trois fois depuis la Phase 3,
+  centralisés dans `services/matches.py`.
 - [ ] **Phase 6 — Mobile.** Flutter (dans son conteneur, cible web d'abord) implémente les écrans
   01→08 dans l'ordre du cahier des charges, à partir de `docs/DESIGN_TOKENS.md`.
 

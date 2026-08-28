@@ -1,10 +1,13 @@
 import io
+import uuid
 from datetime import date
 
 from fastapi.testclient import TestClient
 
+from app.db.session import SessionLocal
 from app.main import app
-from tests.helpers import auth_headers, unique_phone
+from app.models.photo_access_log import PhotoAccessLog
+from tests.helpers import auth_headers, create_match, force_match_unlocked, unique_phone
 
 client = TestClient(app)
 
@@ -105,3 +108,54 @@ def test_private_photo_max_three():
         files={"file": ("photo.jpg", fourth, "image/jpeg")},
     )
     assert response.status_code == 400
+
+
+def test_partner_photos_blocked_before_unlock():
+    match = create_match(client)
+    response = client.get(
+        f"/profiles/matches/{match['match_id']}/partner-photos", headers=match["headers_a"]
+    )
+    assert response.status_code == 403
+
+
+def test_partner_photos_available_after_unlock_and_logged():
+    match = create_match(client)
+    fake_image = io.BytesIO(b"\xff\xd8\xff" + b"0" * 100)
+    client.post(
+        "/profiles/me/private/photos",
+        headers=match["headers_b"],
+        files={"file": ("photo.jpg", fake_image, "image/jpeg")},
+    )
+    force_match_unlocked(match["match_id"])
+
+    response = client.get(
+        f"/profiles/matches/{match['match_id']}/partner-photos", headers=match["headers_a"]
+    )
+    assert response.status_code == 200
+    photos = response.json()["photos"]
+    assert len(photos) == 1
+    assert photos[0]["url"].startswith("http")
+
+    db = SessionLocal()
+    try:
+        logged = (
+            db.query(PhotoAccessLog)
+            .filter(
+                PhotoAccessLog.match_id == uuid.UUID(match["match_id"]),
+                PhotoAccessLog.viewer_id == uuid.UUID(match["id_a"]),
+                PhotoAccessLog.owner_id == uuid.UUID(match["id_b"]),
+            )
+            .count()
+        )
+        assert logged == 1
+    finally:
+        db.close()
+
+
+def test_partner_photos_requires_match_participant():
+    match = create_match(client)
+    outsider_headers = auth_headers(client, unique_phone())
+    response = client.get(
+        f"/profiles/matches/{match['match_id']}/partner-photos", headers=outsider_headers
+    )
+    assert response.status_code == 404

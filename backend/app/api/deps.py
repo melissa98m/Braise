@@ -34,6 +34,10 @@ def user_from_token(token: str | None, db: Session) -> User:
         # Choix délibéré : couper l'accès partout (y compris /auth/me) plutôt que de garder un
         # cas particulier pour afficher un écran "compte suspendu" — cahier des charges A.4.4.
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Compte suspendu.")
+    if user.deleted_at is not None:
+        # Un token émis avant la suppression reste cryptographiquement valide jusqu'à expiration
+        # (pas de révocation de JWT) — c'est ce garde-fou qui empêche de continuer à l'utiliser.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Compte supprimé.")
     return user
 
 

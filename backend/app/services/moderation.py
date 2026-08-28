@@ -9,6 +9,7 @@ from app.models.match import Match
 from app.models.rating import Rating
 from app.models.report import Report, ReportStatus
 from app.models.user import User
+from app.services.matches import get_match_or_404, other_user_id
 from app.services.moderation_ml import predict_is_rancor
 
 # Une note très négative postée dans les heures qui suivent le déblocage du profil privé est le
@@ -28,17 +29,6 @@ _TRUST_LABEL_THRESHOLDS = (
     (70, "SOLIDE"),
     (50, "EN CONSTRUCTION"),
 )
-
-
-def _get_match_or_404(db: Session, user: User, match_id: uuid.UUID) -> Match:
-    match = db.get(Match, match_id)
-    if match is None or user.id not in (match.user_a_id, match.user_b_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Match introuvable.")
-    return match
-
-
-def _other_user_id(match: Match, user: User) -> uuid.UUID:
-    return match.user_b_id if match.user_a_id == user.id else match.user_a_id
 
 
 def _is_post_unlock_rancor(match: Match, score: int, now: datetime) -> bool:
@@ -78,8 +68,8 @@ def compute_trust_score(db: Session, user_id: uuid.UUID) -> dict:
 
 
 def create_rating(db: Session, user: User, match_id: uuid.UUID, score: int, comment: str) -> dict:
-    match = _get_match_or_404(db, user, match_id)
-    ratee_id = _other_user_id(match, user)
+    match = get_match_or_404(db, user, match_id)
+    ratee_id = other_user_id(match, user)
 
     existing = (
         db.query(Rating)
@@ -127,8 +117,8 @@ def create_rating(db: Session, user: User, match_id: uuid.UUID, score: int, comm
 def create_report(
     db: Session, user: User, match_id: uuid.UUID, reason: str, comment: str | None
 ) -> Report:
-    match = _get_match_or_404(db, user, match_id)
-    reported_id = _other_user_id(match, user)
+    match = get_match_or_404(db, user, match_id)
+    reported_id = other_user_id(match, user)
 
     report = Report(
         match_id=match_id,

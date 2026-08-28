@@ -52,9 +52,9 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 **Backend** (`backend/`, FastAPI + SQLAlchemy + Alembic + Postgres, all in `backend/app/`):
 - `main.py` wires every router in `api/v1/` into the app. Each product module from the spec has
   its own router file (`auth`, `profiles`, `discovery`, `messaging`, `moderation`,
-  `subscriptions`), even before it has real logic — unbuilt modules currently expose a single
-  `/ping` returning `{"module": ..., "status": "stub — Phase N"}` so the Swagger UI always lists
-  the full intended API surface and it's obvious what phase built what.
+  `subscriptions`) — as of Phase 5 all six have real logic; none are left as the `/ping`
+  `{"module": ..., "status": "stub — Phase N"}` placeholder that unbuilt modules used to expose
+  (only Phase 6 / mobile remains, and it isn't a backend router).
 - `core/config.py` — a single `Settings` (pydantic-settings) object read from `.env`, cached via
   `get_settings()`. Add new env-driven config here, not scattered `os.environ` reads.
 - `core/security.py` — JWT creation/decoding and OTP code generation live together here (both are
@@ -92,6 +92,10 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   tries to reach `localhost:9000` (that's the container itself, not MinIO). Don't merge these two
   clients back into one; presigned URLs must stay signed against the externally-reachable host.
 
+- `services/matches.py` — `get_match_or_404`/`other_user_id` are the shared "is this user actually
+  a participant in this match" check, used by discovery, messaging, moderation and profiles
+  (partner-photos). It used to be copy-pasted per service; if you're about to write a fourth copy,
+  don't — import from here instead.
 - **Discovery & matching** (`models/swipe.py`, `models/match.py`, `services/discovery.py`):
   `Swipe` (from_user_id, to_user_id, decision, unique pair constraint) records like/pass; a mutual
   `like` creates a `Match` with a *canonical* pair ordering (`_ordered_pair`, smaller UUID string
@@ -116,8 +120,9 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   instance. WebSocket auth can't use the `Authorization` header (browsers can't set it on the
   handshake), so the JWT travels as a `?token=` query param and is checked manually
   (`api/deps.user_from_token`) *before* `websocket.accept()` — a rejected connection is closed with
-  `WS_1008_POLICY_VIOLATION`, never accepted-then-closed. `_get_match_or_404` gates every messaging
-  endpoint (REST and WS) the same way discovery gates swipes: a match that doesn't exist and one
+  `WS_1008_POLICY_VIOLATION`, never accepted-then-closed. `services.matches.get_match_or_404` gates
+  every messaging endpoint (REST and WS) the same way discovery gates swipes: a match that doesn't
+  exist and one
   that exists but isn't yours both 404. The daily question is deterministic
   (`random.Random(f"{match_id}:{for_user_id}:{date}")`) so repeated `GET`s the same day return the
   identical question without needing to read it back from the DB first, but it's still persisted on
@@ -143,6 +148,31 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   Reports (`Report`) always start `status="pending"`: there's no automatic founded/unfounded
   triage or reviewer UI yet (cahier des charges C.1 explicitly scopes that to V2) — inspect them
   via Adminer for now, not a moderation endpoint that doesn't exist.
+- **Monetization & security** (`models/subscription.py`, `models/photo_access_log.py`,
+  `services/subscriptions.py`, `services/account.py`): `Subscription` is one current-state row per
+  user (no history table — single tier per cahier des charges C.1), `is_premium` computed from
+  `is_active and expires_at > now`, never trusted as a cached flag on its own. `record_swipe`
+  (discovery) calls `can_create_new_match` before accepting a "like" — a free user at
+  `FREE_MATCH_LIMIT` gets 402, checked *before* the swipe is even recorded, so it can never leave a
+  half-completed match attempt. `GET /profiles/matches/{id}/partner-photos` is the actual payoff of
+  the whole flames mechanic — it was missing through Phase 3/4: unlocking a match only ever set
+  `Match.unlocked_at`, nothing let the *other* participant see the photos that state was supposed
+  to unlock. Gated on `unlocked_at is not None` (403 otherwise), and every access is written to
+  `PhotoAccessLog` — but only cross-user access; viewing your own photos via `/profiles/me/private`
+  is not logged, that's not the disclosure event RGPD audit trails care about. Private photo
+  uploads are encrypted at rest via MinIO's SSE-S3 (`sse=SseS3()` in `storage.upload_private_photo`,
+  keyed by `MINIO_KMS_SECRET_KEY` — a single local secret, no external KMS); verify it's actually
+  applied with `mc stat`, which reports `Encryption: SSE-S3` on a correctly-encrypted object — SSE-S3
+  is the only mode compatible with plain presigned-GET browser access, SSE-C would require the
+  client to hold and send the encryption key itself. Account deletion
+  (`services.account.delete_my_account`) anonymizes rather than cascades: profile fields are
+  cleared, private photos removed from MinIO, `phone` replaced with a `deleted-{uuid}` tombstone,
+  `User.deleted_at` set — but `Match`/`Rating`/`Report` rows involving this user stay, and a
+  deleted user's own message *bodies* get replaced with a placeholder rather than deleted, because
+  the other participant's conversation history is their data too. `deleted_at` is checked in
+  `api/deps.user_from_token` alongside `is_banned` — a JWT issued before deletion is still
+  cryptographically valid until it expires, so this is the actual enforcement point, not the delete
+  endpoint itself.
 - `backend/scripts/scrape_dating_reviews.py` (+ `google-play-scraper` in requirements.txt) is a
   separate, standalone data-collection script — not part of the running API, not imported by
   anything under `app/`. Its output lands in `backend/scripts/data/` (gitignored). Read it before
@@ -152,8 +182,9 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 `docs/ROADMAP.md` for when each graduates to the real thing):
 - OTP: no SMS provider. `services/otp.py` logs the code to stdout and the API returns it directly
   in the response body when `DEBUG_OTP=true` in `.env`.
-- Payments/subscriptions: `subscriptions` router is a stub; no StoreKit/Play Billing integration
-  yet (arrives with a real store build, Phase 5+).
+- Payments/subscriptions: real free/premium logic exists (Phase 5), but activation is
+  `POST /subscriptions/debug-activate` rather than a real purchase — no StoreKit/Play Billing
+  integration until there's an actual store build to attach it to (cahier des charges D.8).
 - Push notifications: not implemented at all yet — not needed to validate product logic.
 
 **Infra** (`docker-compose.yml` + `infra/`): Postgres, MinIO (+ a one-shot `minio-init` container
@@ -166,8 +197,13 @@ Flutter SDK is never installed on the host, only inside that container).
 per-test transaction rollback or fixture teardown. Any test that creates a `User` (i.e. touches
 auth) must call `tests.helpers.unique_phone()` rather than a hardcoded number, or it will pass once
 and then fail on every rerun once that phone number already has data attached to it.
+`tests/helpers.py` also has `create_published_user`, `create_match`/`create_match_with` (a second
+user matched to an *existing* one, for "N raters, one target" scenarios), and
+`force_match_unlocked` (writes `Match.flame_count`/`unlocked_at` directly — reaching
+`unlock_threshold` through the real one-question-per-day flow would take real days). Add to these
+shared helpers rather than re-inlining the same setup in a new test file.
 
-**Build order**: the repo is being built phase-by-phase per `docs/ROADMAP.md` (Identité & Profils →
+**Build order**: the repo was built phase-by-phase per `docs/ROADMAP.md` (Identité & Profils →
 Matching & Découverte → Messagerie & Flammes → Confiance & Modération → Monétisation/Sécurité →
-Mobile). Check that file's checkboxes before assuming a module is unbuilt — the `/ping` stub
-pattern above is how you can tell from the code itself which phase a router belongs to.
+Mobile) — all backend phases (0-5) are done; only Mobile (Phase 6) remains. Check that file's
+checkboxes for the current state and what each phase deliberately left out of scope.

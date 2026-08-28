@@ -11,6 +11,7 @@ from app.models.match import Match
 from app.models.message import Message
 from app.models.profile import PublicProfile
 from app.models.user import User
+from app.services.matches import get_match_or_404, other_user_id
 
 MAX_MESSAGE_LENGTH = 2000
 DEFAULT_MESSAGE_HISTORY = 50
@@ -26,27 +27,14 @@ _DECOY_INTERESTS = [
 ]
 
 
-def _get_match_or_404(db: Session, user: User, match_id: uuid.UUID) -> Match:
-    # Un match inexistant et un match qui existe mais n'appartient pas à l'appelant renvoient
-    # la même erreur générique — même logique anti-énumération que pour les profils/swipes.
-    match = db.get(Match, match_id)
-    if match is None or user.id not in (match.user_a_id, match.user_b_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Match introuvable.")
-    return match
-
-
-def _other_user_id(match: Match, user: User) -> uuid.UUID:
-    return match.user_b_id if match.user_a_id == user.id else match.user_a_id
-
-
 def assert_match_participant(db: Session, user: User, match_id: uuid.UUID) -> Match:
-    return _get_match_or_404(db, user, match_id)
+    return get_match_or_404(db, user, match_id)
 
 
 def list_messages(
     db: Session, user: User, match_id: uuid.UUID, limit: int = DEFAULT_MESSAGE_HISTORY
 ) -> list[Message]:
-    _get_match_or_404(db, user, match_id)
+    get_match_or_404(db, user, match_id)
     limit = max(1, min(limit, MAX_MESSAGE_HISTORY))
     recent = (
         db.query(Message)
@@ -59,7 +47,7 @@ def list_messages(
 
 
 def create_message(db: Session, user: User, match_id: uuid.UUID, body: str) -> Message:
-    _get_match_or_404(db, user, match_id)
+    get_match_or_404(db, user, match_id)
     body = body.strip()[:MAX_MESSAGE_LENGTH]
     message = Message(match_id=match_id, sender_id=user.id, body=body)
     db.add(message)
@@ -84,8 +72,8 @@ def _build_question(
 
 
 def get_or_create_daily_question(db: Session, user: User, match_id: uuid.UUID) -> dict:
-    match = _get_match_or_404(db, user, match_id)
-    other_id = _other_user_id(match, user)
+    match = get_match_or_404(db, user, match_id)
+    other_id = other_user_id(match, user)
     today = date.today()
 
     def _query():
@@ -139,7 +127,7 @@ def get_or_create_daily_question(db: Session, user: User, match_id: uuid.UUID) -
 
 
 def answer_daily_question(db: Session, user: User, match_id: uuid.UUID, selected: str) -> dict:
-    match = _get_match_or_404(db, user, match_id)
+    match = get_match_or_404(db, user, match_id)
     today = date.today()
 
     question = (

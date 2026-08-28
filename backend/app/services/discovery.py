@@ -10,7 +10,9 @@ from app.models.profile import PublicProfile
 from app.models.swipe import Swipe, SwipeDecision
 from app.models.user import User
 from app.services.avatar import avatar_spec_from_seed
+from app.services.matches import other_user_id
 from app.services.profiles import compute_age
+from app.services.subscriptions import can_create_new_match
 
 # Borne le coût de calcul par requête : on ne score jamais plus que ce pool, même si le
 # nombre de profils publiés grandit beaucoup au-delà de ce qu'un seul feed doit renvoyer.
@@ -74,6 +76,12 @@ def record_swipe(
     if to_user_id == user.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Impossible de se swiper soi-même.")
 
+    if decision == SwipeDecision.LIKE and not can_create_new_match(db, user):
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            "Limite de matchs gratuits atteinte. Passez à Braise+ pour continuer à liker.",
+        )
+
     # Un profil inexistant et un profil non publié renvoient la même erreur générique :
     # ne pas laisser un client distinguer "n'existe pas" de "existe mais pas publié".
     target_profile = db.get(PublicProfile, to_user_id)
@@ -133,7 +141,7 @@ def list_my_matches(db: Session, user: User) -> list[dict]:
     if not matches:
         return []
 
-    other_ids = {m.user_b_id if m.user_a_id == user.id else m.user_a_id for m in matches}
+    other_ids = {other_user_id(m, user) for m in matches}
     # Une seule requête pour tous les profils plutôt qu'une par match (évite le N+1).
     profiles_by_id = {
         profile.user_id: profile
@@ -142,7 +150,7 @@ def list_my_matches(db: Session, user: User) -> list[dict]:
 
     results = []
     for match in matches:
-        other_id = match.user_b_id if match.user_a_id == user.id else match.user_a_id
+        other_id = other_user_id(match, user)
         other_profile = profiles_by_id.get(other_id)
         threshold = match.unlock_threshold or 1
         unlock_pct = min(100, round(match.flame_count / threshold * 100))

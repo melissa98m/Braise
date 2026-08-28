@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
@@ -20,7 +22,7 @@ def get_my_public_profile(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     profile = profiles_service.get_or_create_public_profile(db, user)
-    return profiles_service.to_public_profile_out(profile)
+    return profiles_service.to_public_profile_out(db, profile)
 
 
 @router.put("/me/public", response_model=PublicProfileOut)
@@ -30,7 +32,7 @@ def update_my_public_profile(
     db: Session = Depends(get_db),
 ):
     profile = profiles_service.upsert_public_profile(db, user, payload)
-    return profiles_service.to_public_profile_out(profile)
+    return profiles_service.to_public_profile_out(db, profile)
 
 
 @router.post("/me/avatar/regenerate", response_model=AvatarSpec)
@@ -66,3 +68,12 @@ def delete_my_private_photo(
 ):
     profile = profiles_service.remove_private_photo(db, user, object_key)
     return profiles_service.to_private_profile_out(profile)
+
+
+@router.get("/matches/{match_id}/partner-photos", response_model=PrivateProfileOut)
+def get_partner_photos(
+    match_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return profiles_service.get_partner_photos(db, user, match_id)

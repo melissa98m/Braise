@@ -2,6 +2,7 @@ from datetime import timedelta
 from io import BytesIO
 
 from minio import Minio
+from minio.sse import SseS3
 
 from app.core.config import get_settings
 
@@ -41,12 +42,16 @@ def bucket_exists() -> bool:
 
 
 def upload_private_photo(object_key: str, data: bytes, content_type: str) -> None:
+    # Chiffrement au repos (SSE-S3, cf. MINIO_KMS_SECRET_KEY côté serveur) : géré côté MinIO, donc
+    # le presigned GET reste utilisable tel quel par un navigateur — pas d'en-tête supplémentaire
+    # à faire porter par le client, contrairement à SSE-C.
     _client.put_object(
         settings.minio_bucket,
         object_key,
         BytesIO(data),
         length=len(data),
         content_type=content_type,
+        sse=SseS3(),
     )
 
 

@@ -4,11 +4,14 @@ from datetime import date, datetime, timezone
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.models.photo_access_log import PhotoAccessLog
 from app.models.profile import PrivateProfile, PublicProfile
 from app.models.user import User
 from app.schemas.profile import PublicProfileIn
 from app.services import storage
 from app.services.avatar import avatar_spec_from_seed, generate_avatar_seed
+from app.services.matches import get_match_or_404, other_user_id
+from app.services.subscriptions import is_premium
 
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": "jpg",
@@ -63,7 +66,7 @@ def regenerate_avatar(db: Session, user: User) -> dict:
     return avatar_spec_from_seed(profile.avatar_seed)
 
 
-def to_public_profile_out(profile: PublicProfile) -> dict:
+def to_public_profile_out(db: Session, profile: PublicProfile) -> dict:
     return {
         "display_name": profile.display_name,
         "age": compute_age(profile.birth_date),
@@ -71,6 +74,7 @@ def to_public_profile_out(profile: PublicProfile) -> dict:
         "interests": profile.interests,
         "avatar": avatar_spec_from_seed(profile.avatar_seed),
         "is_published": profile.is_published,
+        "is_premium": is_premium(db, profile.user_id),
     }
 
 
@@ -125,3 +129,23 @@ def to_private_profile_out(profile: PrivateProfile) -> dict:
             {"key": key, "url": storage.presigned_get_url(key)} for key in profile.photo_keys
         ]
     }
+
+
+def get_partner_photos(db: Session, user: User, match_id: uuid.UUID) -> dict:
+    match = get_match_or_404(db, user, match_id)
+    if match.unlocked_at is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Le profil privé n'est pas encore débloqué pour ce match."
+        )
+
+    partner_id = other_user_id(match, user)
+    partner_profile = db.get(PrivateProfile, partner_id)
+    photos = partner_profile.photo_keys if partner_profile else []
+
+    # Journal d'audit : uniquement l'accès aux photos d'*autrui* (cahier des charges A.9) — voir
+    # get_or_create_private_profile / to_private_profile_out pour la consultation de ses propres
+    # photos, qui n'a pas besoin d'être journalisée.
+    db.add(PhotoAccessLog(match_id=match_id, viewer_id=user.id, owner_id=partner_id))
+    db.commit()
+
+    return {"photos": [{"key": key, "url": storage.presigned_get_url(key)} for key in photos]}

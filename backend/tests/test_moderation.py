@@ -1,34 +1,16 @@
-import uuid
-from datetime import datetime, timedelta, timezone
-
 from fastapi.testclient import TestClient
 
-from app.db.session import SessionLocal
 from app.main import app
-from app.models.match import Match
 from tests.helpers import (
     auth_headers,
     create_match,
     create_match_with,
     create_published_user,
+    force_match_unlocked,
     unique_phone,
 )
 
 client = TestClient(app)
-
-
-def _force_unlocked(match_id: str, hours_ago: float) -> None:
-    # Atteindre unlock_threshold flammes par le vrai flux (une question/jour/utilisateur) prendrait
-    # plusieurs jours réels : on pose directement l'état "match débloqué depuis X" en base pour
-    # tester la règle de rancune post-déblocage, comme pour la lecture directe de la Phase 3.
-    db = SessionLocal()
-    try:
-        match = db.get(Match, uuid.UUID(match_id))
-        match.flame_count = match.unlock_threshold
-        match.unlocked_at = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
-        db.commit()
-    finally:
-        db.close()
 
 
 def test_rating_rejects_short_comment():
@@ -106,7 +88,7 @@ def test_rancor_leaning_comment_flagged_by_classifier():
 
 def test_post_unlock_low_score_flagged_by_rule():
     match = create_match(client)
-    _force_unlocked(match["match_id"], hours_ago=1)
+    force_match_unlocked(match["match_id"], hours_ago=1)
 
     response = client.post(
         f"/moderation/matches/{match['match_id']}/rating",
@@ -119,7 +101,7 @@ def test_post_unlock_low_score_flagged_by_rule():
 
 def test_low_score_far_from_unlock_not_flagged_by_rule():
     match = create_match(client)
-    _force_unlocked(match["match_id"], hours_ago=48)  # hors de la fenêtre de 24h
+    force_match_unlocked(match["match_id"], hours_ago=48)  # hors de la fenêtre de 24h
 
     response = client.post(
         f"/moderation/matches/{match['match_id']}/rating",

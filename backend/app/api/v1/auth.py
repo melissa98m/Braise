@@ -7,6 +7,7 @@ from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import OTPRequest, OTPRequestResponse, OTPVerify, TokenResponse
+from app.services import account as account_service
 from app.services import otp as otp_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -34,3 +35,14 @@ def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
 @router.get("/me")
 def read_me(user: User = Depends(get_current_user)):
     return {"id": str(user.id), "phone": user.phone, "is_verified": user.is_verified}
+
+
+@router.get("/me/export")
+def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return account_service.export_my_data(db, user)
+
+
+@router.delete("/me")
+def delete_my_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    account_service.delete_my_account(db, user)
+    return {"message": "Compte supprimé."}

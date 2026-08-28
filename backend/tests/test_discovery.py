@@ -3,6 +3,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.subscriptions import FREE_MATCH_LIMIT
 from tests.helpers import auth_headers, create_published_user, unique_phone
 
 client = TestClient(app)
@@ -159,3 +160,45 @@ def test_discovery_endpoints_require_auth():
         ).status_code
         == 401
     )
+
+
+def test_free_tier_match_limit_blocks_further_likes():
+    hub_headers, hub_id = create_published_user(client, "Hub")
+
+    for _ in range(FREE_MATCH_LIMIT):
+        other_headers, other_id = create_published_user(client, "Autre")
+        client.post(
+            "/discovery/swipe", headers=hub_headers, json={"to_user_id": other_id, "decision": "like"}
+        )
+        reciprocal = client.post(
+            "/discovery/swipe", headers=other_headers, json={"to_user_id": hub_id, "decision": "like"}
+        )
+        assert reciprocal.json()["matched"] is True
+
+    _, one_more_id = create_published_user(client, "En trop")
+    blocked = client.post(
+        "/discovery/swipe", headers=hub_headers, json={"to_user_id": one_more_id, "decision": "like"}
+    )
+    assert blocked.status_code == 402
+
+    # Un "pass" n'est jamais limité : seul le fait de *liker* est concerné.
+    passed = client.post(
+        "/discovery/swipe", headers=hub_headers, json={"to_user_id": one_more_id, "decision": "pass"}
+    )
+    assert passed.status_code == 200
+
+
+def test_premium_bypasses_free_tier_match_limit():
+    hub_headers, hub_id = create_published_user(client, "Hub premium")
+    client.post("/subscriptions/debug-activate", headers=hub_headers)
+
+    for _ in range(FREE_MATCH_LIMIT + 1):
+        other_headers, other_id = create_published_user(client, "Autre premium")
+        like_response = client.post(
+            "/discovery/swipe", headers=hub_headers, json={"to_user_id": other_id, "decision": "like"}
+        )
+        assert like_response.status_code == 200
+        reciprocal = client.post(
+            "/discovery/swipe", headers=other_headers, json={"to_user_id": hub_id, "decision": "like"}
+        )
+        assert reciprocal.json()["matched"] is True

@@ -20,6 +20,9 @@ class User(Base):
     # existantes (voir la migration 2228d479fbdd).
     is_banned = Column(Boolean, default=False, nullable=False, server_default=text("false"))
     banned_at = Column(DateTime(timezone=True), nullable=True)
+    # Droit à l'oubli (cahier des charges A.9) : suppression = anonymisation, pas un hard-delete
+    # cascadé — les Match/Message/Rating d'un tiers restent intacts (voir services/account.py).
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
