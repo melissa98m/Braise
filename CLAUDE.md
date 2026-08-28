@@ -68,8 +68,10 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   `storage.py` for the MinIO client, `profiles.py` for public/private profile CRUD, `avatar.py` for
   the deterministic avatar-sigil). Routers stay thin: parse request → call a service → shape
   response.
-- `api/deps.py` — `get_current_user` is the one auth dependency every protected route uses (decodes
-  the bearer JWT, loads the `User`). Any new protected endpoint takes
+- `api/deps.py` — `user_from_token` is the single place that turns a JWT into a `User`, used both
+  by the `get_current_user` HTTP dependency and manually by the messaging WebSocket handler (which
+  can't use `Depends`). It also enforces `is_banned` — a banned user gets 403 from *every* protected
+  endpoint, no per-router exception. Any new protected endpoint takes
   `user: User = Depends(get_current_user)`, nothing bespoke per-router.
 - Migrations are in `app/migrations/versions/`, generated with `alembic revision --autogenerate`
   against the live dev Postgres — don't hand-write migration files; let Alembic diff the models.
@@ -126,6 +128,26 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   réponse = +1 flamme pour vous deux" in the mockups; `Match.flame_count` already existed from
   Phase 2, this phase just started writing to it.
 
+- **Trust & moderation** (`models/rating.py`, `models/report.py`, `services/moderation.py`,
+  `services/moderation_ml.py`): a `Rating` is one score+comment per `(match_id, rater_id)` — the
+  trust score is *never stored*, it's recomputed on every read from all `Rating` rows for a user
+  (`compute_trust_score`), so there's no cached counter that can drift out of sync. A rating is
+  flagged `suspected_rancor` by either of two independent signals: a rule (score ≤ 2 posted within
+  `POST_UNLOCK_RANCOR_WINDOW` of `Match.unlocked_at`) or `moderation_ml.predict_is_rancor` (a
+  TF-IDF + logistic regression pipeline trained at import time on a hand-written seed dataset in
+  that file — real scikit-learn, real training, but a toy dataset; retrain on bêta data before
+  trusting it, per the docstring there). Flagged ratings are excluded from the trust-score average
+  rather than counted against it — human review decides, the model doesn't punish directly.
+  Auto-ban (`User.is_banned`) only fires past `MIN_RATINGS_FOR_AUTO_BAN = 3` — a deliberate
+  floor so one or two bad-faith ratings can't zero out a brand-new user (cahier des charges A.9).
+  Reports (`Report`) always start `status="pending"`: there's no automatic founded/unfounded
+  triage or reviewer UI yet (cahier des charges C.1 explicitly scopes that to V2) — inspect them
+  via Adminer for now, not a moderation endpoint that doesn't exist.
+- `backend/scripts/scrape_dating_reviews.py` (+ `google-play-scraper` in requirements.txt) is a
+  separate, standalone data-collection script — not part of the running API, not imported by
+  anything under `app/`. Its output lands in `backend/scripts/data/` (gitignored). Read it before
+  assuming what it does; it wasn't written as part of the phase work above.
+
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):
 - OTP: no SMS provider. `services/otp.py` logs the code to stdout and the API returns it directly
@@ -133,8 +155,6 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 - Payments/subscriptions: `subscriptions` router is a stub; no StoreKit/Play Billing integration
   yet (arrives with a real store build, Phase 5+).
 - Push notifications: not implemented at all yet — not needed to validate product logic.
-- ML moderation (`moderation` router): stub for now; the real version (Phase 4) is a small
-  scikit-learn classifier trained on a local seed dataset, no external API calls.
 
 **Infra** (`docker-compose.yml` + `infra/`): Postgres, MinIO (+ a one-shot `minio-init` container
 that runs `infra/minio/init.sh` to create the `braise-photos` bucket via `mc`), the FastAPI

@@ -21,8 +21,17 @@ Référence stack : cahier des charges, section D.11.
   choix, seed déterministe, une par utilisateur/match/jour) ; bonne réponse = +1 flamme partagée
   sur le `Match` posé en Phase 2. Pas de statut de lecture ni d'indicateur de saisie : reporté,
   pas nécessaire pour valider le cœur du mécanisme flammes/déblocage.
-- [ ] **Phase 4 — Module 4 Confiance & Modération.** Notation (note + commentaire ≥ 4 mots
-  obligatoire), classifieur scikit-learn (authenticité), signalement + file de revue humaine.
+- [x] **Phase 4 — Module 4 Confiance & Modération.** Notation (note 1-5 + commentaire ≥ 4 mots
+  obligatoire, une note par match) alimentant un score de confiance calculé à la volée (moyenne des
+  notes non suspectes, labels EXEMPLAIRE/SOLIDE/EN CONSTRUCTION/FRAGILE repris des maquettes).
+  Rancune détectée par deux signaux combinés : règle métier (note basse dans les 24h suivant le
+  déblocage du match) + classifieur scikit-learn maison (TF-IDF + régression logistique, jeu de
+  départ écrit à la main, à réentraîner sur des données réelles — voir
+  `backend/app/services/moderation_ml.py`). Bannissement automatique si le score tombe à 0,
+  garde-fou à 3 notes minimum pour ne pas bannir sur un ou deux avis malveillants (cahier des
+  charges A.9). Signalement avec motif qualifié + commentaire libre, statut `pending` systématique
+  — pas de tri automatique ni d'interface de revue humaine : hors périmètre MVP (cahier des charges
+  C.1/C.2), à consulter via Adminer en attendant un vrai outillage de modération.
 - [ ] **Phase 5 — Modules 5/6 Monétisation (stub) & Sécurité.** Toggle Premium local, URLs signées
   courtes pour les photos privées (MinIO), chiffrement au repos.
 - [ ] **Phase 6 — Mobile.** Flutter (dans son conteneur, cible web d'abord) implémente les écrans

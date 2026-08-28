@@ -167,6 +167,8 @@ def answer_daily_question(db: Session, user: User, match_id: uuid.UUID, selected
     # vit sur Match, pas par utilisateur, conformément au modèle posé en Phase 2.
     if is_correct:
         match.flame_count += 1
+        if match.unlocked_at is None and match.flame_count >= match.unlock_threshold:
+            match.unlocked_at = datetime.now(timezone.utc)
 
     db.commit()
     return {

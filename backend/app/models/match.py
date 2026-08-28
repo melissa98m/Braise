@@ -21,6 +21,11 @@ class Match(Base):
     # charges), pas du mécanisme qui l'incrémente.
     flame_count = Column(Integer, nullable=False, default=0)
     unlock_threshold = Column(Integer, nullable=False, default=5)
+    # Posé quand flame_count franchit unlock_threshold pour la première fois (Phase 3) ; sert de
+    # point de référence en Phase 4 pour repérer une note très négative postée juste après la
+    # découverte du physique (cahier des charges A.4.5 : "corrélation temporelle entre rejet et
+    # note négative").
+    unlocked_at = Column(DateTime(timezone=True), nullable=True)
     matched_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

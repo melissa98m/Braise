@@ -1,8 +1,46 @@
-from fastapi import APIRouter
+import uuid
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user
+from app.db.session import get_db
+from app.models.user import User
+from app.schemas.moderation import RatingIn, RatingOut, ReportIn, ReportOut, TrustScoreOut
+from app.services import moderation as moderation_service
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 
 
-@router.get("/ping")
-def ping():
-    return {"module": "Confiance & Modération", "status": "stub — Phase 4"}
+@router.post("/matches/{match_id}/rating", response_model=RatingOut)
+def rate_match(
+    match_id: uuid.UUID,
+    payload: RatingIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return moderation_service.create_rating(db, user, match_id, payload.score, payload.comment)
+
+
+@router.post("/matches/{match_id}/report", response_model=ReportOut)
+def report_match(
+    match_id: uuid.UUID,
+    payload: ReportIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return moderation_service.create_report(db, user, match_id, payload.reason, payload.comment)
+
+
+@router.get("/reports/mine", response_model=list[ReportOut])
+def my_reports(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return moderation_service.list_my_reports(db, user)
+
+
+@router.get("/users/{user_id}/trust-score", response_model=TrustScoreOut)
+def trust_score(
+    user_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return moderation_service.get_trust_score(db, user_id)

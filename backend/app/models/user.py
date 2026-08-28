@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, String, text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
@@ -15,6 +15,11 @@ class User(Base):
     otp_code = Column(String, nullable=True)
     otp_expires_at = Column(DateTime(timezone=True), nullable=True)
     is_verified = Column(Boolean, default=False, nullable=False)
+    # server_default (pas seulement default=) : cette colonne a été ajoutée à une table déjà
+    # peuplée — sans valeur par défaut côté base, l'ALTER TABLE NOT NULL échoue sur les lignes
+    # existantes (voir la migration 2228d479fbdd).
+    is_banned = Column(Boolean, default=False, nullable=False, server_default=text("false"))
+    banned_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

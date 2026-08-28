@@ -84,3 +84,40 @@ def create_match(
         "id_b": id_b,
         "match_id": match_id,
     }
+
+
+def create_match_with(client, other_headers: dict, other_id: str) -> dict:
+    """Crée un nouvel utilisateur publié et le fait matcher avec un utilisateur *existant*.
+
+    Sert à obtenir plusieurs match distincts vers la même personne (ex: N utilisateurs qui
+    notent tous le même compte), ce que `create_match` seul ne permet pas puisqu'il crée
+    systématiquement deux comptes neufs.
+    """
+    token = auth_token(client, unique_phone())
+    headers = {"Authorization": f"Bearer {token}"}
+    my_id = client.get("/auth/me", headers=headers).json()["id"]
+
+    client.put(
+        "/profiles/me/public",
+        headers=headers,
+        json={
+            "display_name": "Match test",
+            "birth_date": "1996-01-01",
+            "bio": "",
+            "interests": [],
+            "is_published": True,
+        },
+    )
+
+    client.post(
+        "/discovery/swipe", headers=headers, json={"to_user_id": other_id, "decision": "like"}
+    )
+    second = client.post(
+        "/discovery/swipe", headers=other_headers, json={"to_user_id": my_id, "decision": "like"}
+    )
+    assert second.json()["matched"] is True
+
+    matches = client.get("/discovery/matches", headers=headers).json()
+    match_id = next(m["match_id"] for m in matches if m["other_user_id"] == other_id)
+
+    return {"token": token, "headers": headers, "id": my_id, "match_id": match_id}
