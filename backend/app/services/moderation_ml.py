@@ -40,7 +40,10 @@ _texts, _labels = _load_dataset()
 _pipeline = Pipeline(
     [
         ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1)),
-        ("clf", LogisticRegression(max_iter=1000)),
+        # class_weight="balanced" : les deux classes n'ont pas vocation à rester de même taille
+        # au fil des ajouts au CSV, or un déséquilibre biaise sinon le seuil de décision côté
+        # majoritaire plutôt que de rester ancré aux mots réellement discriminants.
+        ("clf", LogisticRegression(max_iter=1000, class_weight="balanced")),
     ]
 )
 _pipeline.fit(_texts, _labels)
