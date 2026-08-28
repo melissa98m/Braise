@@ -95,8 +95,28 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               padding: const EdgeInsets.all(BraiseSpacing.xxl),
               child: Column(
                 children: [
-                  Expanded(child: _CandidateCard(candidate: _feed.first)),
-                  const SizedBox(height: BraiseSpacing.xl),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.04),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: _CandidateCard(
+                        key: ValueKey(_feed.first.userId),
+                        candidate: _feed.first,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: BraiseSpacing.lg),
                   Row(
                     children: [
                       Expanded(
@@ -115,6 +135,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       ),
                     ],
                   ),
+                  if (_feed.length > 1) ...[
+                    const SizedBox(height: BraiseSpacing.lg),
+                    _NextCandidatePreview(candidate: _feed[1]),
+                  ],
                 ],
               ),
             ),
@@ -123,7 +147,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 }
 
 class _CandidateCard extends StatelessWidget {
-  const _CandidateCard({required this.candidate});
+  const _CandidateCard({super.key, required this.candidate});
 
   final DiscoveryCandidate candidate;
 
@@ -177,6 +201,54 @@ class _CandidateCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Aperçu du prochain profil de la file — moins présent (opacité réduite), jamais la même
+/// hiérarchie que la carte active : on garde "une carte à la fois" (cahier des charges A.7).
+class _NextCandidatePreview extends StatelessWidget {
+  const _NextCandidatePreview({required this.candidate});
+
+  final DiscoveryCandidate candidate;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = BraiseTokens.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return Opacity(
+      opacity: 0.8,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(BraiseSpacing.lg),
+        decoration: BoxDecoration(
+          color: tokens.surface1,
+          border: Border.all(color: tokens.borderHairline),
+          borderRadius: BorderRadius.circular(BraiseRadii.card),
+        ),
+        child: Row(
+          children: [
+            AvatarSigil(spec: candidate.avatar, size: 44),
+            const SizedBox(width: BraiseSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${candidate.displayName} · ${candidate.age}', style: textTheme.titleMedium),
+                  const SizedBox(height: BraiseSpacing.xs),
+                  Text(
+                    '« ${candidate.bio} »',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

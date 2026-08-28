@@ -7,6 +7,7 @@ import '../../models/discovery.dart';
 import '../../models/messaging.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
+import '../../widgets/braise_page_route.dart';
 import '../../widgets/flame_diamonds.dart';
 import '../rating/rating_screen.dart';
 import '../unlock/unlock_screen.dart';
@@ -153,16 +154,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
             _Banner(
               text: 'Profil privé débloqué — voir les photos',
               color: tokens.foiInk,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => UnlockScreen(match: _match)),
-              ),
+              onTap: () => Navigator.of(
+                context,
+              ).push(braiseRoute(context, UnlockScreen(match: _match))),
             ),
           _Banner(
             text: 'Noter cet échange',
             color: tokens.voileInk,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => RatingScreen(match: _match)),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(braiseRoute(context, RatingScreen(match: _match))),
           ),
           Expanded(
             child: ListView.builder(
@@ -172,6 +173,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
               itemBuilder: (context, index) {
                 final message = _messages[index];
                 final isMine = message.senderId == myId;
+                // Coin "queue" resserré (6px) du côté de l'émetteur — même asymétrie que la
+                // maquette, pas un simple rectangle arrondi uniforme.
+                final radius = BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isMine ? 18 : 6),
+                  bottomRight: Radius.circular(isMine ? 6 : 18),
+                );
                 return Align(
                   alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
@@ -183,7 +192,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       border: Border.all(
                         color: isMine ? tokens.braiseInk : tokens.borderHairline,
                       ),
-                      borderRadius: BorderRadius.circular(BraiseRadii.card),
+                      borderRadius: radius,
                     ),
                     child: Text(message.body, style: textTheme.bodyLarge),
                   ),
@@ -271,6 +280,7 @@ class _DailyQuestionCard extends StatelessWidget {
         color: tokens.surface1,
         border: Border.all(color: tokens.braiseInk, width: 1.75),
         borderRadius: BorderRadius.circular(BraiseRadii.keyCard),
+        boxShadow: [BoxShadow(color: tokens.braiseInk.withValues(alpha: 0.14), blurRadius: 40)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

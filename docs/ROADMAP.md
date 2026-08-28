@@ -47,8 +47,18 @@ Référence stack : cahier des charges, section D.11.
 - [x] **Phase 6 — Mobile.** Flutter (conteneur `ghcr.io/cirruslabs/flutter:stable`, cible web,
   servi sur `localhost:5000`) implémente les 8 écrans du cahier des charges avec fidélité
   fonctionnelle sur le thème dark/light complet (`docs/DESIGN_TOKENS.md` porté 1:1 dans
-  `BraiseTokens`/`buildBraiseTheme`) — hors polish d'animation, explicitement laissé de côté pour
-  cette passe. Écran d'onboarding adapté en saisie OTP (pas de scan KYC : le backend n'en a pas).
+  `BraiseTokens`/`buildBraiseTheme`). Une passe de polish ultérieure (mêmes 4 documents de
+  maquette re-fournis en pièce jointe) a ajouté : l'alphabet de signes (`widgets/sign_shapes.dart`
+  — cercle/carré/cercle plein pour la barre d'onglets, carré-à-noyau, diamant) plutôt que des
+  icônes Material génériques ; des transitions d'écran fondu+glissement communes
+  (`widgets/braise_page_route.dart`, désactivées si `MediaQuery.disableAnimations`) ; le halo
+  ambré sous les CTA primaires (`elevation`/`shadowColor` du thème) ; les coins de bulle
+  asymétriques et le halo de la carte "question du jour" en conversation ; le fond radial et le
+  cadre lumineux des photos à l'écran de déblocage ; les 5 barres de confiance croissantes
+  (calculées côté client depuis `TrustScore.score`, jamais un badge "vérifié" fictif — la donnée
+  n'existe pas côté backend) ; l'aperçu du prochain profil en découverte (déjà présent dans la
+  réponse de feed, simplement pas affiché avant) ; le diamant Braise+ pulsé
+  (`@keyframes braisePulse` de la maquette). Écran d'onboarding adapté en saisie OTP (pas de scan KYC : le backend n'en a pas).
   Découverte à carte unique, pas de grille de swipe (principe "pas de catalogue" du cahier des
   charges). Conversation branchée sur le WebSocket réel (`ChatSocket`, même schéma token-en-query
   que le backend Phase 3) fusionné à l'historique REST, question quotidienne, bannières de

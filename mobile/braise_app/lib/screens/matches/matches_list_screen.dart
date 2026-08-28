@@ -5,6 +5,7 @@ import '../../api/api_exception.dart';
 import '../../models/discovery.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
+import '../../widgets/braise_page_route.dart';
 import '../../widgets/flame_diamonds.dart';
 import '../messaging/conversation_screen.dart';
 
@@ -82,9 +83,8 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
                       style: textTheme.bodyMedium,
                     ),
                     trailing: FlameDiamonds(filled: match.flameCount, total: match.unlockThreshold),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => ConversationScreen(match: match)),
-                    ),
+                    onTap: () =>
+                        Navigator.of(context).push(braiseRoute(context, ConversationScreen(match: match))),
                   );
                 },
               ),

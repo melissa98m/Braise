@@ -51,50 +51,105 @@ class _UnlockScreenState extends State<UnlockScreen> {
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profil privé')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(child: Text(_error!, style: TextStyle(color: tokens.erreur)))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(BraiseSpacing.xxl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '3 / 3 flammes · le voile cède',
-                    style: textTheme.labelSmall?.copyWith(color: tokens.braiseInk),
+      appBar: AppBar(title: const Text('Profil privé'), backgroundColor: Colors.transparent),
+      extendBodyBehindAppBar: true,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        // Halo chaud radial derrière l'écran de déblocage — même geste que la maquette
+        // (radial-gradient), jamais un fond plat pour ce moment.
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(0, -0.4),
+            radius: 0.9,
+            colors: isDark
+                ? [const Color(0xFF2A1A12), tokens.surfaceRoot]
+                : [const Color(0xFFFFE6CE), tokens.surfaceRoot],
+          ),
+        ),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(child: Text(_error!, style: TextStyle(color: tokens.erreur)))
+            : SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    BraiseSpacing.xxl,
+                    BraiseSpacing.xxxl,
+                    BraiseSpacing.xxl,
+                    BraiseSpacing.xxxl,
                   ),
-                  const SizedBox(height: BraiseSpacing.md),
-                  Text('Vous vous connaissiez déjà. Voici son visage.', style: textTheme.headlineMedium),
-                  const SizedBox(height: BraiseSpacing.xl),
-                  if (_photos.isEmpty)
-                    Text(
-                      "${widget.match.otherDisplayName} n'a pas encore ajouté de photo privée.",
-                      style: textTheme.bodyLarge,
-                    )
-                  else
-                    Wrap(
-                      spacing: BraiseSpacing.md,
-                      runSpacing: BraiseSpacing.md,
-                      children: [
-                        for (final photo in _photos)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(BraiseRadii.media),
-                            child: Image.network(
-                              photo.url,
-                              width: 160,
-                              height: 200,
-                              fit: BoxFit.cover,
-                            ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        '3 / 3 flammes · le voile cède',
+                        textAlign: TextAlign.center,
+                        style: textTheme.labelSmall?.copyWith(
+                          color: tokens.braiseInk,
+                          letterSpacing: 12 * 0.18,
+                        ),
+                      ),
+                      const SizedBox(height: BraiseSpacing.md),
+                      Text(
+                        'Vous vous connaissiez déjà. Voici son visage.',
+                        textAlign: TextAlign.center,
+                        style: textTheme.displayLarge,
+                      ),
+                      const SizedBox(height: BraiseSpacing.xl),
+                      if (_photos.isEmpty)
+                        Text(
+                          "${widget.match.otherDisplayName} n'a pas encore ajouté de photo privée.",
+                          textAlign: TextAlign.center,
+                          style: textTheme.bodyLarge,
+                        )
+                      else
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, t, child) => Opacity(
+                            opacity: t,
+                            child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
                           ),
-                      ],
-                    ),
-                ],
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: BraiseSpacing.md,
+                            runSpacing: BraiseSpacing.md,
+                            children: [
+                              for (final photo in _photos)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(BraiseRadii.media),
+                                    border: Border.all(color: tokens.braiseInk, width: 1.75),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: tokens.braiseInk.withValues(alpha: 0.25),
+                                        blurRadius: 60,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(BraiseRadii.media - 1.75),
+                                    child: Image.network(
+                                      photo.url,
+                                      width: 160,
+                                      height: 200,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+      ),
     );
   }
 }

@@ -123,6 +123,10 @@ ThemeData buildBraiseTheme(Brightness brightness) {
         minimumSize: const Size.fromHeight(56),
         textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w700, fontSize: 17),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BraiseRadii.card)),
+        // Halo ambré sous le CTA primaire — motif répété dans toute la maquette
+        // (box-shadow 0 10px 30px rgba(braise,.28)), jamais un simple bouton plat.
+        elevation: 8,
+        shadowColor: tokens.braiseFill.withValues(alpha: 0.55),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(

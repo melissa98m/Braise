@@ -131,17 +131,39 @@ class _RatingScreenState extends State<RatingScreen> {
               ),
             ),
             const SizedBox(height: BraiseSpacing.sm),
-            Row(
-              children: [
-                Icon(Icons.info_outline, size: 16, color: tokens.alerte),
-                const SizedBox(width: BraiseSpacing.xs),
-                Expanded(
-                  child: Text(
-                    "Une note sans commentaire n'est pas enregistrée : c'est ce qui rend le score fiable.",
-                    style: textTheme.bodyMedium,
+            Container(
+              padding: const EdgeInsets.all(BraiseSpacing.md),
+              decoration: BoxDecoration(
+                color: tokens.alerte.withValues(alpha: 0.1),
+                border: Border.all(color: tokens.alerte),
+                borderRadius: BorderRadius.circular(BraiseRadii.card),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: tokens.alerte, width: 1.75),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '!',
+                      style: textTheme.labelSmall?.copyWith(color: tokens.alerte, fontSize: 13),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: BraiseSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      "Une note sans commentaire n'est pas enregistrée : c'est ce qui rend le "
+                      "score fiable pour tout le monde.",
+                      style: textTheme.bodyMedium?.copyWith(color: tokens.inkPrimary),
+                    ),
+                  ),
+                ],
+              ),
             ),
             if (_error != null)
               Padding(
@@ -192,7 +214,8 @@ class _ScoreChip extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(BraiseRadii.field),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
         width: 52,
         height: 52,
         alignment: Alignment.center,
@@ -204,13 +227,14 @@ class _ScoreChip extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(BraiseRadii.field),
         ),
-        child: Text(
-          '$value',
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 150),
           style: TextStyle(
             color: selected ? tokens.braiseFillText : tokens.inkSecondary,
             fontWeight: FontWeight.w700,
             fontSize: 17,
           ),
+          child: Text('$value'),
         ),
       ),
     );

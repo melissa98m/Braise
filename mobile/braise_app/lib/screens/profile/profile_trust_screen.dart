@@ -7,6 +7,7 @@ import '../../models/public_profile.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
+import '../../widgets/braise_page_route.dart';
 import '../../widgets/flame_diamonds.dart';
 import '../onboarding/otp_screen.dart';
 import '../paywall/paywall_screen.dart';
@@ -86,10 +87,9 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
     await services.apiClient.delete('/auth/me');
     await services.authController.signOut();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const OtpScreen()),
-      (route) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(braiseRoute(context, const OtpScreen()), (route) => false);
   }
 
   @override
@@ -157,10 +157,19 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
                       ),
                       Text('/100', style: textTheme.bodyMedium),
                       const Spacer(),
-                      if (trust.label != null)
-                        Text(
-                          trust.label!,
-                          style: textTheme.labelSmall?.copyWith(color: tokens.inkPrimary),
+                      if (trust.score != null)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _TrustBars(score: trust.score!),
+                            if (trust.label != null) ...[
+                              const SizedBox(height: BraiseSpacing.sm),
+                              Text(
+                                trust.label!,
+                                style: textTheme.labelSmall?.copyWith(color: tokens.inkPrimary),
+                              ),
+                            ],
+                          ],
                         ),
                     ],
                   ),
@@ -190,16 +199,15 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
             ),
             const SizedBox(height: BraiseSpacing.xxl),
             OutlinedButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProfileSetupScreen()),
-              ).then((_) => _load()),
+              onPressed: () => Navigator.of(context)
+                  .push(braiseRoute(context, const ProfileSetupScreen()))
+                  .then((_) => _load()),
               child: const Text('Modifier mon profil public'),
             ),
             const SizedBox(height: BraiseSpacing.sm),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PaywallScreen()),
-              ),
+              onPressed: () =>
+                  Navigator.of(context).push(braiseRoute(context, const PaywallScreen())),
               style: ElevatedButton.styleFrom(backgroundColor: tokens.alerte, foregroundColor: tokens.surfaceRoot),
               child: const Text('Braise+'),
             ),
@@ -219,6 +227,41 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 5 barres croissantes, pleines jusqu'à `score / 20` puis en contour — le score se lit par
+/// forme et par hauteur, jamais par une seule couleur (docs/DESIGN_TOKENS.md, accessibilité).
+class _TrustBars extends StatelessWidget {
+  const _TrustBars({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = BraiseTokens.of(context);
+    final filled = (score / 20).round();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (var i = 1; i <= 5; i++)
+          Padding(
+            padding: const EdgeInsets.only(left: 5),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              width: 7,
+              height: 16 + i * 6,
+              decoration: BoxDecoration(
+                color: i <= filled ? tokens.foiInk : null,
+                border: i <= filled ? null : Border.all(color: tokens.foiInk, width: 1.75),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
