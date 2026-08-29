@@ -6,6 +6,7 @@ import '../../models/discovery.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
+import '../../widgets/sign_shapes.dart';
 
 /// Écran 03 — pas de swipe façon catalogue : une carte à la fois, hiérarchie phrase > intérêts
 /// > avatar (cahier des charges A.7 : refuse le tri purement visuel).
@@ -25,7 +26,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
     vsync: this,
     duration: const Duration(milliseconds: 280),
   );
-  // -1 = "Passer" (sort à gauche), 1 = "Répondre" (sort à droite) — même sens que le swipe
+  // -1 = "Passer" (sort à gauche), 1 = "Braise" (sort à droite) — même sens que le swipe
   // Tinder classique, même si le geste de glisser n'existe pas ici (cahier des charges A.7).
   int _exitSign = 0;
   bool _isSwiping = false;
@@ -133,6 +134,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
                       duration: const Duration(milliseconds: 260),
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
+                      // AnimatedSwitcher clippe (hardEdge) sa pile interne par défaut : la carte
+                      // active qui glisse hors de sa propre largeur se ferait couper des deux
+                      // côtés au lieu de sortir de l'écran. On désactive le clip pour ce widget.
+                      layoutBuilder: (currentChild, previousChildren) => Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [...previousChildren, ?currentChild],
+                      ),
                       transitionBuilder: (child, animation) => FadeTransition(
                         opacity: animation,
                         child: SlideTransition(
@@ -178,9 +187,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
                       const SizedBox(width: BraiseSpacing.md),
                       Expanded(
                         flex: 2,
-                        child: ElevatedButton(
+                        child: ElevatedButton.icon(
                           onPressed: _isSwiping ? null : () => _swipe('like'),
-                          child: Text('Répondre à ${_feed.first.displayName}'),
+                          icon: SignDiamond(color: tokens.braiseFillText, size: 16),
+                          label: const Text('Braise'),
                         ),
                       ),
                     ],
