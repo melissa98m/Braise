@@ -489,6 +489,34 @@ techniques : cahier des charges sections A, B, C, D.
   `NotificationPrefs`, 7 sur les points de déclenchement Discovery/Settings/RootShell),
   `flutter analyze` propre, `flutter build web` réussi, 80/80 tests backend inchangés.
 
+- [x] **P9.2 — Badge de messages non lus.** Le statut lu/non lu par message existait déjà côté
+  backend depuis la Phase 3 (`last_read_at_a`/`last_read_at_b`, `services/matches.message_is_read`)
+  mais rien ne l'agrégeait ni ne l'affichait : ni compteur sur l'onglet "Échanges", ni indicateur
+  par match dans `MatchesListScreen`. `services/discovery.list_my_matches` calcule désormais
+  `unread_count` par match (nouveau champ sur `MatchOut`) — une seule requête batchée sur tous les
+  messages de l'autre côté à travers tous mes matchs, comparaison à mon "lu jusqu'à" (par match,
+  donc en Python après cette requête unique) plutôt qu'une requête par match, même principe que le
+  scoring de compatibilité du feed. Test backend dédié
+  (`test_match_list_reports_unread_count_from_the_other_side_only`) : mes propres messages ne
+  comptent jamais comme non lus pour moi, et marquer comme lu remet le compteur à 0.
+
+  Côté mobile, `MatchSummary.unreadCount` s'affiche en `Badge.count` sur chaque ligne de
+  `MatchesListScreen` et, agrégé, sur l'icône de l'onglet "Échanges" dans `RootShell`. `RootShell`
+  appelle `getMatches()` une troisième fois pour ce total — `MatchesListScreen` et
+  `ProfileTrustScreen` l'appellent déjà chacun indépendamment pour leurs propres besoins, donc un
+  troisième appelant suit le même principe pragmatique plutôt que d'inventer un état partagé entre
+  3 écrans pour une fonctionnalité à l'échelle MVP. Cet appel est protégé par un `try/catch`
+  (contrairement au reste de `RootShell`, qui ne dépend de rien de bloquant) : un badge est
+  purement décoratif, une erreur ne doit jamais remonter comme une exception non gérée —
+  `MatchesListScreen` affiche déjà sa propre erreur si le problème persiste réellement. Pas de
+  rafraîchissement en direct pendant qu'une conversation est ouverte (aucun bus d'événements
+  inter-écrans n'existe) : le badge se met à jour au montage et en quittant l'onglet Échanges, ce
+  qui couvre le cas réel (il se vide en revenant de la messagerie) sans machinerie d'état partagé
+  supplémentaire.
+
+  84/84 tests Flutter au total, `flutter analyze` propre, `flutter build web` réussi, 81/81 tests
+  backend, `ruff check .` propre.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

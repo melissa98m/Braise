@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../api/api_exception.dart';
 import '../notifications/notification_prefs.dart';
 import '../state/app_services.dart';
 import '../theme/braise_tokens.dart';
@@ -29,6 +30,7 @@ class _RootShellState extends State<RootShell> {
   static const _questionLastShownKey = 'braise_notif_question_last_shown';
 
   int _index = 0;
+  int _totalUnread = 0;
 
   static const _screens = [
     DiscoveryScreen(),
@@ -40,6 +42,27 @@ class _RootShellState extends State<RootShell> {
   void initState() {
     super.initState();
     unawaited(_maybeNotifyDailyQuestion());
+    unawaited(_refreshUnreadBadge());
+  }
+
+  /// P9.2 : badge global sur l'onglet "Échanges" — `MatchesListScreen`/`ProfileTrustScreen`
+  /// appellent déjà `getMatches()` chacun de leur côté pour leurs propres besoins (liste,
+  /// total de flammes) ; un troisième appel ici pour le badge suit le même principe pragmatique
+  /// plutôt que d'inventer un état partagé pour 3 écrans. Pas de rafraîchissement en direct
+  /// pendant qu'une conversation est ouverte (pas de flux global de lecture inter-écrans) :
+  /// seulement au montage et en quittant l'onglet Échanges, qui couvre le cas réel (le badge se
+  /// vide quand on revient de la messagerie).
+  Future<void> _refreshUnreadBadge() async {
+    try {
+      final matches = await context.read<AppServices>().discoveryApi.getMatches();
+      if (!mounted) return;
+      setState(() {
+        _totalUnread = matches.fold(0, (sum, m) => sum + m.unreadCount);
+      });
+    } on ApiException {
+      // Purement décoratif (un badge) : une erreur ici ne doit jamais faire échouer RootShell
+      // ni s'afficher — MatchesListScreen affiche déjà sa propre erreur si le problème persiste.
+    }
   }
 
   Future<void> _maybeNotifyDailyQuestion() async {
@@ -67,7 +90,13 @@ class _RootShellState extends State<RootShell> {
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: (value) {
+          // On quitte l'onglet Échanges : c'est le moment le plus probable où des messages
+          // viennent d'être lus, donc où le badge doit se vider.
+          final leavingMatches = _index == 1 && value != 1;
+          setState(() => _index = value);
+          if (leavingMatches) unawaited(_refreshUnreadBadge());
+        },
         destinations: [
           NavigationDestination(
             icon: SignCircleOutline(color: tokens.inkSecondary),
@@ -75,8 +104,16 @@ class _RootShellState extends State<RootShell> {
             label: 'Découvrir',
           ),
           NavigationDestination(
-            icon: SignSquareOutline(color: tokens.inkSecondary),
-            selectedIcon: SignSquareOutline(color: tokens.braiseInk),
+            icon: Badge.count(
+              count: _totalUnread,
+              isLabelVisible: _totalUnread > 0,
+              child: SignSquareOutline(color: tokens.inkSecondary),
+            ),
+            selectedIcon: Badge.count(
+              count: _totalUnread,
+              isLabelVisible: _totalUnread > 0,
+              child: SignSquareOutline(color: tokens.braiseInk),
+            ),
             label: 'Échanges',
           ),
           NavigationDestination(

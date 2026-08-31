@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -6,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.match import Match
+from app.models.message import Message
 from app.models.profile import PublicProfile
 from app.models.swipe import Swipe, SwipeDecision
 from app.models.user import User
@@ -169,6 +171,18 @@ def list_my_matches(db: Session, user: User) -> list[dict]:
         for profile in db.query(PublicProfile).filter(PublicProfile.user_id.in_(other_ids)).all()
     }
 
+    # Idem pour le compte de messages non lus (badge P9.2) : une seule requête sur tous les
+    # matchs plutôt qu'une par match. Le seuil "lu jusqu'à" diffère par match (mon côté du
+    # match, `last_read_at_a` ou `last_read_at_b` selon lequel je suis) donc le filtre par date
+    # se fait ici en Python plutôt qu'en SQL — même principe que le tri par compatibilité du feed
+    # (services/discovery.get_feed) : borné par match plutôt que par un JOIN corrélé par ligne.
+    match_ids = [m.id for m in matches]
+    messages_from_other_side = defaultdict(list)
+    for match_id, sender_id, created_at in db.query(
+        Message.match_id, Message.sender_id, Message.created_at
+    ).filter(Message.match_id.in_(match_ids), Message.sender_id != user.id):
+        messages_from_other_side[match_id].append(created_at)
+
     results = []
     for match in matches:
         other_id = other_user_id(match, user)
@@ -176,6 +190,12 @@ def list_my_matches(db: Session, user: User) -> list[dict]:
         threshold = match.unlock_threshold or 1
         unlock_pct = min(100, round(match.flame_count / threshold * 100))
         blur_stage = "net" if unlock_pct >= 100 else ("flou_leger" if unlock_pct > 0 else "silhouette")
+        my_last_read = match.last_read_at_a if match.user_a_id == user.id else match.last_read_at_b
+        unread_count = sum(
+            1
+            for created_at in messages_from_other_side.get(match.id, [])
+            if my_last_read is None or created_at > my_last_read
+        )
         results.append(
             {
                 "match_id": match.id,
@@ -186,6 +206,7 @@ def list_my_matches(db: Session, user: User) -> list[dict]:
                 "unlock_pct": unlock_pct,
                 "blur_stage": blur_stage,
                 "matched_at": match.matched_at,
+                "unread_count": unread_count,
             }
         )
     return results

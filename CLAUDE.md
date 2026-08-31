@@ -137,7 +137,12 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   (`MAX_CANDIDATE_POOL = 200` rows, further capped to `limit` ≤ 50 in the response) — this keeps
   per-request cost predictable without needing a JSONB-array-overlap SQL query at MVP scale.
   `list_my_matches` batches the other-side profile lookup into one `IN (...)` query instead of
-  N+1. A swipe target that doesn't exist and one that exists but isn't `is_published` return the
+  N+1, and likewise batches `unread_count` per match (P9.2, the mobile "Échanges" badge) — one
+  query fetching every candidate message (sent by the other side, across all my matches) rather
+  than one query per match; since the "read up to" threshold is per-match (`last_read_at_a`/`_b`,
+  whichever side I am), the per-row date comparison happens in Python after that single fetch,
+  same "batch the query, filter in Python" split as the compatibility scoring above. A swipe
+  target that doesn't exist and one that exists but isn't `is_published` return the
   *same* 404 — don't let that distinction leak through, it's a user-enumeration vector. Base
   discovery filters (cahier des charges A.5: age range + looking-for gender; distance stays out of
   scope, no geolocation capture exists anywhere in the app) live as nullable columns on
@@ -432,6 +437,19 @@ Flutter SDK is never installed on the host):
   and `RootShell.initState` (a daily-question nudge, at most once per calendar day, tracked by a
   date stamp in `shared_preferences` rather than genuinely scheduled — the closest honest
   approximation of "daily reminder" achievable without a Service Worker).
+- **Unread message badge (P9.2)**: `MatchSummary.unreadCount` (from `MatchOut.unread_count`,
+  backend) surfaces as a `Badge.count` on each row in `MatchesListScreen` and, aggregated, on the
+  "Échanges" tab icon in `RootShell`. `RootShell` fetches `getMatches()` a third time on its own
+  purely for this total — `MatchesListScreen` and `ProfileTrustScreen` already each call it
+  independently for their own needs, so a third independent caller follows the same established
+  pattern rather than inventing shared state across 3 screens for one MVP-scale feature. That
+  call is wrapped in `try/catch` (unlike the rest of `RootShell`, this one is easy to get wrong
+  since nothing else in `RootShell` gates on `_loading`): a badge is decorative, so a failure
+  here must never surface as an error or an unhandled exception — `MatchesListScreen` already
+  shows its own error if the underlying problem persists. No live refresh while a conversation is
+  open (no cross-screen event bus exists) — the badge updates on mount and when the user
+  navigates away from the Échanges tab, which covers the real case (it clears after visiting the
+  inbox) without new shared-state machinery.
 - Screens live under `lib/screens/<module>/`, one subfolder per backend module, and are adapted
   from the mockups rather than copied verbatim where the backend doesn't match: OTP entry replaces
   the mockup's KYC/ID-scan step (no KYC exists), discovery is a single-card feed rather than a

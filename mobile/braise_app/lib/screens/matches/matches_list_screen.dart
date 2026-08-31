@@ -82,7 +82,13 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
                       match.isUnlocked ? 'Profil privé débloqué' : 'Profil privé · ${match.unlockPct}%',
                       style: textTheme.bodyMedium,
                     ),
-                    trailing: FlameDiamonds(filled: match.flameCount, total: match.unlockThreshold),
+                    trailing: Badge.count(
+                      count: match.unreadCount,
+                      isLabelVisible: match.unreadCount > 0,
+                      alignment: AlignmentDirectional.topStart,
+                      offset: const Offset(-4, -4),
+                      child: FlameDiamonds(filled: match.flameCount, total: match.unlockThreshold),
+                    ),
                     onTap: () =>
                         Navigator.of(context).push(braiseRoute(context, ConversationScreen(match: match))),
                   );

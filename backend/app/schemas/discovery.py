@@ -43,3 +43,6 @@ class MatchOut(BaseModel):
     unlock_pct: int
     blur_stage: Literal["silhouette", "flou_leger", "net"]
     matched_at: datetime
+    # Badge de messages non lus (P9.2) : messages de l'autre côté envoyés après mon "lu jusqu'à"
+    # sur ce match (services/matches.mark_read) — voir list_my_matches pour le calcul batché.
+    unread_count: int

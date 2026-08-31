@@ -54,6 +54,10 @@ class MatchSummary {
     required this.unlockPct,
     required this.blurStage,
     required this.matchedAt,
+    // Optionnel avec valeur par défaut (pas `required`) plutôt que de forcer chaque
+    // construction directe existante (RatingScreen/UnlockScreen/ReportScreen dans les tests) à
+    // fournir une valeur qui ne les concerne pas — seul MatchesListScreen/RootShell l'affichent.
+    this.unreadCount = 0,
   });
 
   factory MatchSummary.fromJson(Map<String, dynamic> json) {
@@ -66,6 +70,7 @@ class MatchSummary {
       unlockPct: json['unlock_pct'] as int,
       blurStage: json['blur_stage'] as String,
       matchedAt: DateTime.parse(json['matched_at'] as String),
+      unreadCount: json['unread_count'] as int? ?? 0,
     );
   }
 
@@ -77,6 +82,7 @@ class MatchSummary {
   final int unlockPct;
   final String blurStage; // "silhouette" | "flou_leger" | "net"
   final DateTime matchedAt;
+  final int unreadCount;
 
   bool get isUnlocked => blurStage == 'net';
 }

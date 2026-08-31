@@ -2,7 +2,9 @@
 // event to hook into (unlike a match or a message) — it fires once per calendar day on first
 // mount, tracked via a SharedPreferences date stamp. These tests mock the 4 endpoints its 3
 // eagerly-built tabs (DiscoveryScreen, MatchesListScreen, ProfileTrustScreen — an IndexedStack
-// builds all of them at once) need to avoid unrelated error states.
+// builds all of them at once) need to avoid unrelated error states. Also covers the P9.2 unread
+// badge on the "Échanges" tab, which RootShell fetches on its own (a third independent
+// getMatches() call, same pragmatic pattern MatchesListScreen/ProfileTrustScreen already used).
 
 import 'dart:convert';
 
@@ -29,13 +31,25 @@ http.Response _json(Object data, int status) {
   );
 }
 
-MockClient _tabsClient() {
+Map<String, dynamic> _match({required String matchId, int unreadCount = 0}) => {
+  'match_id': matchId,
+  'other_user_id': 'user-$matchId',
+  'other_display_name': 'Camille',
+  'flame_count': 1,
+  'unlock_threshold': 5,
+  'unlock_pct': 20,
+  'blur_stage': 'silhouette',
+  'matched_at': '2026-01-01T00:00:00Z',
+  'unread_count': unreadCount,
+};
+
+MockClient _tabsClient({List<Map<String, dynamic>> matches = const []}) {
   return MockClient((request) async {
     if (request.method == 'GET' && request.url.path == '/discovery/feed') {
       return _json([], 200);
     }
     if (request.method == 'GET' && request.url.path == '/discovery/matches') {
-      return _json([], 200);
+      return _json(matches, 200);
     }
     if (request.method == 'GET' && request.url.path == '/profiles/me/public') {
       return _json({
@@ -123,5 +137,30 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(notified, isFalse);
+  });
+
+  testWidgets('shows the total unread count as a badge on the Échanges tab', (tester) async {
+    final services = AppServices(
+      httpClient: _tabsClient(
+        matches: [_match(matchId: 'm1', unreadCount: 2), _match(matchId: 'm2', unreadCount: 3)],
+      ),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+
+    expect(find.text('5'), findsOneWidget);
+  });
+
+  testWidgets('no unread messages shows no badge', (tester) async {
+    final services = AppServices(
+      httpClient: _tabsClient(matches: [_match(matchId: 'm1', unreadCount: 0)]),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+
+    final badges = tester.widgetList<Badge>(find.byType(Badge)).toList();
+    expect(badges.every((b) => !b.isLabelVisible), isTrue);
   });
 }

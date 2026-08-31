@@ -355,3 +355,30 @@ def test_profile_rejects_invalid_gender_value():
         },
     )
     assert response.status_code == 422
+
+
+def test_match_list_reports_unread_count_from_the_other_side_only():
+    # P9.2 : le badge de messages non lus côté mobile s'appuie sur ce champ — un message que
+    # j'ai moi-même envoyé ne doit jamais compter comme "non lu" pour moi.
+    match = create_match(client)
+    url_a = f"/messaging/ws/{match['match_id']}?token={match['token_a']}"
+    url_b = f"/messaging/ws/{match['match_id']}?token={match['token_b']}"
+
+    with client.websocket_connect(url_b) as ws_b:
+        ws_b.send_json({"type": "message", "body": "Premier message."})
+        ws_b.receive_json()
+        ws_b.send_json({"type": "message", "body": "Deuxième message."})
+        ws_b.receive_json()
+
+    with client.websocket_connect(url_a) as ws_a:
+        ws_a.send_json({"type": "message", "body": "Ma propre réponse."})
+        ws_a.receive_json()
+
+    matches_a = client.get("/discovery/matches", headers=match["headers_a"]).json()
+    assert matches_a[0]["unread_count"] == 2
+
+    with client.websocket_connect(url_a) as ws_a:
+        ws_a.send_json({"type": "read"})
+
+    matches_a_after_read = client.get("/discovery/matches", headers=match["headers_a"]).json()
+    assert matches_a_after_read[0]["unread_count"] == 0

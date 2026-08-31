@@ -33,6 +33,7 @@ Map<String, dynamic> _match({
   int flameCount = 2,
   int unlockThreshold = 5,
   int unlockPct = 40,
+  int unreadCount = 0,
 }) => {
   'match_id': matchId,
   'other_user_id': 'user-$matchId',
@@ -42,6 +43,7 @@ Map<String, dynamic> _match({
   'unlock_pct': unlockPct,
   'blur_stage': blurStage,
   'matched_at': '2026-01-01T00:00:00Z',
+  'unread_count': unreadCount,
 };
 
 Widget _harness(AppServices services) {
@@ -76,6 +78,30 @@ void main() {
     expect(find.text('Profil privé débloqué'), findsOneWidget);
     expect(find.text('Alex'), findsOneWidget);
     expect(find.text('Profil privé · 40%'), findsOneWidget);
+  });
+
+  testWidgets('shows an unread badge only for matches with unread messages', (tester) async {
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path == '/discovery/matches') {
+        return _json([
+          _match(
+            matchId: 'm1',
+            otherDisplayName: 'Camille',
+            blurStage: 'net',
+            unreadCount: 3,
+          ),
+          _match(matchId: 'm2', otherDisplayName: 'Alex', blurStage: 'flou_leger'),
+        ], 200);
+      }
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('3'), findsOneWidget);
+    final badges = tester.widgetList<Badge>(find.byType(Badge)).toList();
+    expect(badges.where((b) => b.isLabelVisible).length, 1);
   });
 
   testWidgets('no matches shows the "go discover" message', (tester) async {
