@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../api/api_exception.dart';
 import '../../state/app_services.dart';
 import '../../state/theme_controller.dart';
 import '../../theme/braise_tokens.dart';
@@ -61,11 +62,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _exportData() async {
     final services = context.read<AppServices>();
-    await services.apiClient.get('/auth/me/export');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Export généré côté serveur (droit à la portabilité, RGPD).')),
-    );
+    try {
+      await services.apiClient.get('/auth/me/export');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Export généré côté serveur (droit à la portabilité, RGPD).'),
+        ),
+      );
+    } on ApiException catch (e) {
+      // Sans ce catch, un échec réseau ici disparaissait sans aucun retour — contrairement à
+      // toute autre action mutante de l'app, qui affiche toujours le message d'erreur.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _deleteAccount() async {
@@ -89,7 +99,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true || !mounted) return;
 
     final services = context.read<AppServices>();
-    await services.apiClient.delete('/auth/me');
+    try {
+      await services.apiClient.delete('/auth/me');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
     await services.authController.signOut();
     if (!mounted) return;
     Navigator.of(

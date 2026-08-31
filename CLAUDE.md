@@ -495,7 +495,28 @@ Flutter SDK is never installed on the host):
   inside a `ListView` (so pull-to-refresh keeps working from it), instead of letting the
   exception propagate unhandled. 2 tests: a successful load, and a failure on one of the three
   calls followed by a pull-to-refresh that succeeds — proving recovery actually works, not just
-  that the error renders.
+  that the error renders. P8 covers the six remaining directly-testable screens in one pass —
+  `ConceptIntroScreen`, `RatingScreen`, `UnlockScreen` (empty/error states only; the
+  photos-present case uses `Image.network`, which would hit the real network inside the test
+  sandbox), `PaywallScreen`, `SettingsScreen`, and `ProfileSetupScreen` (the biggest: prefill,
+  interests, bio prompts, gender chips, avatar regeneration, publish — all without ever touching
+  `ImagePicker` or `showDatePicker`, two real platform flows this project's mock infra can't
+  reach; `_save()` only requires `_birthDate` when `_profile` is still `null`, so publishing
+  right after a successful load never needs the date picker at all). Two more real bugs found,
+  same family as `ProfileTrustScreen` above: `PaywallScreen._load()` had no `try/catch` at all
+  (the identical infinite-spinner trap), and `_activate()`/`_cancel()` silently swallowed errors
+  instead of showing them; `SettingsScreen._exportData()`/`_deleteAccount()` had the same silent-
+  swallow gap. All four fixed with the same `catch (ApiException e)` pattern used everywhere else
+  in the app — an error state (with working pull-to-refresh) for `_load()`, a `SnackBar` for the
+  rest. Two new test-infra traps surfaced along the way: `PaywallScreen`'s `_PulsingDiamond` runs
+  `AnimationController.repeat()` forever unless the test harness forces
+  `MediaQuery.disableAnimations: true` — otherwise `pumpAndSettle()` never finds a frame with no
+  pending animation and times out; and `SettingsScreen`'s long `ListView` doesn't even build
+  elements far below the fold (past the underlying `Sliver`'s `cacheExtent`), so
+  `tester.ensureVisible()` has nothing to target — a tall enough test viewport sidesteps this
+  rather than working around it. Only `ConversationScreen` remains untested: it talks over a real
+  WebSocket (`ChatSocket`, no injectable channel factory), a refactor of its own and out of scope
+  for this coverage pass.
 
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not

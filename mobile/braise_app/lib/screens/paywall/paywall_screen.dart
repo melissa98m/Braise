@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/api_exception.dart';
 import '../../models/subscription.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
@@ -19,6 +20,7 @@ class PaywallScreen extends StatefulWidget {
 class _PaywallScreenState extends State<PaywallScreen> {
   SubscriptionStatus? _status;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -27,27 +29,51 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   Future<void> _load() async {
-    final status = await context.read<AppServices>().subscriptionsApi.me();
-    if (!mounted) return;
     setState(() {
-      _status = status;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final status = await context.read<AppServices>().subscriptionsApi.me();
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      // Sans ce catch, une erreur transitoire laissait cet écran bloqué sur un spinner infini —
+      // même bug que ProfileTrustScreen._load() avant son correctif (voir CLAUDE.md).
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _activate() async {
-    final status = await context.read<AppServices>().subscriptionsApi.debugActivate();
-    if (!mounted) return;
-    setState(() => _status = status);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Braise+ activé (stub local — aucun paiement réel).')),
-    );
+    try {
+      final status = await context.read<AppServices>().subscriptionsApi.debugActivate();
+      if (!mounted) return;
+      setState(() => _status = status);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Braise+ activé (stub local — aucun paiement réel).')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _cancel() async {
-    final status = await context.read<AppServices>().subscriptionsApi.cancel();
-    if (!mounted) return;
-    setState(() => _status = status);
+    try {
+      final status = await context.read<AppServices>().subscriptionsApi.cancel();
+      if (!mounted) return;
+      setState(() => _status = status);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   @override
@@ -56,6 +82,24 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
+
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Braise+')),
+        // ListView (pas juste Center) : reste scrollable, donc tirer-pour-rafraîchir marche
+        // même depuis l'état d'erreur — même correctif que ProfileTrustScreen.
+        body: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(BraiseSpacing.xxl),
+            children: [
+              Text(_error!, style: textTheme.bodyMedium?.copyWith(color: tokens.erreur)),
+            ],
+          ),
+        ),
+      );
+    }
+
     final status = _status!;
 
     return Scaffold(

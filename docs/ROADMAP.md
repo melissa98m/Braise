@@ -407,6 +407,43 @@ techniques : cahier des charges sections A, B, C, D.
   cette fois — la preuve que la sortie de l'état bloqué fonctionne réellement, pas seulement que
   l'erreur s'affiche. 37/37 tests Flutter au total, `flutter analyze` propre.
 
+- [x] **Post-MVP P8 — Couverture de test de tous les écrans restants (hors `ConversationScreen`),
+  et deux nouveaux vrais bugs corrigés.** Six écrans couverts en une passe :
+  `ConceptIntroScreen` (3 pages, navigation finale vers `RootShell` — sans crash grâce au
+  correctif P7.2, plus mocké ici), `RatingScreen` (même gabarit que `ReportScreen`, score par
+  défaut vs choisi explicitement, rancune suspectée), `UnlockScreen` (état vide et erreur
+  seulement — le cas "photos présentes" utilise `Image.network`, qui taperait le vrai réseau
+  dans le bac à sable de test), `PaywallScreen`, `SettingsScreen`, et `ProfileSetupScreen`
+  (le plus gros : pré-remplissage, intérêts, prompts de bio, genre, régénération d'avatar,
+  publication — sans jamais toucher `ImagePicker`/`showDatePicker`, deux flux réels non
+  mockables ici ; `_save()` n'exige `_birthDate` que si `_profile` est encore `null`, donc
+  publier après un chargement réussi n'a jamais besoin d'interagir avec le sélecteur de date).
+
+  Deux vrais bugs trouvés et corrigés, même famille que celui de `ProfileTrustScreen` (P7.2) :
+  - `PaywallScreen._load()` n'avait aucun `try/catch` — même spinner infini sans recours qu'avait
+    `ProfileTrustScreen` avant son correctif. `_activate()`/`_cancel()` avalaient aussi
+    silencieusement toute erreur au lieu de l'afficher, contrairement à chaque autre action
+    mutante de l'app. Les trois méthodes capturent désormais `ApiException` et l'affichent
+    (état d'erreur rafraîchissable pour `_load()`, `SnackBar` pour les deux autres).
+  - `SettingsScreen._exportData()`/`_deleteAccount()` n'avaient pas non plus de gestion
+    d'erreur : un échec réseau disparaissait sans aucun retour utilisateur. Corrigé avec le même
+    motif `catch (ApiException e) -> SnackBar(e.message)` déjà utilisé partout ailleurs dans
+    l'app.
+
+  Deux nouveaux pièges de test découverts au passage (documentés dans les fichiers concernés) :
+  `PaywallScreen`'s `_PulsingDiamond` tourne en boucle infinie (`AnimationController.repeat()`)
+  si `MediaQuery.disableAnimations` n'est pas explicitement forcé à `true` dans le harnais de
+  test — sinon `pumpAndSettle()` n'atteint jamais une frame sans animation active et échoue par
+  timeout ; et `SettingsScreen`'s long `ListView` ne construit même pas les éléments trop loin
+  sous la ligne de flottaison (au-delà du `cacheExtent` du `Sliver` sous-jacent), donc
+  `tester.ensureVisible()` ne peut rien cibler qui n'existe pas encore — un viewport de test
+  assez haut pour que tout tienne évite le problème plutôt que de le contourner.
+
+  68/68 tests Flutter au total, `flutter analyze` propre, 80/80 tests backend inchangés. Seul
+  `ConversationScreen` reste sans test direct : il parle en WebSocket réel (`ChatSocket`), qui
+  n'a pas de fabrique de canal injectable — un refactor à part entière, hors périmètre de cette
+  passe de couverture d'écrans.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
