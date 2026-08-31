@@ -34,6 +34,29 @@ Mobile (Phase 6, pas encore développé) :
 docker compose --profile mobile up mobile
 ```
 
+## Sauvegardes & supervision (durcissement opérationnel, cahier des charges B.3/D.7/D.12)
+
+Sauvegardes automatisées (dump Postgres + miroir des photos MinIO) et **testées par restauration
+réelle**, pas juste supposées fonctionner — voir `infra/backup/` :
+
+```bash
+docker compose up -d backup          # service en continu, 1 sauvegarde/jour (BACKUP_INTERVAL_SECONDS)
+docker compose run --rm backup /scripts/backup.sh         # sauvegarde à la demande
+docker compose run --rm backup /scripts/test_restore.sh   # sauvegarde -> restauration dans une base/bucket jetables -> vérification -> nettoyage
+```
+
+Supervision basique (Uptime Kuma, gratuit, auto-hébergé) :
+
+```bash
+docker compose up -d uptime-kuma
+```
+
+- Dashboard : http://localhost:8082 — au premier démarrage, créer le compte admin puis ajouter 3
+  moniteurs : HTTP `http://backend:8000/health`, HTTP `http://minio:9000/minio/health/live`, TCP
+  `db:5432`, avec une notification (email/webhook) en cas d'échec.
+
+Détail des risques couverts et de ceux qui restent : `docs/DPIA.md`.
+
 ## Stack (figée, cahier des charges section D.11)
 
 Flutter · FastAPI · PostgreSQL · WebSockets custom · MinIO · scikit-learn maison. Aucun service

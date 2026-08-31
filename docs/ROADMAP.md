@@ -75,3 +75,18 @@ Référence stack : cahier des charges, section D.11.
 Chaque phase se clôt par une vérification locale gratuite (pytest + un passage Swagger UI, puis
 `run`/`audit` une fois le mobile en jeu) avant de passer à la suivante. Détail complet des choix
 techniques : cahier des charges sections A, B, C, D.
+
+- [x] **Post-MVP P0 — Durcissement opérationnel.** Le cahier des charges (B.3, D.7, D.12) posait
+  les sauvegardes automatisées/testées et la supervision comme dépendance critique avant toute
+  bêta ; aucune des phases 0-6 ne l'avait traitée. Service `backup` (`infra/backup/`) : dump
+  Postgres quotidien + miroir des photos MinIO, avec purge des dumps > `BACKUP_RETENTION_DAYS`,
+  et surtout **testé par restauration réelle** (`test_restore.sh` : sauvegarde → restauration dans
+  une base/bucket jetables → comparaison des lignes/objets avec la source → nettoyage — vérifié en
+  conditions réelles, pas seulement écrit). Supervision basique via `uptime-kuma` (moniteurs
+  HTTP/TCP sur backend, MinIO, Postgres — configuration manuelle au premier lancement, ce produit
+  n'a pas de format déclaratif). `docs/DPIA.md` : AIPD couvrant l'inventaire des données, les
+  mesures déjà en place et les risques résiduels — notamment l'absence de procédure de
+  contestation de bannissement pourtant exigée par A.9, à traiter dans un prochain palier (P1).
+  Volontairement hors de ce palier : réplication du volume de sauvegarde hors de l'hôte Docker
+  local (n'a de sens qu'une fois sur un vrai VPS, D.7) et notification effective sur les moniteurs
+  Uptime Kuma (étape manuelle documentée dans le README, pas automatisable sans API dédiée).

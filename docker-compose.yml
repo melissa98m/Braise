@@ -65,6 +65,35 @@ services:
     depends_on:
       - db
 
+  # Sauvegarde automatisée (dump Postgres + miroir des photos MinIO) et testée par restauration —
+  # voir infra/backup/. Service long-vivant : sauvegarde immédiate puis en boucle toutes les
+  # BACKUP_INTERVAL_SECONDS. Sauvegarde à la demande : `docker compose run --rm backup /scripts/backup.sh`.
+  # Test de restauration : `docker compose run --rm backup /scripts/test_restore.sh`.
+  backup:
+    build: ./infra/backup
+    env_file: .env
+    environment:
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - backup_data:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # Supervision basique (cahier des charges D.7/D.11/D.12 : Uptime Kuma, gratuit, auto-hébergé).
+  # Premier démarrage : ouvrir http://localhost:8082, créer le compte admin, puis ajouter 3
+  # moniteurs HTTP(S) — backend http://backend:8000/health, MinIO http://minio:9000/minio/health/live,
+  # et un moniteur TCP sur db:5432 — avec une notification (email/webhook) sur passage en échec.
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - "8082:3001"
+
   # Flutter (Phase 6) — pas lancé par défaut : `docker compose --profile mobile up mobile`
   mobile:
     profiles: ["mobile"]
@@ -77,3 +106,5 @@ services:
 volumes:
   db_data:
   minio_data:
+  backup_data:
+  uptime_kuma_data:

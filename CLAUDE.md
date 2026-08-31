@@ -195,6 +195,31 @@ Flutter SDK is never installed on the host, only inside that container). The bac
 `CORSMiddleware` enabled (`main.py`, origins from `Settings.cors_origin_list` / `CORS_ORIGINS` env
 var, default `http://localhost:5000`) so the Flutter web app can call it cross-origin.
 
+**Operational hardening** (`infra/backup/`, post-MVP P0 — cahier des charges B.3/D.7/D.12
+"sauvegardes automatisées et testées" was a listed critical dependency that phases 0-6 never
+actually addressed): a `backup` Compose service (own `Dockerfile`, based on `postgres:16-alpine`
+so `pg_dump`/`pg_restore` are always version-matched with the `db` service, plus the `mc` binary)
+runs `backup.sh` on a loop (`BACKUP_INTERVAL_SECONDS`, default daily) — `pg_dump -F c` to
+`backup_data:/backups/db` with retention (`BACKUP_RETENTION_DAYS`), and `mc mirror --remove` of the
+`braise-photos` bucket to `/backups/photos` (mirror, not accumulate — deleted photos don't pile up
+forever). `restore.sh <target_db> [target_bucket]` restores the latest dump into any target
+database/bucket, deliberately never defaulting to overwriting the live one silently.
+`test_restore.sh` is the actual proof this works, not an assumption: backup → restore into
+throwaway `braise_restore_test` / `braise-photos-restore-test` → compare row/object counts against
+the source → drop both. Run it with `docker compose run --rm backup /scripts/test_restore.sh`.
+`entrypoint.sh` is the container's `ENTRYPOINT`; it `exec "$@"` when `docker compose run backup
+<cmd>` passes an explicit command (needed for `test_restore.sh`/`backup.sh` to run once instead of
+being silently swallowed by the default infinite loop — this was a real bug caught by actually
+running the test, not just writing it) and only falls into the backup loop when invoked with no
+args (`docker compose up backup`). Basic uptime supervision is `uptime-kuma` (official image,
+port 8082, one-time manual setup: create the admin account, add HTTP monitors on
+`http://backend:8000/health` and `http://minio:9000/minio/health/live` plus a TCP monitor on
+`db:5432`, and a notification channel — nothing is pre-seeded, Uptime Kuma has no declarative
+config format for that). `docs/DPIA.md` is the AIPD/DPIA required before any real beta (A.9/B.3):
+data inventory, legal basis, existing technical measures already in the code (SSE-S3 encryption,
+`PhotoAccessLog`, anonymizing deletion), and the residual risks/actions that are still open —
+notably that A.9 requires a human contestation procedure for auto-bans and none exists yet.
+
 **Mobile** (`mobile/braise_app/`, Flutter web, all commands run in the `mobile` container — the
 Flutter SDK is never installed on the host):
 - Every container-side Flutter command (`flutter create`, `flutter pub get`, `flutter run`, ...)
