@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/moderation/ban_appeal_screen.dart';
-import 'screens/onboarding/otp_screen.dart';
+import 'screens/onboarding/welcome_screen.dart';
 import 'screens/root_shell.dart';
 import 'state/app_services.dart';
 import 'state/auth_controller.dart';
@@ -67,7 +67,13 @@ class _AuthGateState extends State<_AuthGate> {
     final status = context.watch<AuthController>().status;
     return switch (status) {
       AuthStatus.unknown => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      AuthStatus.signedOut => const OtpScreen(),
+      // Écran d'accueil (CTA "Créer un compte"/"J'ai déjà un compte"), pas directement OtpScreen :
+      // WelcomeScreen pousse vers OtpScreen via un vrai `Navigator.push`, donc après vérification
+      // réussie le `pushReplacement` d'OtpScreen (voir otp_screen.dart) remplace cette route-là,
+      // pas la route racine — WelcomeScreen reste dans l'historique mais n'est plus jamais
+      // atteignable une fois connecté, ce qui est le comportement voulu (pas de retour arrière
+      // vers l'accueil/l'OTP depuis l'app une fois dans RootShell).
+      AuthStatus.signedOut => const WelcomeScreen(),
       AuthStatus.signedIn => const RootShell(),
       AuthStatus.banned => const BanAppealScreen(),
     };

@@ -589,6 +589,30 @@ techniques : cahier des charges sections A, B, C, D.
   comptant `RootShell` qui n'était pas un écran de module dédié mais est maintenant lui aussi
   couvert via P9).
 
+- [x] **P11 — Écran d'accueil et session longue durée (demande explicite, hors cahier des
+  charges).** Deux changements de parcours utilisateur demandés directement, pas déduits des
+  maquettes :
+  1. `screens/onboarding/welcome_screen.dart` — premier écran vu à l'installation (avant, l'app
+     ouvrait directement sur `OtpScreen`), avec deux CTA ("Créer un compte" / "J'ai déjà un
+     compte"). Les deux mènent au même `OtpScreen` sans paramètre : l'OTP téléphone ne distingue
+     techniquement pas inscription et connexion (`POST /auth/verify-otp` crée le compte au
+     premier succès, connecte ensuite — `services/otp.py`), donc simuler une différence côté
+     client aurait été malhonnête pour un flux réellement unifié. Atteint via un vrai
+     `Navigator.push`, pas replié dans le switch de `_AuthGate` — le `pushReplacement`
+     d'`OtpScreen` en cas de succès remplace alors cette route poussée, pas la route que
+     `_AuthGate` lui-même affiche, ce qui empêche tout retour arrière vers l'accueil/l'OTP une
+     fois connecté (comportement voulu, pas un oubli).
+  2. `ACCESS_TOKEN_EXPIRE_MINUTES` passé de 60 (1h) à 21600 (15 jours) — rester connecté d'une
+     session à l'autre plutôt qu'une expiration courte. Vérifié sur un vrai jeton émis contre la
+     stack qui tourne (décodage du payload JWT, `exp` mesuré à 14j 23h59 après émission).
+     `AuthController.restoreSession()` gérait déjà correctement l'expiration (redirige vers
+     `WelcomeScreen`/`OtpScreen`, reconnexion par OTP téléphone) — aucun changement nécessaire là,
+     seule la durée de validité du jeton a changé. Pas de refresh token séparé : un seul JWT
+     longue durée reste le choix le plus simple, cohérent avec le reste du projet.
+
+  3 nouveaux tests (`test/screens/welcome_screen_test.dart`), 96/96 tests Flutter au total,
+  `flutter analyze` propre, 85/85 tests backend, `ruff check .` propre.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

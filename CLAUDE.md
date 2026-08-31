@@ -59,7 +59,12 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   `get_settings()`. Add new env-driven config here, not scattered `os.environ` reads.
 - `core/security.py` — JWT creation/decoding and OTP code generation live together here (both are
   "auth primitives"); business logic that *uses* them (looking up/mutating a `User`) lives in
-  `services/`, not in the router or in `core/`.
+  `services/`, not in the router or in `core/`. `access_token_expire_minutes` (`core/config.py`,
+  `.env`) is 21600 (15 days), not a short session-style expiry — staying signed in across app
+  restarts matters more for this product than a tight expiry window, and re-auth past that point
+  is just the phone OTP flow again (`WelcomeScreen` → `OtpScreen`), never a silent dead end. No
+  separate refresh token: one long-lived JWT is the simplest thing that works, revisit only if a
+  real need for shorter-lived tokens shows up (`docs/V2_FEATURES.md`).
 - `db/base.py` (declarative `Base`) and `db/session.py` (`get_db()` FastAPI dependency) are the only
   two files that touch SQLAlchemy engine/session setup. New models import `Base` from `db/base.py`
   and must be imported in `app/models/__init__.py` — Alembic's `env.py` only sees models that have
@@ -520,6 +525,20 @@ Flutter SDK is never installed on the host):
   the veil) with one plain Material icon for "personality/interests," a concept none of the 4
   spec-defined primitives (braise/voile/confiance/vérifié) actually represents — same pragmatic
   mixing `screens/settings/settings_screen.dart` already does for its own icons.
+  `screens/onboarding/welcome_screen.dart` is the very first screen a signed-out user sees
+  (`main.dart`'s `_AuthGate`, `AuthStatus.signedOut`) — a presentation screen with two CTAs
+  ("Créer un compte" / "J'ai déjà un compte") before `OtpScreen`, requested explicitly rather
+  than inferred from the mockups. Both CTAs push the exact same `const OtpScreen()`, no mode
+  flag: the backend's OTP flow doesn't distinguish signup from login at all (`POST
+  /auth/verify-otp` creates the account on first success, signs in on every one after — see
+  `services/otp.py`), so faking a distinction client-side would be dishonest UI for a flow that's
+  actually unified. `WelcomeScreen` is reached via a real `Navigator.push(braiseRoute(...))`, not
+  folded into `_AuthGate`'s own status switch — `OtpScreen`'s existing `pushReplacement` on
+  successful verify (see below) then replaces *that* pushed route with `RootShell`/
+  `ProfileSetupScreen`, leaving `WelcomeScreen` behind in history rather than the route
+  `_AuthGate` itself renders. That's a deliberate side effect, not an oversight: it means there's
+  no back-gesture path from inside the signed-in app back to the welcome/OTP screens, which is
+  the behavior you want once someone's actually signed in.
 - `test/widget_test.dart` exercises the theme system (background tokens per brightness, WCAG
   contrast ratio on `inkFloor`) rather than pumping the full `BraiseApp`, which would make a real
   network call via `restoreSession()` — that gap is now closed for `ApiClient` specifically (see
