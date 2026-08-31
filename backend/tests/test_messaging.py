@@ -171,6 +171,57 @@ def test_websocket_rejects_invalid_token():
         pass
 
 
+def test_message_history_reports_unread_by_default():
+    match = create_match(client)
+    url = f"/messaging/ws/{match['match_id']}?token={match['token_a']}"
+    with client.websocket_connect(url) as ws:
+        ws.send_json({"type": "message", "body": "Pas encore lu."})
+        ws.receive_json()
+
+    history = client.get(
+        f"/messaging/matches/{match['match_id']}/messages", headers=match["headers_a"]
+    ).json()
+    sent = next(m for m in history if m["body"] == "Pas encore lu.")
+    assert sent["read"] is False
+
+
+def test_websocket_read_marks_message_read_and_notifies_sender():
+    match = create_match(client)
+    url_a = f"/messaging/ws/{match['match_id']}?token={match['token_a']}"
+    url_b = f"/messaging/ws/{match['match_id']}?token={match['token_b']}"
+
+    with client.websocket_connect(url_a) as ws_a, client.websocket_connect(url_b) as ws_b:
+        ws_a.send_json({"type": "message", "body": "Tu as vu mon message ?"})
+        ws_a.receive_json()
+        ws_b.receive_json()
+
+        ws_b.send_json({"type": "read"})
+        notified = ws_a.receive_json()
+        assert notified["type"] == "read"
+        assert notified["reader_id"] == match["id_b"]
+
+    history = client.get(
+        f"/messaging/matches/{match['match_id']}/messages", headers=match["headers_a"]
+    ).json()
+    sent = next(m for m in history if m["body"] == "Tu as vu mon message ?")
+    assert sent["read"] is True
+
+
+def test_websocket_typing_broadcasts_to_other_participant():
+    match = create_match(client)
+    url_a = f"/messaging/ws/{match['match_id']}?token={match['token_a']}"
+    url_b = f"/messaging/ws/{match['match_id']}?token={match['token_b']}"
+
+    with client.websocket_connect(url_a) as ws_a, client.websocket_connect(url_b) as ws_b:
+        ws_a.send_json({"type": "typing"})
+        received = ws_b.receive_json()
+        assert received == {
+            "type": "typing",
+            "match_id": match["match_id"],
+            "sender_id": match["id_a"],
+        }
+
+
 def test_websocket_rejects_non_participant():
     match = create_match(client)
     outsider_token = auth_token(client, unique_phone())

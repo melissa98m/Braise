@@ -12,6 +12,9 @@ class MessageOut(BaseModel):
     sender_id: uuid.UUID
     body: str
     created_at: datetime
+    # Vrai dès que le destinataire (jamais l'émetteur) a marqué le match comme lu après l'envoi
+    # de ce message — voir services/matches.message_is_read.
+    read: bool
 
 
 class DailyQuestionOut(BaseModel):

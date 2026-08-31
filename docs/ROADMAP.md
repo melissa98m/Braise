@@ -150,6 +150,23 @@ techniques : cahier des charges sections A, B, C, D.
   la branche `AuthStatus.banned` ajoutée en P1.1 qui n'avait jusqu'ici aucune couverture de test.
   11/11 tests Flutter au total (3 thème + 8 nouveaux).
 
+- [x] **Post-MVP P3 — Statut de lecture et indicateur de saisie.** A.5 Module 3 les listait tous
+  les deux comme scope MVP ; reportés en Phase 3, faute de nécessité pour valider le cœur du
+  mécanisme flammes/déblocage. `Match.last_read_at_a`/`last_read_at_b` : un timestamp "lu jusqu'à"
+  par côté plutôt qu'un flag par message, suffisant pour un chat 1-to-1, pas de table séparée.
+  `services.matches.message_is_read` est symétrique — un fait sur le message (le destinataire
+  l'a-t-il lu), jamais dépendant de qui consulte. `chat_ws` distingue désormais 3 types de frames
+  (`message`/`typing`/`read`), `message` restant le défaut implicite si absent pour ne pas casser
+  le protocole existant. `typing` est un pur relai, jamais persisté. `read` pose le timestamp et
+  rediffuse aux autres connexions du match. Côté Flutter, `ChatSocket` démultiplexe un seul flux
+  brut en 3 (`messages`/`typingEvents`/`readEvents`) via le champ `type` déjà tagué serveur.
+  `ConversationScreen` envoie `markRead()` au chargement de l'historique et à chaque message reçu
+  pendant que l'écran est ouvert — il n'existe pas d'action "marquer comme lu" explicite dans
+  cette UI, avoir la conversation ouverte en tient lieu. `sendTyping()` est throttlé à 1 envoi/2s
+  sur `onChanged`, pas un envoi par frappe. Le tick de lecture ("Envoyé"/"Lu") ne s'affiche que
+  sous le tout dernier message envoyé, jamais par bulle. Vérifié par 3 nouveaux tests pytest
+  (71/71 au total) exerçant le vrai WebSocket (pas mocké) contre la vraie base.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

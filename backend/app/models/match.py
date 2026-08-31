@@ -29,3 +29,8 @@ class Match(Base):
     matched_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+    # Statut de lecture (cahier des charges A.5 Module 3 : "avec statut de lecture") — un
+    # timestamp "lu jusqu'à" par côté plutôt qu'un flag par message : suffisant pour un chat 1-to-1
+    # (services/matches.mark_read/message_is_read), pas de table séparée à gérer.
+    last_read_at_a = Column(DateTime(timezone=True), nullable=True)
+    last_read_at_b = Column(DateTime(timezone=True), nullable=True)

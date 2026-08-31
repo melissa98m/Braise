@@ -5,6 +5,7 @@ class ChatMessage {
     required this.senderId,
     required this.body,
     required this.createdAt,
+    required this.read,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -14,6 +15,20 @@ class ChatMessage {
       senderId: json['sender_id'] as String,
       body: json['body'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
+      // Absent seulement en théorie (toujours envoyé par le backend) — false par défaut plutôt
+      // que de planter sur un message reçu avant un redéploiement serveur.
+      read: json['read'] as bool? ?? false,
+    );
+  }
+
+  ChatMessage copyWith({bool? read}) {
+    return ChatMessage(
+      id: id,
+      matchId: matchId,
+      senderId: senderId,
+      body: body,
+      createdAt: createdAt,
+      read: read ?? this.read,
     );
   }
 
@@ -22,6 +37,7 @@ class ChatMessage {
   final String senderId;
   final String body;
   final DateTime createdAt;
+  final bool read;
 }
 
 class DailyQuestion {

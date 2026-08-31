@@ -20,6 +20,7 @@ from app.schemas.messaging import (
     DailyQuestionResultOut,
     MessageOut,
 )
+from app.services import matches as matches_service
 from app.services import messaging as messaging_service
 from app.ws.connection_manager import manager
 
@@ -63,7 +64,7 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
     db = SessionLocal()
     try:
         user = user_from_token(token, db)
-        messaging_service.assert_match_participant(db, user, match_id)
+        match = messaging_service.assert_match_participant(db, user, match_id)
     except HTTPException:
         db.close()
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -73,6 +74,29 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
     try:
         while True:
             data = await websocket.receive_json()
+            event_type = data.get("type", "message")
+
+            if event_type == "typing":
+                # Éphémère, jamais persisté : juste un relais aux autres connexions du match
+                # (voir ws/connection_manager.py — un seul process backend pour l'instant).
+                await manager.broadcast(
+                    match_id, {"type": "typing", "match_id": str(match_id), "sender_id": str(user.id)}
+                )
+                continue
+
+            if event_type == "read":
+                read_at = matches_service.mark_read(db, match, user)
+                await manager.broadcast(
+                    match_id,
+                    {
+                        "type": "read",
+                        "match_id": str(match_id),
+                        "reader_id": str(user.id),
+                        "read_at": read_at.isoformat(),
+                    },
+                )
+                continue
+
             body = str(data.get("body", "")).strip()
             if not body:
                 continue
@@ -86,6 +110,9 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
                     "sender_id": str(user.id),
                     "body": message.body,
                     "created_at": message.created_at.isoformat(),
+                    # Toujours faux à l'envoi : personne d'autre n'a encore pu marquer le match
+                    # comme lu après ce message (voir services/matches.message_is_read).
+                    "read": False,
                 },
             )
     except WebSocketDisconnect:

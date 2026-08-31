@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -35,10 +37,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
   DailyQuestion? _dailyQuestion;
   bool _loadingQuestion = true;
 
+  String? _myId;
+  bool _otherIsTyping = false;
+  Timer? _typingClearTimer;
+  DateTime _lastTypingSentAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   void initState() {
     super.initState();
     _match = widget.match;
+    _myId = context.read<AppServices>().authController.userId;
     _connect();
     _loadHistory();
     _loadDailyQuestion();
@@ -53,6 +61,31 @@ class _ConversationScreenState extends State<ConversationScreen> {
       if (!mounted) return;
       setState(() => _messages.add(message));
       _scrollToEnd();
+      // On regarde activement l'écran quand ce message arrive : on marque tout de suite comme
+      // lu plutôt que d'attendre une action explicite qui n'existe pas dans cette UI.
+      if (message.senderId != _myId) socket.markRead();
+    });
+    socket.typingEvents.listen((event) {
+      if (!mounted || event.senderId == _myId) return;
+      _typingClearTimer?.cancel();
+      setState(() => _otherIsTyping = true);
+      // Pas de "stopped typing" explicite dans le protocole : on efface simplement l'indicateur
+      // si aucun nouvel événement n'arrive avant ce délai, ce qui reste imperceptible pour
+      // quelqu'un qui écrit en continu (les navigateurs renvoient bien plus souvent que ça).
+      _typingClearTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _otherIsTyping = false);
+      });
+    });
+    socket.readEvents.listen((event) {
+      if (!mounted || event.readerId == _myId) return;
+      setState(() {
+        for (var i = 0; i < _messages.length; i++) {
+          final message = _messages[i];
+          if (message.senderId == _myId && !message.createdAt.isAfter(event.readAt)) {
+            _messages[i] = message.copyWith(read: true);
+          }
+        }
+      });
     });
     setState(() => _socket = socket);
   }
@@ -63,6 +96,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (!mounted) return;
     setState(() => _messages.insertAll(0, history));
     _scrollToEnd();
+    _socket?.markRead();
+  }
+
+  void _onComposerChanged(String _) {
+    final now = DateTime.now();
+    if (now.difference(_lastTypingSentAt) < const Duration(seconds: 2)) return;
+    _lastTypingSentAt = now;
+    _socket?.sendTyping();
   }
 
   Future<void> _loadDailyQuestion() async {
@@ -182,25 +223,55 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   bottomLeft: Radius.circular(isMine ? 18 : 6),
                   bottomRight: Radius.circular(isMine ? 6 : 18),
                 );
-                return Align(
-                  alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: BraiseSpacing.xs),
-                    padding: const EdgeInsets.all(BraiseSpacing.md),
-                    constraints: const BoxConstraints(maxWidth: 280),
-                    decoration: BoxDecoration(
-                      color: isMine ? tokens.braiseTint : tokens.surface2,
-                      border: Border.all(
-                        color: isMine ? tokens.braiseInk : tokens.borderHairline,
+                // Le statut de lecture (cahier des charges A.5) ne s'affiche que sous le tout
+                // dernier message qu'on a envoyé soi-même — un tick par bulle serait du bruit.
+                final isLastOfMine =
+                    isMine && !_messages.skip(index + 1).any((m) => m.senderId == myId);
+                return Column(
+                  crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: BraiseSpacing.xs),
+                        padding: const EdgeInsets.all(BraiseSpacing.md),
+                        constraints: const BoxConstraints(maxWidth: 280),
+                        decoration: BoxDecoration(
+                          color: isMine ? tokens.braiseTint : tokens.surface2,
+                          border: Border.all(
+                            color: isMine ? tokens.braiseInk : tokens.borderHairline,
+                          ),
+                          borderRadius: radius,
+                        ),
+                        child: Text(message.body, style: textTheme.bodyLarge),
                       ),
-                      borderRadius: radius,
                     ),
-                    child: Text(message.body, style: textTheme.bodyLarge),
-                  ),
+                    if (isLastOfMine)
+                      Padding(
+                        padding: const EdgeInsets.only(right: BraiseSpacing.xs, bottom: BraiseSpacing.sm),
+                        child: Text(
+                          message.read ? 'Lu' : 'Envoyé',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: message.read ? tokens.foiInk : tokens.inkFloor,
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
           ),
+          if (_otherIsTyping)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: BraiseSpacing.lg),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${_match.otherDisplayName} est en train d\'écrire…',
+                  style: textTheme.labelSmall?.copyWith(color: tokens.inkSecondary),
+                ),
+              ),
+            ),
           if (!_loadingQuestion && _dailyQuestion != null) _DailyQuestionCard(
             question: _dailyQuestion!,
             onAnswer: _answer,
@@ -230,6 +301,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   child: TextField(
                     controller: _bodyController,
                     decoration: InputDecoration(hintText: 'Écrire à ${_match.otherDisplayName}…'),
+                    onChanged: _onComposerChanged,
                     onSubmitted: (_) => _send(),
                   ),
                 ),
@@ -245,6 +317,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   void dispose() {
+    _typingClearTimer?.cancel();
     _socket?.close();
     _bodyController.dispose();
     _scrollController.dispose();

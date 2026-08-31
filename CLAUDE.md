@@ -143,7 +143,17 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   in the `GET` response — only revealed in the `POST .../answer` result, after that day's attempt is
   consumed. A correct answer increments `Match.flame_count` (shared, not per-user), matching "bonne
   réponse = +1 flamme pour vous deux" in the mockups; `Match.flame_count` already existed from
-  Phase 2, this phase just started writing to it.
+  Phase 2, this phase just started writing to it. Read status and typing (A.5 Module 3 listed both
+  as MVP scope; deferred at the time) are now in: `Match.last_read_at_a`/`last_read_at_b` are a
+  "read up to" timestamp per side, not a flag per message — enough for a 1:1 chat, no separate
+  table. `services.matches.message_is_read` is symmetric (a fact about the message, not about who's
+  asking): a message is read once the *recipient* (never the sender) has a `last_read_at` at or
+  after `created_at`. `chat_ws` dispatches on a `type` field now (`"message"` is still the default
+  when absent, so the old client behavior — sending a bare `{"body": ...}` — still works):
+  `"typing"` is a pure relay, never persisted; `"read"` calls `mark_read` and rebroadcasts so the
+  *other* open connection updates live. `GET .../messages` computes `read` per message via
+  `message_is_read`, so a client that reloads history sees accurate ticks without replaying WS
+  events.
 
 - **Trust & moderation** (`models/rating.py`, `models/report.py`, `services/moderation.py`,
   `services/moderation_ml.py`): a `Rating` is one score+comment per `(match_id, rater_id)` — the
@@ -260,7 +270,15 @@ Flutter SDK is never installed on the host):
   getters) on non-2xx, using FastAPI's `detail` string as the message. `messaging_api.dart` also
   has `ChatSocket`, which connects to `/messaging/ws/{match_id}?token=...` — the same
   token-in-query-string pattern as the backend (Phase 3), because a browser can't set an
-  `Authorization` header on a WebSocket handshake.
+  `Authorization` header on a WebSocket handshake. One raw JSON stream, demultiplexed into
+  `messages`/`typingEvents`/`readEvents` by the server-tagged `type` field — no sealed-union type,
+  just three `.where()`+`.map()` views over the same broadcast stream. `ConversationScreen` sends
+  `sendTyping()` on composer changes (throttled to once per 2s, not per keystroke) and
+  `markRead()` both after loading history and whenever an incoming message arrives while the
+  screen is open — there's no explicit "mark as read" UI action, opening/having the conversation
+  open *is* the action. The read tick ("Envoyé"/"Lu") renders only under the single most recent
+  message the current user sent, never per-bubble — a tick on every message would be noise the
+  mockups never called for.
 - `lib/state/app_services.dart` (`AppServices`) wires every API client plus `AuthController`
   (`ChangeNotifier`, JWT persisted via `shared_preferences` under `braise_token`) into one
   `Provider`-injected bundle; the circular dependency (the API client needs a token from the auth

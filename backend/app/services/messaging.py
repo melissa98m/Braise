@@ -11,7 +11,7 @@ from app.models.match import Match
 from app.models.message import Message
 from app.models.profile import PublicProfile
 from app.models.user import User
-from app.services.matches import get_match_or_404, other_user_id
+from app.services.matches import get_match_or_404, message_is_read, other_user_id
 
 MAX_MESSAGE_LENGTH = 2000
 DEFAULT_MESSAGE_HISTORY = 50
@@ -33,8 +33,8 @@ def assert_match_participant(db: Session, user: User, match_id: uuid.UUID) -> Ma
 
 def list_messages(
     db: Session, user: User, match_id: uuid.UUID, limit: int = DEFAULT_MESSAGE_HISTORY
-) -> list[Message]:
-    get_match_or_404(db, user, match_id)
+) -> list[dict]:
+    match = get_match_or_404(db, user, match_id)
     limit = max(1, min(limit, MAX_MESSAGE_HISTORY))
     recent = (
         db.query(Message)
@@ -43,7 +43,17 @@ def list_messages(
         .limit(limit)
         .all()
     )
-    return list(reversed(recent))
+    return [
+        {
+            "id": message.id,
+            "match_id": message.match_id,
+            "sender_id": message.sender_id,
+            "body": message.body,
+            "created_at": message.created_at,
+            "read": message_is_read(match, message),
+        }
+        for message in reversed(recent)
+    ]
 
 
 def create_message(db: Session, user: User, match_id: uuid.UUID, body: str) -> Message:
