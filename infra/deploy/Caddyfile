@@ -1,0 +1,29 @@
+# Reverse proxy + TLS automatique (Let's Encrypt, renouvellement géré par Caddy lui-même — pas de
+# certbot à opérer à la main). Les domaines et l'email ACME viennent de .env (voir
+# .env.prod.example) via la substitution {$VAR} native de Caddy — rien à éditer ici. Caddy refuse
+# de démarrer proprement tant que ces domaines ne pointent pas déjà vers ce serveur (challenge
+# ACME) : voir docs/DEPLOYMENT.md, étape DNS, avant le premier démarrage.
+{
+	email {$ACME_EMAIL}
+}
+
+# API backend — la seule chose qu'un client mobile/web appelle directement.
+{$API_DOMAIN} {
+	reverse_proxy backend:8000
+}
+
+# Stockage objet MinIO — uniquement les URLs pré-signées générées par le backend
+# (services/storage.py::presigned_get_url) transitent ici ; jamais d'accès direct au bucket.
+{$OBJECTS_DOMAIN} {
+	reverse_proxy minio:9000
+}
+
+# App web Flutter — build statique (`flutter build web`), pas le conteneur `mobile` de dev
+# (celui-ci lance `flutter create`/`flutter run`, jamais utilisé en prod). Voir docs/DEPLOYMENT.md
+# pour la commande de build ; le résultat doit être déposé dans ./mobile/braise_app/build/web sur
+# l'hôte avant `docker compose up`, monté en lecture seule (voir docker-compose.prod.yml).
+{$APP_DOMAIN} {
+	root * /srv/braise-web
+	file_server
+	try_files {path} /index.html
+}

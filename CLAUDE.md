@@ -114,6 +114,13 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   bucket region before signing, which fails when this code runs *inside* the backend container and
   tries to reach `localhost:9000` (that's the container itself, not MinIO). Don't merge these two
   clients back into one; presigned URLs must stay signed against the externally-reachable host.
+  `minio_secure`/`minio_public_secure` (`core/config.py`) are two separate settings, not one —
+  `_client`'s traffic never leaves the private Docker network so it stays plain `http` even in
+  prod, but `_public_client` signs URLs a real browser fetches, which must follow whatever scheme
+  is actually externally reachable (`https` once a TLS-terminating reverse proxy sits in front —
+  see `docs/DEPLOYMENT.md`/`infra/deploy/`). A signature computed for the wrong scheme is either
+  rejected by MinIO or blocked by the browser as mixed content; both default to `false`, matching
+  local dev unchanged, and only prod's `.env` sets `MINIO_PUBLIC_SECURE=true`.
 
 - `services/matches.py` — `get_match_or_404`/`other_user_id` are the shared "is this user actually
   a participant in this match" check, used by discovery, messaging, moderation and profiles
@@ -290,6 +297,23 @@ config format for that). `docs/DPIA.md` is the AIPD/DPIA required before any rea
 data inventory, legal basis, existing technical measures already in the code (SSE-S3 encryption,
 `PhotoAccessLog`, anonymizing deletion), and the residual risks/actions that are still open —
 notably that A.9 requires a human contestation procedure for auto-bans and none exists yet.
+
+**Production deployment** (`docker-compose.prod.yml`, `infra/deploy/`, `docs/DEPLOYMENT.md`,
+post-MVP P4.4 — D.7/D.11's VPS-auto-géré recommendation, never scripted until this palier): the
+prod file is an *overlay*, always used with the base (`-f docker-compose.yml -f
+docker-compose.prod.yml`), never standalone. It locks every admin-facing service (`db`, MinIO
+console, Adminer, Uptime Kuma) to `127.0.0.1`-only (SSH-tunnel access, never public) and adds
+`caddy` as the one thing that touches ports 80/443 — automatic Let's Encrypt TLS, config in
+`infra/deploy/Caddyfile` using Caddy's native `{$VAR}` substitution (`API_DOMAIN`/
+`OBJECTS_DOMAIN`/`APP_DOMAIN`/`ACME_EMAIL`, from `.env`) rather than hardcoded domains. Two
+non-obvious Compose merge behaviors this file depends on, confirmed by testing (`docker compose
+... config`), not assumed: list fields like `ports`/`volumes` don't merge across `-f` files by
+default (an override of `ports: []` leaves the base list untouched), so clearing one needs the
+explicit `!reset []` tag, and *replacing* a non-empty base list needs `!override [...]` instead
+— `!reset` with non-empty content silently drops it. `infra/deploy/provision.sh` bootstraps a
+bare Ubuntu VPS (Docker install, `ufw`, a non-root `braise` deploy user) — reviewed but not run
+against a real VPS from this environment (none available), so treat it as reviewed-not-verified
+until it's actually exercised once.
 
 **Mobile** (`mobile/braise_app/`, Flutter web, all commands run in the `mobile` container — the
 Flutter SDK is never installed on the host):

@@ -1,0 +1,80 @@
+# Surcouche de production — jamais utilisée seule : toujours en plus de docker-compose.yml.
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Voir docs/DEPLOYMENT.md pour la checklist complète (VPS, secrets, DNS, TLS). Rien ici n'a été
+# vérifié contre un vrai VPS — seule la fusion Compose elle-même a été testée
+# (`docker compose -f docker-compose.yml -f docker-compose.prod.yml config`), pas un déploiement
+# réel : ce fichier attend une exécution manuelle sur l'infrastructure choisie (cahier des
+# charges D.7), pas quelque chose que ce dépôt déclenche tout seul.
+#
+# Différences avec le dev local :
+#   - Plus aucun service admin/interne exposé publiquement (db, console MinIO, Adminer,
+#     Uptime Kuma) — seuls Caddy (80/443) et rien d'autre touchent Internet. Accès aux outils
+#     d'administration via tunnel SSH (voir docs/DEPLOYMENT.md).
+#   - `backend` tourne sur l'image buildée, sans montage bind live ni `--reload` (outil de dev).
+#   - `restart: unless-stopped` partout : un redémarrage du VPS ne doit pas exiger une
+#     intervention manuelle.
+#   - Caddy fait office de reverse proxy + TLS automatique (Let's Encrypt) — le choix le plus
+#     simple qui respecte la priorité "maîtrise interne" du cahier des charges (D.11) : un seul
+#     binaire, une config d'une douzaine de lignes (infra/deploy/Caddyfile), pas de CRD/contrôleur
+#     à opérer comme le ferait Traefik+Kubernetes.
+
+services:
+  db:
+    restart: unless-stopped
+    ports: !reset []
+
+  minio:
+    restart: unless-stopped
+    # Le port objet (9000) reste accessible uniquement via Caddy (voir Caddyfile) : MinIO n'écoute
+    # plus directement sur l'hôte. La console d'admin (9001) ne doit jamais être publique.
+    # !override (pas !reset) : on remplace la liste de base par une nouvelle valeur, on ne la
+    # vide pas — !reset n'accepte qu'un remplacement vide, voir docs/DEPLOYMENT.md.
+    ports: !override
+      - "127.0.0.1:9001:9001"
+
+  minio-init:
+    restart: "no"
+
+  backend:
+    restart: unless-stopped
+    volumes: !reset []
+    ports: !reset []
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  adminer:
+    restart: unless-stopped
+    # Jamais public — un outil d'inspection de base de données ouvert à Internet est exactement
+    # le genre de chose que cahier des charges A.9/le bon sens interdisent. Tunnel SSH uniquement.
+    ports: !override
+      - "127.0.0.1:8081:8080"
+
+  backup:
+    restart: unless-stopped
+
+  uptime-kuma:
+    restart: unless-stopped
+    ports: !override
+      - "127.0.0.1:8082:3001"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file: .env
+    volumes:
+      - ./infra/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      # Build statique Flutter web (`flutter build web`, voir docs/DEPLOYMENT.md) — pas le
+      # conteneur `mobile` de dev, jamais démarré en prod.
+      - ./mobile/braise_app/build/web:/srv/braise-web:ro
+    depends_on:
+      - backend
+      - minio
+
+volumes:
+  caddy_data:
+  caddy_config:

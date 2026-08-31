@@ -231,6 +231,29 @@ techniques : cahier des charges sections A, B, C, D.
   l'outil de test, pas du serveur, pas encore poussée plus loin faute de temps. Un vrai bug de
   capacité trouvé et corrigé par un vrai test de charge, pas juste une case cochée.
 
+- [x] **Post-MVP P4.4 — Scripts et guide de déploiement VPS.** D.7/D.11 recommandent un VPS
+  auto-géré (Hetzner/OVH/Scaleway) + Docker Compose. `docs/DEPLOYMENT.md` + `docker-compose.prod.yml`
+  (surcouche, jamais utilisée seule) + `infra/deploy/provision.sh` + `infra/deploy/Caddyfile` +
+  `.env.prod.example`. Pas un vrai déploiement — aucun VPS disponible dans cet environnement pour
+  le tester en conditions réelles ; chaque pièce vérifiable localement l'a été (la fusion Compose
+  avec `docker compose config`, le Caddyfile avec `caddy validate`, la suite pytest après les
+  changements de code). En préparant la config prod, deux vrais problèmes trouvés et corrigés,
+  pas seulement documentés :
+  - `MINIO_SECURE` pilotait à la fois le client interne (réseau Docker privé, doit rester `http`)
+    et le client public qui signe les URLs des photos (doit suivre le vrai schéma externe,
+    `https` derrière un reverse proxy TLS) — un seul réglage pour deux schémas qui n'ont aucune
+    raison d'être identiques. Séparé en `minio_secure`/`minio_public_secure`
+    (`core/config.py`/`services/storage.py`), défaut `false` des deux côtés pour ne rien changer
+    en dev.
+  - Docker Compose ne fusionne pas les listes (`ports`, `volumes`) entre fichiers par défaut : un
+    override `ports: []` ne vide *pas* la liste de base (elle reste inchangée), il faut le tag
+    `!reset` explicite pour vider et `!override` pour remplacer par un nouveau contenu — piège
+    vérifié par l'usage (`docker compose config` avant/après), pas supposé.
+  Réseau prod : seuls Caddy (80/443, TLS Let's Encrypt automatique) touche Internet — `db`, la
+  console MinIO, Adminer et Uptime Kuma repassent en `127.0.0.1` uniquement (tunnel SSH), jamais
+  publics. CGU/politique de confidentialité et vrai fournisseur SMS restent explicitement hors de
+  ce palier — décisions produit/juridiques, pas des artefacts techniques à improviser.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

@@ -28,7 +28,10 @@ _public_client = Minio(
     settings.minio_public_endpoint,
     access_key=settings.minio_root_user,
     secret_key=settings.minio_root_password,
-    secure=settings.minio_secure,
+    # Son propre réglage (minio_public_secure), pas minio_secure : ce client signe des URLs pour
+    # l'hôte public, qui a son propre schéma externe (https derrière Caddy en prod) indépendant
+    # de celui du trafic interne conteneur-à-conteneur. Voir core/config.py.
+    secure=settings.minio_public_secure,
     region="us-east-1",
 )
 

@@ -18,7 +18,15 @@ class Settings(BaseSettings):
     minio_root_user: str
     minio_root_password: str
     minio_bucket: str
+    # Deux réglages distincts, pas un seul : le client interne (minio_endpoint, le nom de service
+    # Docker) parle en clair sur le réseau Docker privé même en prod — rien à chiffrer entre deux
+    # conteneurs du même hôte. Le client public (minio_public_endpoint, ce qu'un navigateur
+    # résout réellement) doit en revanche suivre le vrai schéma externe : http en local, https
+    # dès qu'un reverse proxy TLS (Caddy, voir infra/deploy/) se trouve devant lui — sinon les
+    # URLs pré-signées générées pointent vers le mauvais schéma et le navigateur les rejette
+    # (contenu mixte) ou MinIO refuse la requête (signature calculée pour l'autre schéma).
     minio_secure: bool = False
+    minio_public_secure: bool = False
 
     # Le Flutter web (Phase 6) tourne sur un port différent (localhost:5000) : sans CORS,
     # le navigateur bloque tous les appels vers l'API (localhost:8010).
