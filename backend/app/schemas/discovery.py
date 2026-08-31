@@ -17,6 +17,11 @@ class DiscoveryCandidateOut(BaseModel):
     common_interests: list[str]
     compatibility_score: float
     is_verified: bool
+    # Score seul (jamais rating_count/flagged_count, plus granulaires) — cahier des charges
+    # A.3/A.4.4 : le score de confiance doit informer la découverte, pas seulement son propre
+    # profil. None tant que personne n'a encore noté ce profil (voir services/moderation.py).
+    trust_score: int | None
+    trust_label: str | None
 
 
 class SwipeIn(BaseModel):

@@ -11,6 +11,8 @@ class DiscoveryCandidate {
     required this.commonInterests,
     required this.compatibilityScore,
     required this.isVerified,
+    required this.trustScore,
+    required this.trustLabel,
   });
 
   factory DiscoveryCandidate.fromJson(Map<String, dynamic> json) {
@@ -24,6 +26,8 @@ class DiscoveryCandidate {
       commonInterests: (json['common_interests'] as List).cast<String>(),
       compatibilityScore: (json['compatibility_score'] as num).toDouble(),
       isVerified: json['is_verified'] as bool,
+      trustScore: json['trust_score'] as int?,
+      trustLabel: json['trust_label'] as String?,
     );
   }
 
@@ -36,6 +40,8 @@ class DiscoveryCandidate {
   final List<String> commonInterests;
   final double compatibilityScore;
   final bool isVerified;
+  final int? trustScore;
+  final String? trustLabel;
 }
 
 class MatchSummary {

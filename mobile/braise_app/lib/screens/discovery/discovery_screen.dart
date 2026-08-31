@@ -276,15 +276,20 @@ class _CandidateCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${candidate.displayName} · ${candidate.age}', style: textTheme.titleMedium),
-                  if (candidate.isVerified) ...[
+                  if (candidate.isVerified || candidate.trustScore != null) ...[
                     const SizedBox(height: BraiseSpacing.xs),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SignSquareCore(color: tokens.foiInk, size: 14),
-                        const SizedBox(width: BraiseSpacing.xs),
+                        if (candidate.isVerified) ...[
+                          SignSquareCore(color: tokens.foiInk, size: 14),
+                          const SizedBox(width: BraiseSpacing.xs),
+                        ],
                         Text(
-                          'VÉRIFIÉ',
+                          [
+                            if (candidate.isVerified) 'VÉRIFIÉ',
+                            if (candidate.trustScore != null) 'CONFIANCE ${candidate.trustScore}',
+                          ].join(' · '),
                           style: textTheme.labelSmall?.copyWith(
                             color: tokens.foiInk,
                             letterSpacing: 10 * 0.08,

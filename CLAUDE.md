@@ -95,6 +95,17 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   takes `is_verified` as an explicit argument rather than re-querying `User` — both of its callers
   already have the `User` object from `Depends(get_current_user)`. `get_feed` batches it in one
   `IN (...)` lookup over the candidate pool, same N+1-avoidance pattern as `list_my_matches`.
+  `DiscoveryCandidateOut` also carries `trust_score`/`trust_label` (score only, never
+  `rating_count`/`flagged_count` — those stay more granular than a third party needs, same
+  minimization logic as the age-not-birthdate rule above). This is deliberately *not* the same
+  thing the `/moderation/*/trust-score` IDOR fix removed: that fix stopped anyone from reading an
+  *arbitrary* user's rating internals by guessing a UUID; A.3/A.4.4 still require the score itself
+  to inform discovery decisions before a match exists, which the old vulnerable endpoint was never
+  actually wired into anyway (discovery never referenced trust data at all, before or after the
+  fix — grep confirms it). `services.moderation.compute_trust_score` now delegates to
+  `compute_trust_scores_batch` (one `ratee_id IN (...)` query grouped in Python) so `get_feed` can
+  resolve up to `MAX_CANDIDATE_POOL` scores in one query instead of one per candidate — same
+  batching principle as `is_verified` and `list_my_matches` above.
 - **MinIO has two clients in `services/storage.py`**, both pointed at the same server: `_client`
   uses `MINIO_ENDPOINT` (`minio:9000`, the Docker service name — for uploads/deletes from the
   backend container) and `_public_client` uses `MINIO_PUBLIC_ENDPOINT` (`localhost:9000` — the only

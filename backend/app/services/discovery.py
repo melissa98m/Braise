@@ -11,6 +11,7 @@ from app.models.swipe import Swipe, SwipeDecision
 from app.models.user import User
 from app.services.avatar import avatar_spec_from_seed
 from app.services.matches import other_user_id
+from app.services.moderation import compute_trust_scores_batch
 from app.services.profiles import compute_age
 from app.services.subscriptions import can_create_new_match
 
@@ -58,11 +59,9 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
 
     # Batché en une requête IN(...) plutôt qu'un aller-retour par candidat — même règle que
     # list_my_matches (services/matches, cf. CLAUDE.md) pour éviter un N+1.
-    verified_by_id = dict(
-        db.query(User.id, User.is_verified).filter(
-            User.id.in_([profile.user_id for profile in candidates])
-        )
-    )
+    candidate_ids = [profile.user_id for profile in candidates]
+    verified_by_id = dict(db.query(User.id, User.is_verified).filter(User.id.in_(candidate_ids)))
+    trust_by_id = compute_trust_scores_batch(db, candidate_ids)
 
     scored = []
     for profile in candidates:
@@ -83,6 +82,8 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
                 "common_interests": common,
                 "compatibility_score": round(_jaccard(my_interests, profile.interests), 2),
                 "is_verified": verified_by_id.get(profile.user_id, False),
+                "trust_score": trust_by_id[profile.user_id]["score"],
+                "trust_label": trust_by_id[profile.user_id]["label"],
             }
         )
 

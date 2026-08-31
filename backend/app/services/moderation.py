@@ -46,7 +46,29 @@ def _trust_label(score: int) -> str:
 
 
 def compute_trust_score(db: Session, user_id: uuid.UUID) -> dict:
-    ratings = db.query(Rating).filter(Rating.ratee_id == user_id).all()
+    return compute_trust_scores_batch(db, [user_id]).get(
+        user_id, {"score": None, "label": None, "rating_count": 0, "flagged_count": 0}
+    )
+
+
+def compute_trust_scores_batch(db: Session, user_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict]:
+    """Même calcul que compute_trust_score, mais en une seule requête pour N utilisateurs — sert
+    le feed de découverte (services/discovery.get_feed), où interroger une fois par candidat
+    romprait le principe déjà en place ailleurs dans ce module (pool borné, coût prévisible)."""
+    if not user_ids:
+        return {}
+
+    ratings_by_user: dict[uuid.UUID, list[Rating]] = {}
+    for rating in db.query(Rating).filter(Rating.ratee_id.in_(user_ids)).all():
+        ratings_by_user.setdefault(rating.ratee_id, []).append(rating)
+
+    return {
+        user_id: _trust_score_from_ratings(ratings_by_user.get(user_id, []))
+        for user_id in user_ids
+    }
+
+
+def _trust_score_from_ratings(ratings: list[Rating]) -> dict:
     total = len(ratings)
     if total == 0:
         return {"score": None, "label": None, "rating_count": 0, "flagged_count": 0}

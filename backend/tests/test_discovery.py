@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.subscriptions import FREE_MATCH_LIMIT
-from tests.helpers import auth_headers, create_published_user, unique_phone
+from tests.helpers import auth_headers, create_match, create_published_user, unique_phone
 
 client = TestClient(app)
 
@@ -223,6 +223,35 @@ def test_feed_candidates_report_verified_badge():
     # create_published_user passe par le vrai flux OTP (tests/helpers.auth_headers), donc
     # is_verified est déjà à true — pas besoin de forcer un état artificiel pour ce test.
     assert candidate["is_verified"] is True
+
+
+def test_feed_candidates_report_trust_score():
+    suffix = uuid.uuid4().hex[:6]
+    me_headers, _ = create_published_user(client, "Observatrice confiance", interests=[_tag("art", suffix)])
+    _, unrated_id = create_published_user(client, "Jamais noté", interests=[_tag("art", suffix)])
+
+    feed_before = {
+        c["user_id"]: c for c in client.get("/discovery/feed", headers=me_headers).json()
+    }
+    assert feed_before[unrated_id]["trust_score"] is None
+    assert feed_before[unrated_id]["trust_label"] is None
+
+    # Un candidat noté positivement doit voir son score remonter dans le feed d'un tiers, pas
+    # seulement dans son propre /moderation/me/trust-score (cahier des charges A.3/A.4.4 : le
+    # score de confiance doit informer la découverte, pas rester privé).
+    match = create_match(client, interests_a=[_tag("art", suffix)])
+    rate_response = client.post(
+        f"/moderation/matches/{match['match_id']}/rating",
+        headers=match["headers_a"],
+        json={"score": 5, "comment": "Une conversation vraiment agréable et respectueuse."},
+    )
+    assert rate_response.status_code == 200
+
+    feed_after = {
+        c["user_id"]: c for c in client.get("/discovery/feed", headers=me_headers).json()
+    }
+    assert feed_after[match["id_b"]]["trust_score"] == 100
+    assert feed_after[match["id_b"]]["trust_label"] == "EXEMPLAIRE"
 
 
 def test_feed_filters_by_looking_for_gender():

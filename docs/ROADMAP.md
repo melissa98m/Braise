@@ -187,6 +187,20 @@ techniques : cahier des charges sections A, B, C, D.
   autre question" fait tourner la suggestion, "Utiliser" la insère comme point de départ éditable,
   jamais un texte imposé. Mobile seul, aucun changement backend.
 
+- [x] **Post-MVP P3 — Score de confiance visible en découverte.** A.3/A.4.4 : le score de confiance
+  doit informer la découverte avant même un match ("gage de fiabilité auprès des futurs matchs"),
+  et la maquette 03 l'affiche sur chaque carte ("VÉRIFIÉE · CONFIANCE 88"). Ce n'était pas un
+  effet de bord du correctif IDOR précédent (P1) : `discovery.get_feed` n'a jamais référencé le
+  score de confiance, ni avant ni après ce correctif — celui-ci coupait juste la seule route qui
+  permettait de lire le score de n'importe qui en devinant un UUID, sans rapport avec ce qui
+  manque ici. `compute_trust_score` délègue désormais à `compute_trust_scores_batch` (une requête
+  `ratee_id IN (...)` groupée en Python), pour que `get_feed` résolve tout le pool de candidats en
+  un aller-retour plutôt qu'un par candidat. `DiscoveryCandidateOut` n'expose que `trust_score`/
+  `trust_label` — jamais `rating_count`/`flagged_count`, plus granulaires que ce qu'un tiers doit
+  voir, même logique de minimisation que l'âge calculé sans date de naissance brute. Rendu combiné
+  au badge vérifié sur la carte de découverte ("VÉRIFIÉ · CONFIANCE 88"). Vérifié par un nouveau
+  test pytest (73/73 au total) et une lecture directe du schéma OpenAPI du backend qui tourne.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
