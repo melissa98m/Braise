@@ -4,6 +4,7 @@
 // signs in afterward — see services/otp.py), so both CTAs push the same OtpScreen; this test
 // only checks that both are present and reachable, not that they differ in destination.
 
+import 'package:braise_app/screens/legal/legal_screen.dart';
 import 'package:braise_app/screens/onboarding/otp_screen.dart';
 import 'package:braise_app/screens/onboarding/welcome_screen.dart';
 import 'package:flutter/material.dart';
@@ -41,5 +42,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(OtpScreen), findsOneWidget);
+  });
+
+  testWidgets('the legal notice opens the CGU/privacy screen', (tester) async {
+    await tester.pumpWidget(_harness());
+
+    await tester.tap(
+      find.text('En continuant, vous acceptez nos CGU et notre politique de confidentialité'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LegalScreen), findsOneWidget);
   });
 }

@@ -558,6 +558,18 @@ Flutter SDK is never installed on the host):
   `_AuthGate` itself renders. That's a deliberate side effect, not an oversight: it means there's
   no back-gesture path from inside the signed-in app back to the welcome/OTP screens, which is
   the behavior you want once someone's actually signed in.
+- `screens/legal/legal_screen.dart` (CGU + politique de confidentialité, requested explicitly)
+  renders `docs/legal/CGU.md`/`POLITIQUE_CONFIDENTIALITE.md` as hardcoded Dart section lists
+  (`_cguSections`/`_privacySections`, a two-tab `DefaultTabController`) rather than loading the
+  Markdown files as assets at runtime — this project has no asset pipeline and the content is
+  short enough that a loader would be more machinery than the problem needs. The two must be
+  kept in sync by hand when either changes — a comment at the top of the Dart file says so. Both
+  documents are explicitly marked "version bêta, pas encore relue par un·e professionnel·le du
+  droit" in both the Markdown and the in-app text: drafted directly from `docs/DPIA.md`'s data
+  inventory for accuracy, not generic boilerplate, but still not a substitute for real legal
+  review before any launch beyond a small circle of beta testers. Reachable from two places:
+  `WelcomeScreen` (a small underlined notice above the CTAs, the standard placement for
+  consent-at-signup) and `SettingsScreen`'s RGPD card (for anyone wanting to re-read it later).
 - `test/widget_test.dart` exercises the theme system (background tokens per brightness, WCAG
   contrast ratio on `inkFloor`) rather than pumping the full `BraiseApp`, which would make a real
   network call via `restoreSession()` — that gap is now closed for `ApiClient` specifically (see

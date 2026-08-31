@@ -8,6 +8,7 @@ import '../../state/app_services.dart';
 import '../../state/theme_controller.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/braise_page_route.dart';
+import '../legal/legal_screen.dart';
 import '../onboarding/otp_screen.dart';
 
 /// Écran Paramètres — regroupe compte, apparence, confidentialité RGPD et notifications, qui
@@ -178,6 +179,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsActionRow(label: 'Exporter mes données', onTap: _exportData),
                     Divider(height: 1, color: tokens.borderHairline),
                     _SettingsActionRow(
+                      label: 'CGU & confidentialité',
+                      onTap: () =>
+                          Navigator.of(context).push(braiseRoute(context, const LegalScreen())),
+                    ),
+                    Divider(height: 1, color: tokens.borderHairline),
+                    _SettingsActionRow(
                       label: 'Supprimer mon compte',
                       color: tokens.erreur,
                       onTap: _deleteAccount,
@@ -187,8 +194,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: BraiseSpacing.xxl),
                 _SectionLabel('NOTIFICATIONS'),
                 Text(
-                  'Préférences locales uniquement — les notifications push arrivent dans une '
-                  'prochaine version.',
+                  // Notifications navigateur réelles (P9.1) uniquement quand l'app est ouverte —
+                  // pas de vraies notifications push (Service Worker), voir docs/V2_FEATURES.md.
+                  'Fonctionnent tant que l\'application est ouverte dans un onglet.',
                   style: textTheme.bodyMedium,
                 ),
                 const SizedBox(height: BraiseSpacing.sm),

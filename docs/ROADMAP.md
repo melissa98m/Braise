@@ -613,6 +613,17 @@ techniques : cahier des charges sections A, B, C, D.
   3 nouveaux tests (`test/screens/welcome_screen_test.dart`), 96/96 tests Flutter au total,
   `flutter analyze` propre, 85/85 tests backend, `ruff check .` propre.
 
+- [x] **P12.1 — CGU et politique de confidentialité (DPIA, action 3).** Rédigées à partir de
+  l'inventaire de données de `docs/DPIA.md` (pas un texte générique) :
+  `docs/legal/CGU.md`/`POLITIQUE_CONFIDENTIALITE.md`, toutes deux marquées explicitement "version
+  bêta, pas encore relue par un juriste" — à faire avant toute ouverture au-delà d'un cercle
+  restreint. Affichées dans l'app (`screens/legal/legal_screen.dart`, contenu dupliqué à la main
+  en Dart plutôt que chargé depuis les fichiers Markdown — pas de pipeline d'assets dans ce
+  projet, texte assez court pour ne pas le justifier), reliées depuis `WelcomeScreen` (mention
+  sous les CTA, avant toute inscription) et Paramètres (section RGPD). 2 nouveaux tests
+  (`legal_screen_test.dart` + un test ajouté à `welcome_screen_test.dart`), 99/99 tests Flutter
+  au total, `flutter analyze` propre.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

@@ -46,9 +46,10 @@ paiement des stores Apple/Google (D.8), qui ne transite par aucune donnée perso
   brute — évite la désanonymisation croisée (cahier des charges A.6, exigence explicite). Un swipe
   vers un profil inexistant et un swipe vers un profil non publié renvoient la même 404
   (`services/discovery.py`), pour ne pas laisser fuiter l'existence d'un compte.
-- **Consentement / information.** À formaliser côté produit (CGU + écran d'onboarding) avant bêta —
-  voir plan d'action P1 (« écran d'onboarding pédagogique »), qui est aussi le bon endroit pour
-  poser le consentement explicite RGPD, pas seulement la pédagogie du concept.
+- **Consentement / information.** CGU + politique de confidentialité rédigées et affichées dans
+  l'app (voir action 3, § 5 plus bas) ; l'écran d'onboarding pédagogique (`ConceptIntroScreen`,
+  plan P1) reste le bon endroit pour la pédagogie du concept, distincte du consentement RGPD
+  posé par les CGU.
 - **Sécurité par construction.**
   - Chiffrement au repos des photos privées (SSE-S3 via `MINIO_KMS_SECRET_KEY`, clé locale — voir
     `services/storage.py`), vérifiable avec `mc stat` (`Encryption: SSE-S3`).
@@ -91,7 +92,13 @@ paiement des stores Apple/Google (D.8), qui ne transite par aucune donnée perso
    la supervision existe mais personne n'est alerté.
 2. Répliquer `backup_data` hors de l'hôte Docker local dès le passage en VPS de production
    (rclone/rsync vers un second emplacement physique, D.7).
-3. Rédiger et publier les CGU / la politique de confidentialité côté produit (hors périmètre code).
+3. ~~Rédiger et publier les CGU / la politique de confidentialité côté produit~~ — fait :
+   `docs/legal/CGU.md` et `docs/legal/POLITIQUE_CONFIDENTIALITE.md`, affichées dans l'app
+   (`screens/legal/legal_screen.dart`, liées depuis `WelcomeScreen` et Paramètres). **Reste à
+   faire** : les deux sont explicitement marquées "version bêta, pas encore relue par un
+   juriste" — à faire relire avant toute ouverture au-delà d'un cercle restreint de
+   bêta-testeur·se·s, et à compléter avec le nom/l'entité réel·le de l'éditeur (actuellement un
+   placeholder `[Éditeur]`).
 4. Réentraîner `moderation_ml.py` dès que la bêta produit un premier volume réel de commentaires.
 5. Générer un vrai `JWT_SECRET` et un vrai `MINIO_KMS_SECRET_KEY` avant tout déploiement hors
    poste de dev — les valeurs actuelles dans `.env` sont explicitement des valeurs de dev.

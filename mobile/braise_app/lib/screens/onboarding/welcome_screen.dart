@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/braise_page_route.dart';
 import '../../widgets/sign_shapes.dart';
+import '../legal/legal_screen.dart';
 import 'otp_screen.dart';
 
 /// Écran d'accueil — premier écran vu à l'installation, avant toute authentification. L'OTP
@@ -50,6 +51,21 @@ class WelcomeScreen extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: () => Navigator.of(context).push(braiseRoute(context, const OtpScreen())),
                   child: const Text('J\'ai déjà un compte'),
+                ),
+              ),
+              const SizedBox(height: BraiseSpacing.sm),
+              Center(
+                child: TextButton(
+                  onPressed: () =>
+                      Navigator.of(context).push(braiseRoute(context, const LegalScreen())),
+                  child: Text(
+                    'En continuant, vous acceptez nos CGU et notre politique de confidentialité',
+                    textAlign: TextAlign.center,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: tokens.inkSecondary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: BraiseSpacing.md),
