@@ -171,9 +171,21 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   `"typing"` is a pure relay, never persisted; `"read"` calls `mark_read` and rebroadcasts so the
   *other* open connection updates live. `GET .../messages` computes `read` per message via
   `message_is_read`, so a client that reloads history sees accurate ticks without replaying WS
-  events.
-
-- **Trust & moderation** (`models/rating.py`, `models/report.py`, `services/moderation.py`,
+  events. `chat_ws` opens a fresh `SessionLocal()` per operation (`with SessionLocal() as db:`,
+  once for the initial auth/participant check, once more per received `read`/`message` event —
+  `typing` needs no DB access at all) instead of holding one session for the whole connection's
+  lifetime. This isn't a style preference: `backend/scripts/load_test_messaging.py` (P4.3)
+  measured the old code locking up the *entire* app — including unrelated REST endpoints — at
+  ~15 concurrently open conversations, because a WS connection can stay open for hours and the
+  old code held its `SessionLocal()` checked out from the pool (`pool_size=5` + `max_overflow=10`
+  = 15) for that whole duration; the 16th+ concurrent chat blocked on `pool_timeout` (30s) and
+  every other request queued behind it. After the fix, a session is only checked out for the
+  brief moment of handling one event, so an idle connection between messages holds zero pool
+  capacity — verified at 400 concurrent matches (800 simultaneous WS connections, 100% connect
+  and delivery success) with the backend staying fully responsive throughout. `user_id` (a plain
+  UUID) is threaded through the receive loop instead of the `User`/`Match` ORM objects from the
+  auth check — those become invalid once their session closes, so each per-event session
+  re-fetches what it needs by id rather than reusing detached instances across sessions. (`models/rating.py`, `models/report.py`, `services/moderation.py`,
   `services/moderation_ml.py`): a `Rating` is one score+comment per `(match_id, rater_id)` — the
   trust score is *never stored*, it's recomputed on every read from all `Rating` rows for a user
   (`compute_trust_score`), so there's no cached counter that can drift out of sync. A rating is

@@ -214,6 +214,23 @@ techniques : cahier des charges sections A, B, C, D.
   des requêtes SQL directes sur la base de dev (complétion de profil 65/5395, déblocage 120/1999,
   matchs → 3 jours 0/1999 — tous exacts).
 
+- [x] **Post-MVP P4.3 — Test de charge sur la messagerie WebSocket.** Explicitement exigé par le
+  planning (B.1, Phase 4 : "tests de charge sur la messagerie temps réelle") avant le jalon
+  "Go/No-go bêta" (B.2), jamais fait jusqu'ici. `backend/scripts/load_test_messaging.py` simule N
+  matchs concurrents (chacun avec ses 2 participants connectés) et mesure latence de connexion,
+  latence de diffusion, et taux de succès. Premier run à 100 matchs (200 connexions) : **échec
+  total** — `sqlalchemy.exc.TimeoutError: QueuePool limit of size 5 overflow 10 reached` a
+  bloqué non seulement la messagerie mais toute l'API, y compris des routes REST sans rapport,
+  jusqu'à nécessiter un redémarrage du conteneur. Cause racine : `chat_ws` gardait une seule
+  session DB ouverte pour toute la durée de la connexion (potentiellement des heures) au lieu
+  d'une par opération — corrigé (`api/v1/messaging.py`, détail dans `CLAUDE.md`). Après correctif,
+  vérifié à 400 matchs concurrents (800 connexions WS simultanées) sans le moindre échec, backend
+  resté réactif pendant et après le test. À 800 matchs, le *script client* lui-même a atteint sa
+  limite de descripteurs de fichiers (`OSError: Too many open files`, un seul process ouvrant
+  1600 sockets) avant que le serveur ne montre le moindre signe de faiblesse — limite de
+  l'outil de test, pas du serveur, pas encore poussée plus loin faute de temps. Un vrai bug de
+  capacité trouvé et corrigé par un vrai test de charge, pas juste une case cochée.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

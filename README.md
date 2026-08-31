@@ -69,6 +69,16 @@ monétisation, produit) directement depuis les tables existantes — pas de tabl
 à maintenir. La rétention est un proxy documenté dans le script (pas de journal de
 connexion/session dans ce projet), pas une vraie mesure DAU/MAU.
 
+## Test de charge messagerie (cahier des charges B.1 Phase 4)
+
+```bash
+docker compose run --rm backend python scripts/load_test_messaging.py --matches 100
+```
+
+Simule N matchs concurrents (2 participants connectés en websocket chacun) et rapporte latence
+de connexion/diffusion et taux de succès. C'est ce script qui a mis au jour l'épuisement du pool
+de connexions DB corrigé dans `api/v1/messaging.py` — voir `docs/ROADMAP.md` (P4.3).
+
 ## Stack (figée, cahier des charges section D.11)
 
 Flutter · FastAPI · PostgreSQL · WebSockets custom · MinIO · scikit-learn maison. Aucun service

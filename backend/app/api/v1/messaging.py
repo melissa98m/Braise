@@ -61,14 +61,24 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
     # L'auth WebSocket ne peut pas passer par un header Authorization classique côté navigateur :
     # le token voyage en query string, d'où la vérification manuelle (pas de Depends ici) avant
     # même d'accepter la connexion.
-    db = SessionLocal()
-    try:
-        user = user_from_token(token, db)
-        match = messaging_service.assert_match_participant(db, user, match_id)
-    except HTTPException:
-        db.close()
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+    #
+    # Une session par opération (ci-dessous), jamais une session gardée ouverte pour toute la
+    # durée de la connexion : un test de charge (docs/ROADMAP.md, P4.3) a montré qu'une session
+    # tenue du connect au disconnect épuise le pool SQLAlchemy (5 + 10 overflow par défaut) dès
+    # une quinzaine de conversations ouvertes en même temps — une connexion WS peut rester
+    # ouverte des heures, contrairement à une requête REST. Passé ce seuil, tout le reste de
+    # l'API (y compris les routes REST qui n'ont rien à voir avec la messagerie) se met à
+    # échouer en TimeoutError faute de connexion disponible dans le pool. Ici, une session ne
+    # vit que le temps d'une vérification ou d'un événement reçu, exactement comme une requête
+    # REST via `Depends(get_db)`.
+    with SessionLocal() as db:
+        try:
+            user = user_from_token(token, db)
+            messaging_service.assert_match_participant(db, user, match_id)
+            user_id = user.id
+        except HTTPException:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
 
     await manager.connect(match_id, websocket)
     try:
@@ -80,18 +90,21 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
                 # Éphémère, jamais persisté : juste un relais aux autres connexions du match
                 # (voir ws/connection_manager.py — un seul process backend pour l'instant).
                 await manager.broadcast(
-                    match_id, {"type": "typing", "match_id": str(match_id), "sender_id": str(user.id)}
+                    match_id, {"type": "typing", "match_id": str(match_id), "sender_id": str(user_id)}
                 )
                 continue
 
             if event_type == "read":
-                read_at = matches_service.mark_read(db, match, user)
+                with SessionLocal() as db:
+                    user = db.get(User, user_id)
+                    match = messaging_service.assert_match_participant(db, user, match_id)
+                    read_at = matches_service.mark_read(db, match, user)
                 await manager.broadcast(
                     match_id,
                     {
                         "type": "read",
                         "match_id": str(match_id),
-                        "reader_id": str(user.id),
+                        "reader_id": str(user_id),
                         "read_at": read_at.isoformat(),
                     },
                 )
@@ -100,16 +113,19 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
             body = str(data.get("body", "")).strip()
             if not body:
                 continue
-            message = messaging_service.create_message(db, user, match_id, body)
+            with SessionLocal() as db:
+                user = db.get(User, user_id)
+                message = messaging_service.create_message(db, user, match_id, body)
+                message_id, created_at, saved_body = message.id, message.created_at, message.body
             await manager.broadcast(
                 match_id,
                 {
                     "type": "message",
-                    "id": str(message.id),
+                    "id": str(message_id),
                     "match_id": str(match_id),
-                    "sender_id": str(user.id),
-                    "body": message.body,
-                    "created_at": message.created_at.isoformat(),
+                    "sender_id": str(user_id),
+                    "body": saved_body,
+                    "created_at": created_at.isoformat(),
                     # Toujours faux à l'envoi : personne d'autre n'a encore pu marquer le match
                     # comme lu après ce message (voir services/matches.message_is_read).
                     "read": False,
@@ -119,4 +135,3 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
         pass
     finally:
         manager.disconnect(match_id, websocket)
-        db.close()
