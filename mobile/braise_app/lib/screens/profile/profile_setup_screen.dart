@@ -8,7 +8,7 @@ import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
 import '../../widgets/braise_page_route.dart';
-import '../root_shell.dart';
+import '../onboarding/concept_intro_screen.dart';
 
 class _GenderChips extends StatelessWidget {
   const _GenderChips({required this.value, required this.onChanged});
@@ -202,7 +202,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       });
       if (!mounted || !publish) return;
       if (widget.isOnboarding) {
-        Navigator.of(context).pushReplacement(braiseRoute(context, const RootShell()));
+        // A.4.1.5 : explication pédagogique dédiée avant la première entrée dans l'app, jamais
+        // vue par un utilisateur qui republie juste son profil plus tard (isOnboarding == false).
+        Navigator.of(context).pushReplacement(braiseRoute(context, const ConceptIntroScreen()));
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(

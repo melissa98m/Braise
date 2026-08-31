@@ -285,6 +285,14 @@ Flutter SDK is never installed on the host):
   obligatoires) reused from conversation, unlock, and rating screens, instead of three separate
   ad-hoc dialogs. `screens/moderation/ban_appeal_screen.dart` is what `AuthStatus.banned` routes
   to from `main.dart` — shows the latest `BanAppeal` status or the form to file one.
+  `screens/onboarding/concept_intro_screen.dart` is A.4.1.5's dedicated pedagogical screen (why
+  the physique is deferred, how flames work, how the veil lifts) — a 3-page `PageView`, shown
+  exactly once, wired in from `ProfileSetupScreen._save` only when `isOnboarding == true` (a
+  profile edit later in the app's life never re-shows it). Its icons mix the sign-language
+  primitives from `widgets/sign_shapes.dart` (`SignDiamond` for flames, `SignHatchedCircle` for
+  the veil) with one plain Material icon for "personality/interests," a concept none of the 4
+  spec-defined primitives (braise/voile/confiance/vérifié) actually represents — same pragmatic
+  mixing `screens/settings/settings_screen.dart` already does for its own icons.
 - `test/widget_test.dart` exercises the theme system (background tokens per brightness, WCAG
   contrast ratio on `inkFloor`) rather than pumping the full `BraiseApp`, which would make a real
   network call via `restoreSession()` with no HTTP-mocking infrastructure in place. It uses

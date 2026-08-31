@@ -126,6 +126,17 @@ techniques : cahier des charges sections A, B, C, D.
   backend. Vérifié par 5 nouveaux tests pytest (68/68) et un scénario réel contre le backend qui
   tourne (préférence "femme" exclut un homme, inclut une femme, un genre invalide est rejeté 422).
 
+- [x] **Post-MVP P1.3 — Écran d'onboarding pédagogique.** Dernier point du plan d'action initial :
+  A.4.1.5 exige un "écran d'onboarding dédié" expliquant pourquoi le physique est différé et
+  comment fonctionnent les flammes — l'onboarding sautait jusqu'ici directement de la création du
+  profil à la découverte, sans jamais l'expliquer. `screens/onboarding/concept_intro_screen.dart` :
+  3 pages (`PageView`) — inversion personnalité/physique, mécanique des flammes (bonne réponse =
+  +1 flamme, mauvaise = relecture sans pénalité, jamais une punition — ton A.7), puis le voile
+  progressif (silhouette → flou léger → net, déblocage simultané pour les deux). Affiché une seule
+  fois : `ProfileSetupScreen._save` n'y route que si `isOnboarding == true`, donc jamais revu par
+  quelqu'un qui modifie juste son profil plus tard. Clôt le plan d'action P1 initial (filtres +
+  contestation + onboarding pédagogique) dans son intégralité.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
