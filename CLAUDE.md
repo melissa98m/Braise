@@ -404,7 +404,20 @@ Flutter SDK is never installed on the host):
   signedIn, signedOut (expired/deleted token), and specifically `banned` (403 exact detail
   `'Compte suspendu.'`, token must survive) — the branch added for `AuthStatus.banned` that had
   zero test coverage before this. Plain `test()`, not `testWidgets()`: `AuthController` is a
-  `ChangeNotifier` with no widget tree to pump.
+  `ChangeNotifier` with no widget tree to pump. `AppServices` takes an optional `httpClient` (P5.2)
+  so a full screen can be pumped under a real `Provider<AppServices>` in a test without ever
+  touching the network — `test/screens/ban_appeal_screen_test.dart` is the first thing built on
+  it (form validation, successful filing, an existing pending appeal, an overturned one letting a
+  new filing happen). Building it surfaced a real trap in `package:http`'s `Response(String,
+  ...)` constructor: it picks the body's encoding from the `Content-Type` *response header*, not
+  from the string's actual content — with no header set it silently falls back to Latin-1, and
+  any accented character (French, so: everywhere) then fails `utf8.decode` inside
+  `ApiClient._decode` with a confusing `FormatException`, not a clean HTTP error. Every mock JSON
+  response needs `headers: {'content-type': 'application/json; charset=utf-8'}` (see the `_json`
+  helper in both test files) — `auth_controller_test.dart` predates this fix and had been passing
+  by accident: `'Compte suspendu.'` has no accent so it happened to round-trip fine, while
+  `'Compte supprimé.'` silently decoded to a generic fallback message that the test never
+  compared against, only the resulting `AuthStatus` (which still landed right by coincidence).
 
 **Tests run against the real dev Postgres/MinIO, not a throwaway database** — there's no
 per-test transaction rollback or fixture teardown. Any test that creates a `User` (i.e. touches

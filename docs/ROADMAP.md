@@ -271,6 +271,22 @@ techniques : cahier des charges sections A, B, C, D.
   ajoute un garde-fou de non-régression (même validation croisée, échoue si le taux de faux
   positifs dépasse 2 %) — 76/76 tests backend désormais.
 
+- [x] **Post-MVP P5.2 — Couverture de tests des écrans (en cours).** L'infra de mock HTTP (P3)
+  n'avait servi qu'à `AuthController` — les 10 dossiers d'écrans avaient zéro test.
+  `AppServices` accepte désormais un `httpClient` optionnel, ce qui permet de pumper un écran
+  entier sous un vrai `Provider<AppServices>` sans toucher le réseau.
+  `test/screens/ban_appeal_screen_test.dart` (5 tests) est le premier écran couvert — choisi
+  parce que c'est l'écran le plus dommageable à casser en silence : le seul recours d'un compte
+  banni (A.9). En l'écrivant, un vrai piège trouvé : `package:http`'s `Response(String, ...)`
+  choisit l'encodage du corps depuis l'en-tête `Content-Type` de la réponse, pas depuis le
+  contenu réel de la chaîne — sans en-tête, retombe sur Latin-1, et n'importe quel accent
+  (partout, cette app est en français) casse alors `utf8.decode` côté `ApiClient._decode` avec un
+  `FormatException` confus. `auth_controller_test.dart` (P3) en souffrait déjà sans qu'aucun test
+  ne l'ait remarqué — `'Compte suspendu.'` n'a pas d'accent donc passait par accident,
+  `'Compte supprimé.'` en a un et décodait silencieusement vers un message générique jamais
+  comparé par ce fichier, seul le statut final l'était (qui retombait juste au bon endroit par
+  coïncidence). Corrigé dans les deux fichiers de test. 16/16 tests Flutter au total.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

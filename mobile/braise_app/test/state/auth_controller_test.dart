@@ -16,7 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 AuthController buildController({required http.Response Function() meResponse}) {
   final client = MockClient((request) async {
     if (request.method == 'POST' && request.url.path == '/auth/verify-otp') {
-      return http.Response(jsonEncode({'access_token': 'tok-123'}), 200);
+      return _json({'access_token': 'tok-123'}, 200);
     }
     if (request.method == 'GET' && request.url.path == '/auth/me') {
       return meResponse();
@@ -30,12 +30,26 @@ AuthController buildController({required http.Response Function() meResponse}) {
   return controller;
 }
 
+/// `http.Response(String, ...)` choisit l'encodage du corps depuis l'en-tête Content-Type ; sans
+/// lui, il retombe sur Latin-1, ce qui casse `utf8.decode` côté `ApiClient._decode` dès qu'un
+/// accent apparaît dans le JSON — "Compte supprimé." en contient un, "Compte suspendu." non, ce
+/// qui a fait passer une première version de ce fichier sans ce helper sans qu'aucun test ne
+/// s'en aperçoive (le message d'erreur retombait sur un texte générique, indétectable par ce
+/// fichier tant qu'il ne comparait que le statut final, pas le message).
+http.Response _json(Object data, int status) {
+  return http.Response(
+    jsonEncode(data),
+    status,
+    headers: {'content-type': 'application/json; charset=utf-8'},
+  );
+}
+
 http.Response _mePayload({String id = 'user-1', String phone = '+33600000000'}) {
-  return http.Response(jsonEncode({'id': id, 'phone': phone}), 200);
+  return _json({'id': id, 'phone': phone}, 200);
 }
 
 http.Response _forbidden(String detail) {
-  return http.Response(jsonEncode({'detail': detail}), 403);
+  return _json({'detail': detail}, 403);
 }
 
 void main() {
@@ -90,7 +104,7 @@ void main() {
     test('stored token + 401 (expired) -> signedOut like any other invalid token', () async {
       SharedPreferences.setMockInitialValues({'braise_token': 'stale-token'});
       final controller = buildController(
-        meResponse: () => http.Response(jsonEncode({'detail': 'Identifiants invalides ou expirés.'}), 401),
+        meResponse: () => _json({'detail': 'Identifiants invalides ou expirés.'}, 401),
       );
       await controller.restoreSession();
       expect(controller.status, AuthStatus.signedOut);
@@ -122,7 +136,7 @@ void main() {
 
     test('any other /auth/me failure after verify-otp rethrows', () async {
       final controller = buildController(
-        meResponse: () => http.Response(jsonEncode({'detail': 'Erreur serveur.'}), 500),
+        meResponse: () => _json({'detail': 'Erreur serveur.'}, 500),
       );
       await expectLater(
         () => controller.verifyOtp('+33600000000', '123456'),
