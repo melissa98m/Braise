@@ -591,6 +591,13 @@ techniques : cahier des charges sections A, B, C, D.
 
 ## Backlog V2 (hors périmètre MVP)
 
+Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :
+`docs/V2_FEATURES.md`. Ce qui suit ici n'est qu'un résumé du premier point (KYC), historiquement
+le seul détaillé dans ce fichier avant que `docs/V2_FEATURES.md` ne couvre tout le reste (revue
+de modération humaine, scaling messagerie multi-instance, graduation des stubs OTP/paiement/push
+vers de vrais services, réentraînement du modèle de modération, builds mobiles natives,
+géolocalisation réelle, et les actions de conformité DPIA restantes).
+
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
   identifié comme hors périmètre MVP dans `docs/DPIA.md` (section 1 : "le KYC renforcé par pièce
   d'identité est explicitement hors périmètre MVP, réservé à une option V2"). Le KYC MVP reste

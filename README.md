@@ -1,8 +1,9 @@
 # Braise
 
 Application de rencontre où l'affinité précède le physique. Cahier des charges complet et
-maquettes fournis séparément ; voir `docs/ROADMAP.md` pour le plan d'exécution phase par phase et
-`docs/DESIGN_TOKENS.md` pour la charte graphique.
+maquettes fournis séparément ; voir `docs/ROADMAP.md` pour le plan d'exécution phase par phase,
+`docs/DESIGN_TOKENS.md` pour la charte graphique, et `docs/V2_FEATURES.md` pour ce qu'il reste à
+construire au-delà du MVP actuel (KYC, modération humaine, paiement/push/SMS réels, etc.).
 
 ## Démarrer en local (gratuit, 100 % Docker)
 
