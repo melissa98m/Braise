@@ -163,6 +163,22 @@ def ban_user(client, victim_headers: dict, victim_id: str) -> None:
         assert response.status_code == 200
 
 
+def force_otp_requested_at(phone: str, seconds_ago: float) -> None:
+    # Attendre MIN_RESEND_INTERVAL_SECONDS pour de vrai ralentirait chaque test qui vérifie le
+    # comportement *après* la fenêtre de throttle : on recule directement `otp_requested_at` en
+    # base, comme force_match_unlocked recule `unlocked_at` plutôt que d'attendre des jours réels.
+    from app.db.session import SessionLocal
+    from app.models.user import User
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.phone == phone).one()
+        user.otp_requested_at = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+        db.commit()
+    finally:
+        db.close()
+
+
 def force_match_unlocked(match_id: str, hours_ago: float = 1) -> None:
     # Atteindre unlock_threshold flammes par le vrai flux (une question/jour/utilisateur) prendrait
     # plusieurs jours réels : on pose directement l'état "match débloqué depuis X" en base plutôt

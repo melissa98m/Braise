@@ -327,6 +327,26 @@ techniques : cahier des charges sections A, B, C, D.
   `docker compose run --rm backend ruff check .` — clôt le plan d'action P5 dans son intégralité
   (P5.1 modèle évalué, P5.2 tests d'écran amorcés, P5.3 lint).
 
+- [x] **Post-MVP P6.1 — Protection anti-brute-force sur l'OTP.** `services/otp.py` n'avait
+  aucune limite : un code à 6 chiffres (10^6 possibilités) valide 10 minutes, sans plafond de
+  tentatives, se force par brute force en pratique — une vraie faille de prise de compte, pas un
+  simple manque de robustesse, dès qu'un attaquant connaît le numéro de la victime. Deux garde-fous
+  indépendants, tous les deux sur `User` (pas de Redis/service externe — cohérent avec le reste du
+  projet, tout en Postgres) : `MIN_RESEND_INTERVAL_SECONDS = 30` (`otp_requested_at`) rejette avec
+  429 une nouvelle demande de code trop rapprochée pour le même numéro ; `MAX_OTP_ATTEMPTS = 5`
+  (`otp_attempts`) neutralise le code courant (`otp_code` mis à `None`) après ce nombre d'échecs de
+  vérification — pas un simple rejet : sans invalider le code, le bon code resterait valable après
+  la limite, donc `MAX_OTP_ATTEMPTS` ne ferait que ralentir l'attaque plutôt que l'arrêter. Les deux
+  compteurs repartent à zéro à chaque nouvelle demande de code, pour ne pas pénaliser un
+  utilisateur légitime qui s'est trompé sur son *prochain* essai. Migration Alembic
+  `608fde81428f` (deux colonnes ajoutées à `users`) générée et appliquée contre le Postgres de dev
+  réel. 4 nouveaux tests (`test_auth_otp.py` : throttle actif, throttle levé après la fenêtre,
+  verrouillage après `MAX_OTP_ATTEMPTS`, remise à zéro par un code frais) — 80/80 tests backend,
+  `ruff check .` propre. Aucun changement mobile requis : `OtpScreen` n'a pas de bouton "renvoyer"
+  tant qu'un code est en attente (le bouton est désactivé via `_loading` pendant l'appel), donc ce
+  chemin de throttle n'est pas atteignable depuis l'UI actuelle — c'est un filet de sécurité
+  purement côté serveur.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

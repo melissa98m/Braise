@@ -266,6 +266,22 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   signal to compute from — this project has no login/session event log — so `retention_proxy` is
   explicitly documented as an approximation (swiped again ≥N days after signup), not a real DAU/MAU
   retention figure; don't quote it outside internal debugging without that caveat attached.
+- **OTP brute-force protection (P6.1)**: `services/otp.py` had no limits at all — a 6-digit code
+  (10^6 possibilities) valid for `OTP_TTL_MINUTES = 10` with unlimited verify attempts is a real
+  account-takeover path, not a robustness nitpick, given anyone who learns a victim's phone number
+  could script the whole keyspace within the validity window. Two independent limits, both on
+  `User` (`otp_requested_at`, `otp_attempts` — no Redis/external store, matches this project's
+  "everything in Postgres" pattern): `MIN_RESEND_INTERVAL_SECONDS = 30` rejects a repeated
+  `request_otp` for the same phone with 429 before that window elapses (raised as `HTTPException`
+  straight from the service, same pattern as `discovery.py`/`moderation.py`); `MAX_OTP_ATTEMPTS =
+  5` neutralizes the *current* code (`otp_code` cleared) once that many `verify_otp` calls for it
+  have failed — deliberately not just a rejection: without clearing the code, a correct code
+  submitted after the limit would still work, so `MAX_OTP_ATTEMPTS` would only slow an attacker
+  down instead of stopping them. Both counters reset on every fresh `request_otp` call, so a
+  legitimate user who mistypes a code isn't punished by their *next* code. No mobile changes
+  needed — `OtpScreen` has no resend button while a code is pending (`_requestOtp`'s button is
+  disabled via `_loading` during the call), so the throttle path isn't reachable from the current
+  UI at all; it exists purely as a server-side backstop.
 
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):
