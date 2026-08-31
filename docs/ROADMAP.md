@@ -179,6 +179,14 @@ techniques : cahier des charges sections A, B, C, D.
   signes. Vérifié par 2 nouveaux tests pytest (72/72 au total) et une vérification directe du
   schéma OpenAPI exposé par le backend qui tourne.
 
+- [x] **Post-MVP P3 — Éditeur de bio guidé.** A.5 Module 1 : "suggestions de questions pour éviter
+  les bios vides type « demandez-moi »" — l'éditeur n'avait qu'un texte d'exemple statique en
+  hint, jamais de vraies suggestions. `ProfileSetupScreen` affiche désormais une question tirée de
+  `_bioPrompts` (8 questions, ton A.7) uniquement tant que la bio est vide — elle disparaît dès la
+  première frappe, jamais un encombrement une fois que l'utilisateur a commencé à écrire. "Une
+  autre question" fait tourner la suggestion, "Utiliser" la insère comme point de départ éditable,
+  jamais un texte imposé. Mobile seul, aucun changement backend.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

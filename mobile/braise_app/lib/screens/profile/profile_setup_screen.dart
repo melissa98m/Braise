@@ -56,6 +56,20 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   static const _bioMaxLength = 90;
 
+  // Éditeur de bio guidé (cahier des charges A.5 Module 1) : de quoi éviter une bio vide type
+  // « demandez-moi », sans dicter une formule figée — l'utilisateur reste libre de tout réécrire.
+  static const _bioPrompts = [
+    'Un bruit qui vous rassure instantanément.',
+    'La dernière chose qui vous a fait rire aux éclats.',
+    'Un talent inutile mais dont vous êtes fier·e.',
+    'Le sujet sur lequel vous pourriez parler des heures.',
+    'Une habitude que personne ne soupçonnerait chez vous.',
+    'Le meilleur conseil qu\'on vous ait donné.',
+    'Un lieu où vous vous sentez vraiment vous-même.',
+    'Ce que vous faites quand vous ne devriez rien faire.',
+  ];
+  int _bioPromptIndex = 0;
+
   final _nameController = TextEditingController();
   final _bioController = TextEditingController();
   final _interestController = TextEditingController();
@@ -76,7 +90,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   void initState() {
     super.initState();
+    _bioPromptIndex = DateTime.now().millisecond % _bioPrompts.length;
     _load();
+  }
+
+  void _shuffleBioPrompt() {
+    setState(() => _bioPromptIndex = (_bioPromptIndex + 1) % _bioPrompts.length);
+  }
+
+  void _useBioPrompt() {
+    setState(() {
+      _bioController.text = _bioPrompts[_bioPromptIndex];
+      _bioController.selection = TextSelection.collapsed(offset: _bioController.text.length);
+    });
   }
 
   Future<void> _load() async {
@@ -275,11 +301,50 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               controller: _bioController,
               maxLength: _bioMaxLength,
               maxLines: 3,
+              onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: "Indice d'entrée",
                 hintText: 'Je connais tous les bruits du métro ligne 2 les yeux fermés.',
               ),
             ),
+            if (_bioController.text.trim().isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: BraiseSpacing.lg),
+                child: Container(
+                  padding: const EdgeInsets.all(BraiseSpacing.md),
+                  decoration: BoxDecoration(
+                    color: tokens.surface1,
+                    border: Border.all(color: tokens.borderHairline),
+                    borderRadius: BorderRadius.circular(BraiseRadii.card),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'MATIÈRE À QUESTIONS',
+                              style: textTheme.labelSmall?.copyWith(
+                                color: tokens.inkFloor,
+                                letterSpacing: 11 * 0.14,
+                              ),
+                            ),
+                            const SizedBox(height: BraiseSpacing.xs),
+                            Text(_bioPrompts[_bioPromptIndex], style: textTheme.bodyMedium),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _shuffleBioPrompt,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Une autre question',
+                      ),
+                      TextButton(onPressed: _useBioPrompt, child: const Text('Utiliser')),
+                    ],
+                  ),
+                ),
+              ),
             Text(
               "Centres d'intérêt",
               style: textTheme.labelSmall?.copyWith(letterSpacing: 13 * 0.14),
