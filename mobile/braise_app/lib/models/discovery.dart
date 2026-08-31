@@ -10,6 +10,7 @@ class DiscoveryCandidate {
     required this.avatar,
     required this.commonInterests,
     required this.compatibilityScore,
+    required this.isVerified,
   });
 
   factory DiscoveryCandidate.fromJson(Map<String, dynamic> json) {
@@ -22,6 +23,7 @@ class DiscoveryCandidate {
       avatar: AvatarSpec.fromJson(json['avatar'] as Map<String, dynamic>),
       commonInterests: (json['common_interests'] as List).cast<String>(),
       compatibilityScore: (json['compatibility_score'] as num).toDouble(),
+      isVerified: json['is_verified'] as bool,
     );
   }
 
@@ -33,6 +35,7 @@ class DiscoveryCandidate {
   final AvatarSpec avatar;
   final List<String> commonInterests;
   final double compatibilityScore;
+  final bool isVerified;
 }
 
 class MatchSummary {

@@ -70,7 +70,7 @@ def regenerate_avatar(db: Session, user: User) -> dict:
     return avatar_spec_from_seed(profile.avatar_seed)
 
 
-def to_public_profile_out(db: Session, profile: PublicProfile) -> dict:
+def to_public_profile_out(db: Session, profile: PublicProfile, is_verified: bool) -> dict:
     return {
         "display_name": profile.display_name,
         "age": compute_age(profile.birth_date),
@@ -79,6 +79,7 @@ def to_public_profile_out(db: Session, profile: PublicProfile) -> dict:
         "avatar": avatar_spec_from_seed(profile.avatar_seed),
         "is_published": profile.is_published,
         "is_premium": is_premium(db, profile.user_id),
+        "is_verified": is_verified,
         "gender": profile.gender,
         "looking_for_gender": profile.looking_for_gender,
         "age_min": profile.age_min,

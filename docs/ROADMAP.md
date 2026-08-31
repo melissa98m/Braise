@@ -167,6 +167,18 @@ techniques : cahier des charges sections A, B, C, D.
   sous le tout dernier message envoyé, jamais par bulle. Vérifié par 3 nouveaux tests pytest
   (71/71 au total) exerçant le vrai WebSocket (pas mocké) contre la vraie base.
 
+- [x] **Post-MVP P3 — Badge « profil vérifié ».** A.5 Module 1 le liste en scope MVP et les
+  maquettes l'affichent partout (découverte, profil) ; `User.is_verified` existait et était posé
+  depuis la Phase 1 (premier OTP réussi) mais n'était jamais sorti de `/auth/me` — aucun schéma
+  public ne l'exposait, donc aucun badge nulle part malgré la donnée déjà correcte en base.
+  `PublicProfileOut` et `DiscoveryCandidateOut` gagnent `is_verified` ; `get_feed` le résout en un
+  seul `IN (...)` batché sur le pool de candidats (même principe anti-N+1 que
+  `list_my_matches`). Badge rendu avec le signe carré-à-noyau existant
+  (`widgets/sign_shapes.dart::SignSquareCore`, déjà utilisé nulle part avant ça) sur l'écran Profil
+  et la carte de découverte — jamais une couleur seule, cohérent avec le reste du langage de
+  signes. Vérifié par 2 nouveaux tests pytest (72/72 au total) et une vérification directe du
+  schéma OpenAPI exposé par le backend qui tourne.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

@@ -38,6 +38,9 @@ def test_public_profile_round_trip():
     assert body["interests"] == ["Field recording", "Rando de nuit"]
     assert isinstance(body["age"], int) and body["age"] > 18
     assert body["avatar"]["from_color"].startswith("#")
+    # Badge "profil vérifié" (cahier des charges A.5) : posé dès que l'OTP a réussi une fois
+    # (services/otp.py), avant même toute publication de profil.
+    assert body["is_verified"] is True
 
 
 def test_public_profile_rejects_minor():

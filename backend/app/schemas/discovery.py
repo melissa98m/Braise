@@ -16,6 +16,7 @@ class DiscoveryCandidateOut(BaseModel):
     avatar: AvatarSpec
     common_interests: list[str]
     compatibility_score: float
+    is_verified: bool
 
 
 class SwipeIn(BaseModel):

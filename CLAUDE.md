@@ -88,6 +88,13 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   is never a stored image: `services/avatar.py` derives a gradient spec (two hex colors + angle)
   deterministically from `avatar_seed` via `hashlib.sha256`, so "regenerate" is just a new random
   seed — actual gradient rendering happens client-side (Phase 6) using `docs/DESIGN_TOKENS.md`.
+  `is_verified` (`User`, set true on first successful OTP by `services/otp.py`) is the "profil
+  vérifié" badge A.5 Module 1 lists as MVP scope — it existed on the model and in `/auth/me` since
+  Phase 1 but was never threaded through `PublicProfileOut`/`DiscoveryCandidateOut` until later, so
+  it had no visible badge anywhere despite being set for every account. `to_public_profile_out`
+  takes `is_verified` as an explicit argument rather than re-querying `User` — both of its callers
+  already have the `User` object from `Depends(get_current_user)`. `get_feed` batches it in one
+  `IN (...)` lookup over the candidate pool, same N+1-avoidance pattern as `list_my_matches`.
 - **MinIO has two clients in `services/storage.py`**, both pointed at the same server: `_client`
   uses `MINIO_ENDPOINT` (`minio:9000`, the Docker service name — for uploads/deletes from the
   backend container) and `_public_client` uses `MINIO_PUBLIC_ENDPOINT` (`localhost:9000` — the only

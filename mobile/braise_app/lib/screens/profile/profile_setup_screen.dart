@@ -144,6 +144,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           avatar: spec,
           isPublished: _profile!.isPublished,
           isPremium: _profile!.isPremium,
+          isVerified: _profile!.isVerified,
           gender: _profile!.gender,
           lookingForGender: _profile!.lookingForGender,
           ageMin: _profile!.ageMin,

@@ -22,7 +22,7 @@ def get_my_public_profile(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     profile = profiles_service.get_or_create_public_profile(db, user)
-    return profiles_service.to_public_profile_out(db, profile)
+    return profiles_service.to_public_profile_out(db, profile, user.is_verified)
 
 
 @router.put("/me/public", response_model=PublicProfileOut)
@@ -32,7 +32,7 @@ def update_my_public_profile(
     db: Session = Depends(get_db),
 ):
     profile = profiles_service.upsert_public_profile(db, user, payload)
-    return profiles_service.to_public_profile_out(db, profile)
+    return profiles_service.to_public_profile_out(db, profile, user.is_verified)
 
 
 @router.post("/me/avatar/regenerate", response_model=AvatarSpec)

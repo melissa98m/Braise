@@ -9,6 +9,7 @@ class PublicProfile {
     required this.avatar,
     required this.isPublished,
     required this.isPremium,
+    required this.isVerified,
     required this.gender,
     required this.lookingForGender,
     required this.ageMin,
@@ -24,6 +25,7 @@ class PublicProfile {
       avatar: AvatarSpec.fromJson(json['avatar'] as Map<String, dynamic>),
       isPublished: json['is_published'] as bool,
       isPremium: json['is_premium'] as bool,
+      isVerified: json['is_verified'] as bool,
       gender: json['gender'] as String?,
       lookingForGender: json['looking_for_gender'] as String?,
       ageMin: json['age_min'] as int?,
@@ -38,6 +40,7 @@ class PublicProfile {
   final AvatarSpec avatar;
   final bool isPublished;
   final bool isPremium;
+  final bool isVerified;
   final String? gender;
   final String? lookingForGender;
   final int? ageMin;

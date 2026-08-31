@@ -9,6 +9,7 @@ import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
 import '../../widgets/braise_page_route.dart';
 import '../../widgets/flame_diamonds.dart';
+import '../../widgets/sign_shapes.dart';
 import '../paywall/paywall_screen.dart';
 import '../settings/settings_screen.dart';
 import 'profile_setup_screen.dart';
@@ -92,6 +93,13 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
                     Wrap(
                       spacing: BraiseSpacing.sm,
                       children: [
+                        if (profile.isVerified)
+                          Chip(
+                            avatar: SignSquareCore(color: tokens.foiInk, size: 14),
+                            label: const Text('VÉRIFIÉ'),
+                            backgroundColor: tokens.foiInk.withValues(alpha: 0.1),
+                            side: BorderSide(color: tokens.foiInk),
+                          ),
                         if (profile.isPremium)
                           Chip(
                             label: const Text('BRAISE+'),

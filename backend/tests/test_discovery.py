@@ -210,6 +210,21 @@ def test_premium_bypasses_free_tier_match_limit():
         assert reciprocal.json()["matched"] is True
 
 
+def test_feed_candidates_report_verified_badge():
+    suffix = uuid.uuid4().hex[:6]
+    me_headers, _ = create_published_user(client, "Observatrice vérif", interests=[_tag("art", suffix)])
+    _, candidate_id = create_published_user(client, "Candidat", interests=[_tag("art", suffix)])
+
+    candidate = next(
+        c
+        for c in client.get("/discovery/feed", headers=me_headers).json()
+        if c["user_id"] == candidate_id
+    )
+    # create_published_user passe par le vrai flux OTP (tests/helpers.auth_headers), donc
+    # is_verified est déjà à true — pas besoin de forcer un état artificiel pour ce test.
+    assert candidate["is_verified"] is True
+
+
 def test_feed_filters_by_looking_for_gender():
     suffix = uuid.uuid4().hex[:6]
     me_headers, _ = create_published_user(

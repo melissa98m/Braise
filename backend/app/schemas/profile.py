@@ -60,6 +60,11 @@ class PublicProfileOut(BaseModel):
     avatar: AvatarSpec
     is_published: bool
     is_premium: bool
+    # Badge "profil vérifié" (cahier des charges A.5 Module 1) — reflète User.is_verified (KYC
+    # léger MVP : OTP téléphone, posé à true dès la première vérification réussie, voir
+    # services/otp.py). Jamais la date de naissance ni aucune autre donnée KYC brute : uniquement
+    # ce booléen, même règle de minimisation que le reste de ce schéma.
+    is_verified: bool
     gender: Gender | None
     looking_for_gender: Gender | None
     age_min: int | None

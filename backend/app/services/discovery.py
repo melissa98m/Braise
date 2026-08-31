@@ -56,6 +56,14 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
     age_min = my_profile.age_min if my_profile else None
     age_max = my_profile.age_max if my_profile else None
 
+    # Batché en une requête IN(...) plutôt qu'un aller-retour par candidat — même règle que
+    # list_my_matches (services/matches, cf. CLAUDE.md) pour éviter un N+1.
+    verified_by_id = dict(
+        db.query(User.id, User.is_verified).filter(
+            User.id.in_([profile.user_id for profile in candidates])
+        )
+    )
+
     scored = []
     for profile in candidates:
         age = compute_age(profile.birth_date)
@@ -74,6 +82,7 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
                 "avatar": avatar_spec_from_seed(profile.avatar_seed),
                 "common_interests": common,
                 "compatibility_score": round(_jaccard(my_interests, profile.interests), 2),
+                "is_verified": verified_by_id.get(profile.user_id, False),
             }
         )
 

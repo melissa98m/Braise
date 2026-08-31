@@ -272,7 +272,29 @@ class _CandidateCard extends StatelessWidget {
             children: [
               AvatarSigil(spec: candidate.avatar, size: 56),
               const SizedBox(width: BraiseSpacing.md),
-              Text('${candidate.displayName} · ${candidate.age}', style: textTheme.titleMedium),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${candidate.displayName} · ${candidate.age}', style: textTheme.titleMedium),
+                  if (candidate.isVerified) ...[
+                    const SizedBox(height: BraiseSpacing.xs),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SignSquareCore(color: tokens.foiInk, size: 14),
+                        const SizedBox(width: BraiseSpacing.xs),
+                        Text(
+                          'VÉRIFIÉ',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: tokens.foiInk,
+                            letterSpacing: 10 * 0.08,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
           const SizedBox(height: BraiseSpacing.xl),
