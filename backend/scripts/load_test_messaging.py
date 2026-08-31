@@ -23,7 +23,6 @@ Usage (le backend doit déjà tourner) :
 import argparse
 import asyncio
 import json
-import statistics
 import time
 import uuid
 
@@ -140,10 +139,27 @@ def _percentile(values: list[float], pct: float) -> float:
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--matches", type=int, default=50, help="Nombre de matchs concurrents (défaut 50, soit 2x connexions WS).")
-    parser.add_argument("--setup-concurrency", type=int, default=20, help="Comptes/matchs créés en parallèle pendant la mise en place (défaut 20).")
-    parser.add_argument("--recv-timeout", type=float, default=5.0, help="Délai max d'attente d'un message avant échec (secondes, défaut 5).")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--matches",
+        type=int,
+        default=50,
+        help="Nombre de matchs concurrents (défaut 50, soit 2x connexions WS).",
+    )
+    parser.add_argument(
+        "--setup-concurrency",
+        type=int,
+        default=20,
+        help="Comptes/matchs créés en parallèle pendant la mise en place (défaut 20).",
+    )
+    parser.add_argument(
+        "--recv-timeout",
+        type=float,
+        default=5.0,
+        help="Délai max d'attente d'un message avant échec (secondes, défaut 5).",
+    )
     args = parser.parse_args()
 
     print(f"=== Test de charge messagerie — {args.matches} matchs concurrents ===\n")
@@ -172,7 +188,10 @@ async def main() -> None:
         print("Aucun match prêt, impossible de tester la messagerie.")
         return
 
-    print(f"Ouverture de {len(valid_matches) * 2} connexions WebSocket ({len(valid_matches)} matchs) en simultané...")
+    print(
+        f"Ouverture de {len(valid_matches) * 2} connexions WebSocket "
+        f"({len(valid_matches)} matchs) en simultané..."
+    )
     session_start = time.monotonic()
     results = await asyncio.gather(
         *(run_match_session(m, args.recv_timeout) for m in valid_matches)

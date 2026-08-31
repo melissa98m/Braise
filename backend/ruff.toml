@@ -1,0 +1,22 @@
+# Lint backend Python (P5.3) — le mobile a `flutter_lints` configuré depuis le début, le backend
+# n'avait jusqu'ici aucun linter. line-length 110, pas les 88 par défaut de ruff : suffit à
+# couvrir la quasi-totalité du code existant (quelques f-strings de messages KPI mis à part,
+# corrigés plutôt que d'élargir encore la limite) sans forcer une reformatée massive de
+# commentaires "pourquoi" déjà soigneusement écrits pour tenir sur une ligne raisonnable.
+line-length = 110
+extend-exclude = ["app/migrations"]  # généré par `alembic revision --autogenerate`, jamais retouché à la main
+
+[lint]
+select = [
+    "E",   # pycodestyle erreurs
+    "F",   # pyflakes (imports/variables inutilisés, noms indéfinis...)
+    "W",   # pycodestyle avertissements
+    "I",   # tri des imports
+    "UP",  # idiomes Python modernes (pyupgrade)
+]
+
+[lint.per-file-ignores]
+# Ordre chronologique par phase (Phase 1 -> 5, voir docs/ROADMAP.md), pas alphabétique — c'est le
+# seul fichier de ce dépôt où cet ordre est délibéré (chaque nouveau modèle vient s'ajouter en
+# bas, à la phase où il a été introduit) plutôt qu'un oubli à corriger.
+"app/models/__init__.py" = ["I001"]

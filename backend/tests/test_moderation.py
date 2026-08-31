@@ -148,7 +148,8 @@ def test_two_low_ratings_do_not_trigger_ban():
     victim_headers, victim_id = base["headers_b"], base["id_b"]
     rater_2 = create_match_with(client, victim_headers, victim_id)
 
-    for headers, match_id in ((base["headers_a"], base["match_id"]), (rater_2["headers"], rater_2["match_id"])):
+    raters = ((base["headers_a"], base["match_id"]), (rater_2["headers"], rater_2["match_id"]))
+    for headers, match_id in raters:
         response = client.post(
             f"/moderation/matches/{match_id}/rating",
             headers=headers,

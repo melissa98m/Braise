@@ -57,7 +57,7 @@ def _report_at_threshold(y_true: np.ndarray, rancor_proba: np.ndarray, threshold
     cm = confusion_matrix(y_true, y_pred, labels=[AUTHENTIC_LABEL, RANCOR_LABEL])
     tn, fp, fn, tp = cm.ravel()
     print("Matrice de confusion (lignes = vérité, colonnes = prédiction) :")
-    print(f"                 prédit authentic   prédit rancor")
+    print("                 prédit authentic   prédit rancor")
     print(f"  vrai authentic       {tn:>5}             {fp:>5}")
     print(f"  vrai rancor          {fn:>5}             {tp:>5}")
     print(

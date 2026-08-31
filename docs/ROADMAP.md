@@ -287,6 +287,16 @@ techniques : cahier des charges sections A, B, C, D.
   comparé par ce fichier, seul le statut final l'était (qui retombait juste au bon endroit par
   coïncidence). Corrigé dans les deux fichiers de test. 16/16 tests Flutter au total.
 
+- [x] **Post-MVP P5.3 — Lint backend (ruff).** Le mobile a `flutter_lints` depuis la Phase 6 ; le
+  backend Python n'avait aucun linter. `backend/ruff.toml` (E/F/W/I/UP, `line-length = 110` —
+  suffit à couvrir le code existant sans forcer une reformatée massive des commentaires "pourquoi"
+  déjà soigneusement écrits). Premier passage : 14 signalements réels, tous corrigés à la main
+  plutôt qu'un `--fix` en masse — un import mal trié, un f-string sans placeholder, un import
+  inutilisé, le reste des lignes trop longues à retourner. `app/models/__init__.py` exempté du tri
+  d'imports (`per-file-ignores`) : son ordre chronologique par phase est délibéré, pas un oubli.
+  `docker compose run --rm backend ruff check .` — clôt le plan d'action P5 dans son intégralité
+  (P5.1 modèle évalué, P5.2 tests d'écran amorcés, P5.3 lint).
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

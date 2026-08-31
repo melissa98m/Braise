@@ -26,6 +26,7 @@ Première migration + tests :
 docker compose run --rm backend alembic revision --autogenerate -m "create users table"
 docker compose run --rm backend alembic upgrade head
 docker compose run --rm backend pytest
+docker compose run --rm backend ruff check .   # lint (P5.3, backend/ruff.toml)
 ```
 
 Mobile (Phase 6, pas encore développé) :

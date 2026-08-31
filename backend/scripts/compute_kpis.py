@@ -30,11 +30,11 @@ from app.models.ban_appeal import BanAppeal
 from app.models.daily_question import DailyQuestion
 from app.models.match import Match
 from app.models.message import Message
+from app.models.profile import PublicProfile
 from app.models.report import Report
 from app.models.subscription import Subscription
 from app.models.swipe import Swipe
 from app.models.user import User
-from app.models.profile import PublicProfile
 
 
 def _pct(numerator: int, denominator: int) -> str:
@@ -195,12 +195,18 @@ def main() -> None:
 
         print("\n--- Activation ---")
         completed, verified = activation_profile_completion(db)
-        print(f"Taux de complétion du profil public (bio + intérêts) : {_pct(completed, verified)} — objectif > 80 %")
+        print(
+            f"Taux de complétion du profil public (bio + intérêts) : "
+            f"{_pct(completed, verified)} — objectif > 80 %"
+        )
 
         print("\n--- Engagement ---")
         answered, questions = engagement_daily_question_response_rate(db, since)
         window = f" (derniers {args.recent_days} j)" if since else ""
-        print(f"Taux de réponse à la question quotidienne{window} : {_pct(answered, questions)} — objectif > 60 %")
+        print(
+            f"Taux de réponse à la question quotidienne{window} : "
+            f"{_pct(answered, questions)} — objectif > 60 %"
+        )
         reaching, matches = engagement_matches_reaching_three_days(db)
         print(f"Taux de match -> 3 jours d'échange : {_pct(reaching, matches)} — objectif > 40 %")
 
@@ -212,7 +218,10 @@ def main() -> None:
         founded, reviewed = trust_report_founded_rate(db)
         print(f"Taux de signalements jugés fondés (parmi ceux traités) : {_pct(founded, reviewed)}")
         overturned, resolved = trust_ban_false_positive_rate(db)
-        print(f"Taux de faux positifs de bannissement (parmi les contestations tranchées) : {_pct(overturned, resolved)} — objectif < 5 %")
+        print(
+            f"Taux de faux positifs de bannissement (parmi les contestations tranchées) : "
+            f"{_pct(overturned, resolved)} — objectif < 5 %"
+        )
 
         print("\n--- Monétisation ---")
         premium, verified2 = monetization_conversion_rate(db)
@@ -220,7 +229,10 @@ def main() -> None:
 
         print("\n--- Produit ---")
         unlocked, total_matches = product_unlock_rate(db)
-        print(f"Taux de déblocage effectif du profil privé parmi les matchs : {_pct(unlocked, total_matches)} — indicateur clé")
+        print(
+            f"Taux de déblocage effectif du profil privé parmi les matchs : "
+            f"{_pct(unlocked, total_matches)} — indicateur clé"
+        )
     finally:
         db.close()
 
