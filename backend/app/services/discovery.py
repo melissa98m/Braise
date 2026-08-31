@@ -16,7 +16,7 @@ from app.services.geo import haversine_km
 from app.services.matches import other_user_id
 from app.services.moderation import compute_trust_scores_batch
 from app.services.profiles import compute_age
-from app.services.subscriptions import can_create_new_match
+from app.services.subscriptions import can_create_new_match, is_premium
 
 # Borne le coût de calcul par requête : on ne score jamais plus que ce pool, même si le
 # nombre de profils publiés grandit beaucoup au-delà de ce qu'un seul feed doit renvoyer.
@@ -33,6 +33,29 @@ def _jaccard(a: list[str], b: list[str]) -> float:
     if not set_a or not set_b:
         return 0.0
     return len(set_a & set_b) / len(set_a | set_b)
+
+
+def _candidate_dict(
+    profile: PublicProfile,
+    my_interests: list[str],
+    verified_by_id: dict,
+    trust_by_id: dict,
+) -> dict:
+    """Factorisé entre `get_feed` et `get_likes_received` : même forme de carte candidat des deux
+    côtés (compatibilité, badge vérifié, score de confiance), pas de copie divergente."""
+    return {
+        "user_id": profile.user_id,
+        "display_name": profile.display_name,
+        "age": compute_age(profile.birth_date),
+        "bio": profile.bio,
+        "interests": profile.interests,
+        "avatar": avatar_spec_from_seed(profile.avatar_seed),
+        "common_interests": sorted(set(my_interests) & set(profile.interests)),
+        "compatibility_score": round(_jaccard(my_interests, profile.interests), 2),
+        "is_verified": verified_by_id.get(profile.user_id, False),
+        "trust_score": trust_by_id[profile.user_id]["score"],
+        "trust_label": trust_by_id[profile.user_id]["label"],
+    }
 
 
 def get_feed(db: Session, user: User, limit: int) -> list[dict]:
@@ -88,25 +111,48 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
             distance_km = haversine_km(my_location, (profile.city_lat, profile.city_lon))
             if distance_km > max_distance_km:
                 continue
-        common = sorted(set(my_interests) & set(profile.interests))
-        scored.append(
-            {
-                "user_id": profile.user_id,
-                "display_name": profile.display_name,
-                "age": age,
-                "bio": profile.bio,
-                "interests": profile.interests,
-                "avatar": avatar_spec_from_seed(profile.avatar_seed),
-                "common_interests": common,
-                "compatibility_score": round(_jaccard(my_interests, profile.interests), 2),
-                "is_verified": verified_by_id.get(profile.user_id, False),
-                "trust_score": trust_by_id[profile.user_id]["score"],
-                "trust_label": trust_by_id[profile.user_id]["label"],
-            }
-        )
+        scored.append(_candidate_dict(profile, my_interests, verified_by_id, trust_by_id))
 
     scored.sort(key=lambda item: item["compatibility_score"], reverse=True)
     return scored[:limit]
+
+
+def get_likes_received(db: Session, user: User) -> dict:
+    """« Qui vous a déjà braisé » — moteur d'engagement/conversion classique (cahier des charges
+    hors périmètre explicite, ajouté à la demande) : les profils qui m'ont déjà liké et que je
+    n'ai pas encore swipés moi-même (dans un sens ou l'autre — une fois swipé, `already_swiped`
+    les exclut déjà partout ailleurs, pas de raison de les garder ici). Le compte est toujours
+    renvoyé (gratuit) ; le détail des profils est réservé à Braise+ — c'est la vraie raison de
+    vouloir l'abonnement au-delà de la limite de matchs (`can_create_new_match`)."""
+    my_profile = db.get(PublicProfile, user.id)
+    my_interests = my_profile.interests if my_profile else []
+
+    already_swiped = select(Swipe.to_user_id).where(Swipe.from_user_id == user.id)
+    likers_query = (
+        db.query(PublicProfile)
+        .join(Swipe, Swipe.from_user_id == PublicProfile.user_id)
+        .filter(
+            Swipe.to_user_id == user.id,
+            Swipe.decision == SwipeDecision.LIKE.value,
+            PublicProfile.is_published.is_(True),
+            PublicProfile.user_id.notin_(already_swiped),
+        )
+    )
+    count = likers_query.count()
+
+    if not is_premium(db, user.id):
+        return {"count": count, "is_premium": False, "candidates": []}
+
+    likers = likers_query.order_by(PublicProfile.updated_at.desc()).limit(MAX_CANDIDATE_POOL).all()
+    candidate_ids = [profile.user_id for profile in likers]
+    verified_by_id = dict(db.query(User.id, User.is_verified).filter(User.id.in_(candidate_ids)))
+    trust_by_id = compute_trust_scores_batch(db, candidate_ids)
+
+    candidates = [
+        _candidate_dict(profile, my_interests, verified_by_id, trust_by_id) for profile in likers
+    ]
+    candidates.sort(key=lambda item: item["compatibility_score"], reverse=True)
+    return {"count": count, "is_premium": True, "candidates": candidates}
 
 
 def record_swipe(

@@ -169,7 +169,19 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   age range (`services/geo.haversine_km`, plain great-circle distance) — a candidate is excluded
   outright if either side lacks resolved coordinates, since there's no way to verify they're
   within range. `GET /profiles/cities` (no auth required — static reference data, nothing
-  user-specific) lists the closed set for the mobile city picker.
+  user-specific) lists the closed set for the mobile city picker. **"Who liked you" (P13, requested
+  directly, not in the cahier des charges)**: `get_likes_received` finds profiles that liked the
+  current user and that the user hasn't swiped yet in either direction — the same
+  `already_swiped`-exclusion pattern as `get_feed`, so an existing match or an already-passed
+  profile never shows up here. The count is always returned (free-tier hook); the candidate list
+  itself (`DiscoveryCandidateOut`, same shape as the feed) is only populated for a premium account
+  (`is_premium`) — an empty-vs-populated-list gate, not a per-card blur, simpler and enough to
+  create the upgrade incentive. `_candidate_dict` was factored out of `get_feed`'s scoring loop so
+  both functions build the exact same candidate shape rather than diverging. `GET
+  /discovery/likes-received` (`LikesReceivedOut`) is the only new endpoint — "like back" and
+  "pass" from that screen both reuse `POST /discovery/swipe` as-is; `record_swipe` already handles
+  mutual-like-creates-match correctly regardless of which UI surface triggered it, so no new match
+  logic was needed.
 
 - **Messaging & daily question** (`models/message.py`, `models/daily_question.py`,
   `ws/connection_manager.py`, `services/messaging.py`): `ConnectionManager` is an in-memory

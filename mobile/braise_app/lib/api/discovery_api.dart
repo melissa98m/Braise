@@ -25,4 +25,9 @@ class DiscoveryApi {
     final json = await _client.get('/discovery/matches');
     return (json as List).map((m) => MatchSummary.fromJson(m as Map<String, dynamic>)).toList();
   }
+
+  Future<LikesReceived> getLikesReceived() async {
+    final json = await _client.get('/discovery/likes-received');
+    return LikesReceived.fromJson(json as Map<String, dynamic>);
+  }
 }

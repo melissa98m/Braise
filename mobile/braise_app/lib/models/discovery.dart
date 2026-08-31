@@ -86,3 +86,22 @@ class MatchSummary {
 
   bool get isUnlocked => blurStage == 'net';
 }
+
+class LikesReceived {
+  const LikesReceived({required this.count, required this.isPremium, required this.candidates});
+
+  factory LikesReceived.fromJson(Map<String, dynamic> json) {
+    return LikesReceived(
+      count: json['count'] as int,
+      isPremium: json['is_premium'] as bool,
+      candidates: (json['candidates'] as List)
+          .map((c) => DiscoveryCandidate.fromJson(c as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  final int count;
+  final bool isPremium;
+  // Vide tant que isPremium est faux — pas un teaser flouté par carte, juste liste vide/pleine.
+  final List<DiscoveryCandidate> candidates;
+}

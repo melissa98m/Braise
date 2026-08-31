@@ -421,3 +421,75 @@ def test_no_distance_filter_when_max_distance_km_is_unset():
 
     feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=headers_me).json()}
     assert id_far in feed_ids
+
+
+def test_likes_received_requires_auth():
+    assert client.get("/discovery/likes-received").status_code == 401
+
+
+def test_likes_received_free_tier_only_sees_count():
+    hub_headers, hub_id = create_published_user(client, "Braisée gratuite")
+    liker_headers, _ = create_published_user(client, "Admiratrice")
+    client.post(
+        "/discovery/swipe", headers=liker_headers, json={"to_user_id": hub_id, "decision": "like"}
+    )
+
+    result = client.get("/discovery/likes-received", headers=hub_headers).json()
+    assert result["count"] == 1
+    assert result["is_premium"] is False
+    assert result["candidates"] == []
+
+
+def test_likes_received_premium_sees_candidate_details():
+    hub_headers, hub_id = create_published_user(client, "Braisée premium")
+    client.post("/subscriptions/debug-activate", headers=hub_headers)
+
+    result_before = client.get("/discovery/likes-received", headers=hub_headers).json()
+    assert result_before["count"] == 0
+
+    admirer_headers, admirer_id = create_published_user(client, "Admiratrice détaillée")
+    client.post(
+        "/discovery/swipe", headers=admirer_headers, json={"to_user_id": hub_id, "decision": "like"}
+    )
+
+    result = client.get("/discovery/likes-received", headers=hub_headers).json()
+    assert result["count"] == 1
+    assert result["is_premium"] is True
+    assert [c["user_id"] for c in result["candidates"]] == [admirer_id]
+
+
+def test_likes_received_excludes_already_swiped_and_matched_profiles():
+    hub_headers, hub_id = create_published_user(client, "Braisée triée")
+    client.post("/subscriptions/debug-activate", headers=hub_headers)
+
+    # A : m'a likée, je ne l'ai pas encore swipé -> doit apparaître.
+    a_headers, a_id = create_published_user(client, "A pas encore vue")
+    client.post("/discovery/swipe", headers=a_headers, json={"to_user_id": hub_id, "decision": "like"})
+
+    # B : m'a likée, on a matché (je l'ai likée en retour) -> ne doit plus apparaître.
+    b_headers, b_id = create_published_user(client, "B déjà matché")
+    client.post("/discovery/swipe", headers=b_headers, json={"to_user_id": hub_id, "decision": "like"})
+    client.post("/discovery/swipe", headers=hub_headers, json={"to_user_id": b_id, "decision": "like"})
+
+    # C : m'a likée, je l'ai passé -> ne doit plus apparaître.
+    c_headers, c_id = create_published_user(client, "C déjà passé")
+    client.post("/discovery/swipe", headers=c_headers, json={"to_user_id": hub_id, "decision": "like"})
+    client.post("/discovery/swipe", headers=hub_headers, json={"to_user_id": c_id, "decision": "pass"})
+
+    result = client.get("/discovery/likes-received", headers=hub_headers).json()
+    ids = {c["user_id"] for c in result["candidates"]}
+    assert ids == {a_id}
+    assert result["count"] == 1
+
+
+def test_liking_back_from_likes_received_completes_a_match():
+    hub_headers, hub_id = create_published_user(client, "Braisée qui répond")
+    liker_headers, liker_id = create_published_user(client, "Admirateur patient")
+    client.post(
+        "/discovery/swipe", headers=liker_headers, json={"to_user_id": hub_id, "decision": "like"}
+    )
+
+    reciprocal = client.post(
+        "/discovery/swipe", headers=hub_headers, json={"to_user_id": liker_id, "decision": "like"}
+    )
+    assert reciprocal.json()["matched"] is True

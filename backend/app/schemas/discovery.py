@@ -24,6 +24,14 @@ class DiscoveryCandidateOut(BaseModel):
     trust_label: str | None
 
 
+class LikesReceivedOut(BaseModel):
+    # Le compte est toujours renvoyé (incitation gratuite) ; `candidates` reste vide tant que
+    # `is_premium` est faux — pas un "teaser" flouté par carte, un simple gate liste vide/pleine.
+    count: int
+    is_premium: bool
+    candidates: list[DiscoveryCandidateOut]
+
+
 class SwipeIn(BaseModel):
     to_user_id: uuid.UUID
     decision: Literal["like", "pass"]

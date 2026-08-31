@@ -636,6 +636,30 @@ techniques : cahier des charges sections A, B, C, D.
   test (`test_notification` → `Sent Successfully.`, reçue dans le salon Discord). Supervision et
   alerte toutes deux en place de bout en bout, plus aucune étape manuelle restante.
 
+- [x] **P13 — « Qui vous a déjà braisé » (demande explicite, hors cahier des charges).** Moteur
+  d'engagement/conversion classique des apps de rencontre (le "Who Likes You" de Tinder Gold),
+  proposé puis demandé directement plutôt que déduit des maquettes — s'appuie entièrement sur des
+  données déjà en base (`Swipe`), aucune nouvelle table.
+  - `services/discovery.get_likes_received` : profils qui ont liké l'utilisateur et qu'il/elle n'a
+    pas encore swipés dans un sens ou l'autre (même exclusion `already_swiped` que `get_feed` — un
+    match ou un pass déjà posé sort naturellement de la liste). Le compte est toujours renvoyé
+    (incitation gratuite) ; le détail des profils (`DiscoveryCandidateOut`, même forme que le feed)
+    n'est renvoyé que pour un compte Braise+ (`is_premium`) — un gate liste vide/pleine, pas un
+    flou par carte, plus simple et suffisant pour créer l'incitation. `_candidate_dict` a été
+    extrait de `get_feed` pour être partagé par les deux fonctions plutôt que dupliqué.
+    `GET /discovery/likes-received` (`LikesReceivedOut`) est le seul nouvel endpoint ; « braiser en
+    retour » et « passer » réutilisent tels quels `POST /discovery/swipe` — `record_swipe` gère
+    déjà correctement le cas "like mutuel = match" quelle que soit la surface UI qui l'a déclenché,
+    aucune nouvelle logique de match nécessaire.
+  - Mobile : `LikesReceivedScreen` (`screens/discovery/`), accessible depuis une icône avec badge
+    (même motif `Badge.count` que le badge messages non lus de `RootShell`) dans l'AppBar de
+    `DiscoveryScreen`. Palier gratuit : compte + CTA vers `PaywallScreen`. Palier premium : cartes
+    avec « Braiser en retour »/« Passer », dialogue de célébration de match identique à celui de
+    `DiscoveryScreen` en cas de like mutuel.
+  - 5 nouveaux tests pytest (27/27 sur `test_discovery.py`, 90/90 backend au total), 4 nouveaux
+    tests Flutter (`likes_received_screen_test.dart`), 103/103 tests Flutter au total,
+    `flutter analyze` et `ruff check .` propres, `flutter build web` vérifié.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

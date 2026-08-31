@@ -5,7 +5,13 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.swipe import SwipeDecision
 from app.models.user import User
-from app.schemas.discovery import DiscoveryCandidateOut, MatchOut, SwipeIn, SwipeOut
+from app.schemas.discovery import (
+    DiscoveryCandidateOut,
+    LikesReceivedOut,
+    MatchOut,
+    SwipeIn,
+    SwipeOut,
+)
 from app.services import discovery as discovery_service
 
 router = APIRouter(prefix="/discovery", tags=["discovery"])
@@ -34,3 +40,8 @@ def swipe(
 @router.get("/matches", response_model=list[MatchOut])
 def get_matches(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return discovery_service.list_my_matches(db, user)
+
+
+@router.get("/likes-received", response_model=LikesReceivedOut)
+def get_likes_received(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return discovery_service.get_likes_received(db, user)

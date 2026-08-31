@@ -12,6 +12,7 @@ import '../../widgets/avatar_sigil.dart';
 import '../../widgets/braise_page_route.dart';
 import '../../widgets/sign_shapes.dart';
 import '../messaging/conversation_screen.dart';
+import 'likes_received_screen.dart';
 
 /// Écran 03 — pas de swipe façon catalogue : une carte à la fois, hiérarchie phrase > intérêts
 /// > avatar (cahier des charges A.7 : refuse le tri purement visuel).
@@ -39,12 +40,26 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
   // Tinder classique, même si le geste de glisser n'existe pas ici (cahier des charges A.7).
   int _exitSign = 0;
   bool _isSwiping = false;
+  int _likesReceivedCount = 0;
 
   @override
   void initState() {
     super.initState();
     _exitController = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
     _loadFeed();
+    unawaited(_refreshLikesReceivedBadge());
+  }
+
+  /// Purement décoratif (badge) : une erreur ici ne doit jamais bloquer l'écran de découverte
+  /// lui-même — même principe que RootShell._refreshUnreadBadge pour le badge Échanges.
+  Future<void> _refreshLikesReceivedBadge() async {
+    try {
+      final likes = await context.read<AppServices>().discoveryApi.getLikesReceived();
+      if (!mounted) return;
+      setState(() => _likesReceivedCount = likes.count);
+    } on ApiException {
+      // Ignoré volontairement.
+    }
   }
 
   Future<void> _loadFeed() async {
@@ -164,7 +179,23 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Découvrir')),
+      appBar: AppBar(
+        title: const Text('Découvrir'),
+        actions: [
+          IconButton(
+            tooltip: 'Qui vous a braisé',
+            icon: Badge.count(
+              count: _likesReceivedCount,
+              isLabelVisible: _likesReceivedCount > 0,
+              child: SignDiamond(color: tokens.inkSecondary, size: 22),
+            ),
+            onPressed: () async {
+              await Navigator.of(context).push(braiseRoute(context, const LikesReceivedScreen()));
+              unawaited(_refreshLikesReceivedBadge());
+            },
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
