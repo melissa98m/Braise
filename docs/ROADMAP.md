@@ -371,6 +371,18 @@ techniques : cahier des charges sections A, B, C, D.
   `flutter analyze` propre (0 issue), les deux jobs vérifiés localement dans les mêmes conditions
   qu'en CI avant de committer le workflow.
 
+- [x] **Post-MVP P6.3 — Couverture de test de `DiscoveryScreen`.** L'écran le plus fréquenté
+  (feed, swipe, célébration de match) restait sans test direct — c'est justement en le traversant
+  *indirectement* (navigation post-OTP vers `RootShell`, P5.2/P6) que le crash `_exitController`
+  corrigé en P6 a été trouvé. 6 tests : chargement du feed (candidat affiché + aperçu du suivant),
+  feed vide, erreur de chargement, "passer" qui vide le feed, "braiser" avec match mutuel (le
+  dialogue de célébration s'ouvre, se referme sans naviguer vers la conversation — hors périmètre
+  de ce test), et un swipe refusé (402, limite de matchs gratuits) qui affiche un snackbar sans
+  faire disparaître la carte. Contrairement à `OtpScreen`/`ReportScreen`, aucun piège de viewport
+  ni de scroll ici : le corps de l'écran utilise `Expanded`/`AnimatedSwitcher`, pas une hauteur de
+  contenu fixe. 31/31 tests Flutter au total, `flutter analyze` propre — clôt le plan d'action P6
+  dans son intégralité (P6.1 anti-brute-force OTP, P6.2 CI, P6.3 couverture Discovery).
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

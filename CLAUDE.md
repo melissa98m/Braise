@@ -470,7 +470,15 @@ Flutter SDK is never installed on the host):
   "Looking up a deactivated widget's ancestor is unsafe." Fixed by constructing it in
   `initState()` instead, where the widget is guaranteed mounted — this had been broken since the
   swipe-exit animation was introduced and nothing exercised the no-swipe teardown path before this
-  test did.
+  test did. `test/screens/discovery_screen_test.dart` (P6.3) is the fourth screen and the first
+  tested directly rather than as a side effect of another screen's navigation — the busiest
+  screen in the app (feed, swipe, match celebration) had no direct coverage before this, only the
+  indirect pass that found the `_exitController` bug above. 6 tests: feed load (candidate +
+  next-up preview), empty feed, load error, a "pass" that empties the feed, a "like" that gets
+  matched (celebration dialog opens, then closes without navigating into `ConversationScreen` —
+  out of scope for this file), and a 402-rejected swipe (snackbar shown, card stays put). Unlike
+  `OtpScreen`/`ReportScreen`, no viewport or scroll trap here — the body is
+  `Expanded`/`AnimatedSwitcher`-driven, not a fixed-height content stack.
 
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not
