@@ -51,15 +51,33 @@ machine, pas `localhost` (qui sur son appareil ne désignerait que lui-même).
      poste).
    - `CORS_ORIGINS=http://localhost:5000,http://<ip-locale>:5000` (sinon le navigateur du
      testeur bloque les appels vers l'API).
-3. Redémarrer le backend et le mobile pour appliquer : `docker compose up -d --force-recreate
-   backend && docker compose restart mobile`.
+   - `MOBILE_MODE=serve` — **indispensable**, pas juste une optimisation :
+     `flutter run -d web-server` (le mode par défaut, `MOBILE_MODE=dev`) ouvre une connexion
+     WebSocket de debug vers l'outil Flutter pour le hot reload ; cette connexion échoue
+     silencieusement quand la page est chargée depuis une autre origine que celle attendue par le
+     harnais de debug (DWDS), et la page reste blanche pour qui accède via l'IP LAN — vécu
+     directement en testant ce guide. `serve` fait un vrai build de production
+     (`flutter build web`), servi en fichiers statiques sans aucune connexion de debug.
+3. Reconstruire et redémarrer pour appliquer (`MOBILE_MODE` est lu par `mobile/entrypoint.sh`,
+   copié dans l'image au build — un simple redémarrage ne suffit pas) :
+   ```bash
+   docker compose build mobile
+   docker compose up -d --force-recreate backend
+   docker compose --profile mobile up -d --force-recreate mobile
+   ```
+   Le build de production prend ~30s (visible dans `docker compose logs mobile`, cherche
+   "Bêta (build de production) servie") avant que le port 5000 ne réponde correctement.
 4. Donner aux testeur·se·s l'adresse `http://<ip-locale>:5000` — même réseau Wi-Fi requis.
 
 L'app Flutter (`lib/api/api_config.dart`) résout déjà l'hôte de l'API dynamiquement depuis l'URL
-de la page (`Uri.base.host`) : aucune modification côté mobile nécessaire, seulement les deux
-variables d'environnement ci-dessus côté backend. `DEBUG_OTP=true` reste actif (défaut de
-`.env.example`) : le code de vérification s'affiche directement dans l'app, pas besoin d'un vrai
-SMS pour ce type de bêta.
+de la page (`Uri.base.host`) : aucune modification de code nécessaire pour ça, seulement les
+variables d'environnement ci-dessus. `DEBUG_OTP=true` reste actif (défaut de `.env.example`) : le
+code de vérification s'affiche directement dans l'app, pas besoin d'un vrai SMS pour ce type de
+bêta.
+
+Pour revenir au mode développement normal (hot reload) ensuite : repasser `MOBILE_MODE=dev` (ou
+retirer la ligne) dans `.env`, puis `docker compose build mobile && docker compose --profile
+mobile up -d --force-recreate mobile`.
 
 ## Sauvegardes & supervision (durcissement opérationnel, cahier des charges B.3/D.7/D.12)
 

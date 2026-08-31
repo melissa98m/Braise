@@ -314,7 +314,17 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 that runs `infra/minio/init.sh` to create the `braise-photos` bucket via `mc`), the FastAPI
 `backend`, `adminer` for DB inspection, and a `mobile` service behind the `mobile` Compose profile
 (not started by default — its `entrypoint.sh` runs `flutter create` on first launch since the
-Flutter SDK is never installed on the host, only inside that container). The backend has
+Flutter SDK is never installed on the host, only inside that container). `entrypoint.sh` branches
+on `MOBILE_MODE` (env, defaults to `dev`): `dev` is `flutter run -d web-server` (hot reload, the
+normal dev loop) but its debug WebSocket back to the Flutter tool (DWDS) assumes the page is
+loaded from the same origin the tool expects — silently fails (blank page, no error surfaced to
+the user) when loaded from a different origin, which is exactly what happens for a local-network
+beta tester hitting the host's LAN IP instead of `localhost`. `MOBILE_MODE=serve` runs a real
+`flutter build web` and serves the static output with `python3 -m http.server` instead — no
+debug connection at all, works identically from any origin. Since `entrypoint.sh` is `COPY`'d
+into the image (not part of the `./mobile:/app` bind mount), changing `MOBILE_MODE` needs
+`docker compose build mobile` before recreating the container, a plain restart won't pick it up
+— see README, "Bêta-test entre proches" for the exact commands. The backend has
 `CORSMiddleware` enabled (`main.py`, origins from `Settings.cors_origin_list` / `CORS_ORIGINS` env
 var, default `http://localhost:5000`) so the Flutter web app can call it cross-origin. `backend`
 depends on `minio-init: condition: service_completed_successfully`, not just `minio:

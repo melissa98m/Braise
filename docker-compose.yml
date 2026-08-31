@@ -105,6 +105,13 @@ services:
   mobile:
     profiles: ["mobile"]
     build: ./mobile
+    environment:
+      # dev (défaut) : `flutter run -d web-server`, hot reload, mais suppose que la page est
+      # chargée depuis la même origine que l'outil Flutter — casse silencieusement (page blanche)
+      # si un·e testeur·se y accède via l'IP LAN plutôt que localhost. serve : build de
+      # production statique, sans connexion de debug, ce qu'il faut pour un bêta-test réseau
+      # local (voir README, "Bêta-test entre proches") — voir mobile/entrypoint.sh.
+      MOBILE_MODE: ${MOBILE_MODE:-dev}
     volumes:
       - ./mobile:/app
     ports:
