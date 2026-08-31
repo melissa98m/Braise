@@ -17,6 +17,10 @@ class ProfilesApi {
     required String bio,
     required List<String> interests,
     required bool isPublished,
+    String? gender,
+    String? lookingForGender,
+    int? ageMin,
+    int? ageMax,
   }) async {
     final json = await _client.put(
       '/profiles/me/public',
@@ -27,6 +31,10 @@ class ProfilesApi {
         'bio': bio,
         'interests': interests,
         'is_published': isPublished,
+        'gender': gender,
+        'looking_for_gender': lookingForGender,
+        'age_min': ageMin,
+        'age_max': ageMax,
       },
     );
     return PublicProfile.fromJson(json as Map<String, dynamic>);

@@ -38,26 +38,37 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
     my_interests = my_profile.interests if my_profile else []
 
     already_swiped = select(Swipe.to_user_id).where(Swipe.from_user_id == user.id)
-    candidates = (
-        db.query(PublicProfile)
-        .filter(
-            PublicProfile.user_id != user.id,
-            PublicProfile.is_published.is_(True),
-            PublicProfile.user_id.notin_(already_swiped),
-        )
-        .order_by(PublicProfile.updated_at.desc())
-        .limit(MAX_CANDIDATE_POOL)
-        .all()
+    query = db.query(PublicProfile).filter(
+        PublicProfile.user_id != user.id,
+        PublicProfile.is_published.is_(True),
+        PublicProfile.user_id.notin_(already_swiped),
     )
+    # Filtres de découverte de base (cahier des charges A.5) : genre recherché poussé en SQL
+    # (égalité simple, réduit le pool avant le tri) ; tranche d'âge appliquée en Python ci-dessous
+    # comme le score de compatibilité, l'âge n'étant pas une colonne stockée (voir compute_age) —
+    # même choix de conception que le reste de ce module : pas de requête SQL sur date de
+    # naissance pour un filtre qui reste, de toute façon, borné par MAX_CANDIDATE_POOL.
+    if my_profile is not None and my_profile.looking_for_gender is not None:
+        query = query.filter(PublicProfile.gender == my_profile.looking_for_gender)
+
+    candidates = query.order_by(PublicProfile.updated_at.desc()).limit(MAX_CANDIDATE_POOL).all()
+
+    age_min = my_profile.age_min if my_profile else None
+    age_max = my_profile.age_max if my_profile else None
 
     scored = []
     for profile in candidates:
+        age = compute_age(profile.birth_date)
+        if age_min is not None and age < age_min:
+            continue
+        if age_max is not None and age > age_max:
+            continue
         common = sorted(set(my_interests) & set(profile.interests))
         scored.append(
             {
                 "user_id": profile.user_id,
                 "display_name": profile.display_name,
-                "age": compute_age(profile.birth_date),
+                "age": age,
                 "bio": profile.bio,
                 "interests": profile.interests,
                 "avatar": avatar_spec_from_seed(profile.avatar_seed),

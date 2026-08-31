@@ -9,6 +9,10 @@ class PublicProfile {
     required this.avatar,
     required this.isPublished,
     required this.isPremium,
+    required this.gender,
+    required this.lookingForGender,
+    required this.ageMin,
+    required this.ageMax,
   });
 
   factory PublicProfile.fromJson(Map<String, dynamic> json) {
@@ -20,6 +24,10 @@ class PublicProfile {
       avatar: AvatarSpec.fromJson(json['avatar'] as Map<String, dynamic>),
       isPublished: json['is_published'] as bool,
       isPremium: json['is_premium'] as bool,
+      gender: json['gender'] as String?,
+      lookingForGender: json['looking_for_gender'] as String?,
+      ageMin: json['age_min'] as int?,
+      ageMax: json['age_max'] as int?,
     );
   }
 
@@ -30,7 +38,19 @@ class PublicProfile {
   final AvatarSpec avatar;
   final bool isPublished;
   final bool isPremium;
+  final String? gender;
+  final String? lookingForGender;
+  final int? ageMin;
+  final int? ageMax;
 }
+
+/// "homme" / "femme" / "non_binaire" — doit rester en phase avec Gender côté backend
+/// (schemas/profile.py). Pas de "tous" ici : null porte déjà ce sens (voir looking_for_gender).
+const genderOptions = <String, String>{
+  'homme': 'Homme',
+  'femme': 'Femme',
+  'non_binaire': 'Non binaire',
+};
 
 class PrivatePhoto {
   const PrivatePhoto({required this.key, required this.url});

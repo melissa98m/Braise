@@ -113,9 +113,16 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   per-request cost predictable without needing a JSONB-array-overlap SQL query at MVP scale.
   `list_my_matches` batches the other-side profile lookup into one `IN (...)` query instead of
   N+1. A swipe target that doesn't exist and one that exists but isn't `is_published` return the
-  *same* 404 — don't let that distinction leak through, it's a user-enumeration vector. No
-  age/gender/distance filtering yet (cahier des charges A.5 lists it as MVP scope; deliberately
-  deferred, see `docs/ROADMAP.md` Phase 2).
+  *same* 404 — don't let that distinction leak through, it's a user-enumeration vector. Base
+  discovery filters (cahier des charges A.5: age range + looking-for gender; distance stays out of
+  scope, no geolocation capture exists anywhere in the app) live as nullable columns on
+  `PublicProfile` (`gender`, `looking_for_gender`, `age_min`, `age_max`) set via the same
+  `PUT /profiles/me/public` that edits the rest of the profile — no separate preferences endpoint.
+  `get_feed` pushes the gender filter into the SQL query (plain equality, shrinks the pool before
+  scoring) and applies the age range in the same Python loop that already computes
+  `compatibility_score`, matching the existing "don't push age math into SQL" pattern above. A
+  profile that hasn't set `looking_for_gender`/`age_min`/`age_max` filters nothing — those
+  preferences are opt-in, not required at signup.
 
 - **Messaging & daily question** (`models/message.py`, `models/daily_question.py`,
   `ws/connection_manager.py`, `services/messaging.py`): `ConnectionManager` is an in-memory

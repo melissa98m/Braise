@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from fastapi.testclient import TestClient
 
@@ -13,6 +14,11 @@ def _tag(word: str, suffix: str) -> str:
     # Suffixe unique par test : évite que des intérêts identiques accumulés par des runs
     # précédents (base de dev persistante, pas de rollback) ne faussent le score de ce run.
     return f"{word}-{suffix}"
+
+
+def _birth_date_for_age(age: int) -> str:
+    today = date.today()
+    return date(today.year - age, today.month, min(today.day, 28)).isoformat()
 
 
 def test_feed_ranks_by_shared_interests_and_excludes_self():
@@ -202,3 +208,106 @@ def test_premium_bypasses_free_tier_match_limit():
             "/discovery/swipe", headers=other_headers, json={"to_user_id": hub_id, "decision": "like"}
         )
         assert reciprocal.json()["matched"] is True
+
+
+def test_feed_filters_by_looking_for_gender():
+    suffix = uuid.uuid4().hex[:6]
+    me_headers, _ = create_published_user(
+        client, "Filtre genre", interests=[_tag("cinéma", suffix)], looking_for_gender="femme"
+    )
+    _, homme_id = create_published_user(
+        client, "Un homme", interests=[_tag("cinéma", suffix)], gender="homme"
+    )
+    _, femme_id = create_published_user(
+        client, "Une femme", interests=[_tag("cinéma", suffix)], gender="femme"
+    )
+    _, sans_genre_id = create_published_user(
+        client, "Genre non renseigné", interests=[_tag("cinéma", suffix)]
+    )
+
+    feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=me_headers).json()}
+    assert femme_id in feed_ids
+    assert homme_id not in feed_ids
+    # Un profil qui n'a pas renseigné son genre ne peut pas être vérifié comme correspondant au
+    # filtre actif : il est exclu, pas inclus par défaut.
+    assert sans_genre_id not in feed_ids
+
+
+def test_feed_without_gender_preference_shows_everyone():
+    suffix = uuid.uuid4().hex[:6]
+    me_headers, _ = create_published_user(client, "Sans préférence", interests=[_tag("art", suffix)])
+    _, homme_id = create_published_user(
+        client, "Un homme bis", interests=[_tag("art", suffix)], gender="homme"
+    )
+
+    feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=me_headers).json()}
+    assert homme_id in feed_ids
+
+
+def test_feed_filters_by_age_range():
+    suffix = uuid.uuid4().hex[:6]
+    me_headers, _ = create_published_user(
+        client,
+        "Filtre âge",
+        interests=[_tag("rando", suffix)],
+        age_min=30,
+        age_max=40,
+    )
+    _, young_id = create_published_user(
+        client,
+        "Trop jeune",
+        interests=[_tag("rando", suffix)],
+        birth_date=_birth_date_for_age(22),
+    )
+    _, in_range_id = create_published_user(
+        client,
+        "Dans la tranche",
+        interests=[_tag("rando", suffix)],
+        birth_date=_birth_date_for_age(35),
+    )
+    _, old_id = create_published_user(
+        client,
+        "Trop âgé",
+        interests=[_tag("rando", suffix)],
+        birth_date=_birth_date_for_age(55),
+    )
+
+    feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=me_headers).json()}
+    assert in_range_id in feed_ids
+    assert young_id not in feed_ids
+    assert old_id not in feed_ids
+
+
+def test_profile_rejects_age_min_above_age_max():
+    headers = auth_headers(client, unique_phone())
+    response = client.put(
+        "/profiles/me/public",
+        headers=headers,
+        json={
+            "display_name": "Incohérent",
+            "birth_date": "1996-01-01",
+            "bio": "",
+            "interests": [],
+            "is_published": True,
+            "age_min": 40,
+            "age_max": 25,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_profile_rejects_invalid_gender_value():
+    headers = auth_headers(client, unique_phone())
+    response = client.put(
+        "/profiles/me/public",
+        headers=headers,
+        json={
+            "display_name": "Genre invalide",
+            "birth_date": "1996-01-01",
+            "bio": "",
+            "interests": [],
+            "is_published": True,
+            "gender": "extraterrestre",
+        },
+    )
+    assert response.status_code == 422

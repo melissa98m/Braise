@@ -24,6 +24,10 @@ def create_published_user(
     display_name: str,
     interests: list[str] | None = None,
     birth_date: str = "1996-01-01",
+    gender: str | None = None,
+    looking_for_gender: str | None = None,
+    age_min: int | None = None,
+    age_max: int | None = None,
 ) -> tuple[dict, str]:
     headers = auth_headers(client, unique_phone())
     me = client.get("/auth/me", headers=headers).json()
@@ -36,6 +40,10 @@ def create_published_user(
             "bio": "",
             "interests": interests or [],
             "is_published": True,
+            "gender": gender,
+            "looking_for_gender": looking_for_gender,
+            "age_min": age_min,
+            "age_max": age_max,
         },
     )
     return headers, me["id"]

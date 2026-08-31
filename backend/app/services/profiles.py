@@ -52,6 +52,10 @@ def upsert_public_profile(db: Session, user: User, data: PublicProfileIn) -> Pub
     profile.bio = data.bio
     profile.interests = data.interests
     profile.is_published = data.is_published
+    profile.gender = data.gender
+    profile.looking_for_gender = data.looking_for_gender
+    profile.age_min = data.age_min
+    profile.age_max = data.age_max
     profile.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(profile)
@@ -75,6 +79,10 @@ def to_public_profile_out(db: Session, profile: PublicProfile) -> dict:
         "avatar": avatar_spec_from_seed(profile.avatar_seed),
         "is_published": profile.is_published,
         "is_premium": is_premium(db, profile.user_id),
+        "gender": profile.gender,
+        "looking_for_gender": profile.looking_for_gender,
+        "age_min": profile.age_min,
+        "age_max": profile.age_max,
     }
 
 

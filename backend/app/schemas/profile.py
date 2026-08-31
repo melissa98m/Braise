@@ -1,6 +1,12 @@
 from datetime import date
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+Gender = Literal["homme", "femme", "non_binaire"]
+
+MIN_FEED_AGE = 18
+MAX_FEED_AGE = 99
 
 
 class AvatarSpec(BaseModel):
@@ -16,6 +22,12 @@ class PublicProfileIn(BaseModel):
     bio: str = Field(default="", max_length=90)
     interests: list[str] = Field(default_factory=list)
     is_published: bool = False
+    # Filtres de découverte de base (cahier des charges A.5). Tous optionnels : ne rien renseigner
+    # = pas de filtre, comme avant l'existence de ces champs (voir services/discovery.get_feed).
+    gender: Gender | None = None
+    looking_for_gender: Gender | None = None
+    age_min: int | None = Field(default=None, ge=MIN_FEED_AGE, le=MAX_FEED_AGE)
+    age_max: int | None = Field(default=None, ge=MIN_FEED_AGE, le=MAX_FEED_AGE)
 
     @field_validator("birth_date")
     @classmethod
@@ -33,6 +45,12 @@ class PublicProfileIn(BaseModel):
             raise ValueError("10 centres d'intérêt maximum.")
         return value
 
+    @model_validator(mode="after")
+    def age_range_is_coherent(self) -> "PublicProfileIn":
+        if self.age_min is not None and self.age_max is not None and self.age_min > self.age_max:
+            raise ValueError("age_min ne peut pas dépasser age_max.")
+        return self
+
 
 class PublicProfileOut(BaseModel):
     display_name: str
@@ -42,6 +60,10 @@ class PublicProfileOut(BaseModel):
     avatar: AvatarSpec
     is_published: bool
     is_premium: bool
+    gender: Gender | None
+    looking_for_gender: Gender | None
+    age_min: int | None
+    age_max: int | None
 
 
 class PrivatePhotoOut(BaseModel):

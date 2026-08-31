@@ -109,3 +109,34 @@ techniques : cahier des charges sections A, B, C, D.
   bout en bout réel contre le backend qui tourne (bannissement via 3 notes basses de 3 comptes
   distincts → 403 partout → contestation acceptée → doublon rejeté en 409), pas seulement par les
   tests pytest (63/63 passent, dont 5 nouveaux pour ce palier).
+
+- [x] **Post-MVP P1.2 — Filtres de découverte de base.** A.5 Module 2 les liste explicitement en
+  MVP ("tranche d'âge, distance, genre recherché") ; seule la distance reste hors scope (aucune
+  capture de géolocalisation n'existe dans l'app — l'ajouter serait un projet à part : permission,
+  géocodage, calcul de distance, pas une extension d'un après-midi). `PublicProfile` gagne
+  `gender`/`looking_for_gender`/`age_min`/`age_max`, tous nullable : un profil qui ne les
+  renseigne pas n'est filtré par rien, exactement le comportement d'avant ces colonnes — pas de
+  migration de données à risque sur les profils existants. `services/discovery.get_feed` pousse le
+  filtre de genre en SQL (égalité simple, réduit le pool avant le tri) et applique la tranche d'âge
+  en Python dans la boucle de scoring existante, cohérent avec le choix déjà documenté de ne pas
+  interroger SQL sur un âge qui n'est pas une colonne stockée. Réglages exposés dans
+  `ProfileSetupScreen` (Écran 02) plutôt qu'un nouvel écran dédié — 4 champs facultatifs ne
+  justifiaient pas une route de plus ; tranche d'âge en `RangeSlider` où la position pleine (18–99)
+  équivaut à "pas de préférence" côté client, pour matcher exactement la sémantique `null` du
+  backend. Vérifié par 5 nouveaux tests pytest (68/68) et un scénario réel contre le backend qui
+  tourne (préférence "femme" exclut un homme, inclut une femme, un genre invalide est rejeté 422).
+
+## Backlog V2 (hors périmètre MVP)
+
+- [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
+  identifié comme hors périmètre MVP dans `docs/DPIA.md` (section 1 : "le KYC renforcé par pièce
+  d'identité est explicitement hors périmètre MVP, réservé à une option V2"). Le KYC MVP reste
+  l'OTP téléphone (cahier des charges D.6). Intégration envisagée : FranceConnect+ (niveau de
+  garantie substantiel/élevé) avec France Identité comme fournisseur d'identité — un flux
+  OIDC standard côté code, mais qui suppose d'être accrédité "fournisseur de service" par l'État
+  (personne morale, convention, homologation RGS, domaine de prod en HTTPS) avant même de pouvoir
+  tester contre le vrai service ; à défaut, un prestataire KYC privé (Onfido, Veriff — payant,
+  accréditation en jours plutôt qu'en mois) reste l'alternative. Aucune des deux options n'est
+  compatible avec la contrainte MVP "tout tourne en Docker, gratuit/local uniquement" (`CLAUDE.md`)
+  — à ne considérer qu'une fois le produit validé et prêt à passer en bêta réelle avec une entité
+  juridique constituée.

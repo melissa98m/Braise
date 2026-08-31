@@ -12,7 +12,9 @@ Braise traite des données susceptibles d'être qualifiées de sensibles au sens
 profil privé, contenu de conversations privées, numéro de téléphone (identifiant d'authentification
 via OTP), commentaires de notation et de signalement. Aucune donnée biométrique n'est traitée à ce
 stade (le KYC MVP est un OTP téléphone/email — cahier des charges D.6 ; le KYC renforcé par pièce
-d'identité est explicitement hors périmètre MVP, réservé à une option V2).
+d'identité est explicitement hors périmètre MVP, réservé à une option V2 — piste envisagée :
+France Identité / FranceConnect+, voir `docs/ROADMAP.md` § Backlog V2 pour les contraintes
+d'accréditation qui la reportent au-delà du MVP).
 
 Périmètre : l'ensemble du backend `backend/app/` et du stockage associé (Postgres, MinIO). Le
 frontend Flutter ne fait que consommer l'API ; il ne stocke localement que le JWT de session
@@ -26,6 +28,7 @@ les traitements côté serveur).
 | Téléphone + code OTP | Authentification, unicité de compte | Exécution du contrat (CGU) | `models/user.py`, `services/otp.py` | Jusqu'à suppression de compte (anonymisé ensuite) |
 | Bio, centres d'intérêt, avatar-sigil | Profil public, matching | Exécution du contrat | `models/profile.py` (`PublicProfile`) | Jusqu'à suppression de compte |
 | Date de naissance | Calcul de l'âge affiché, contrôle 18+ | Exécution du contrat / obligation légale (protection des mineurs, A.9) | `models/profile.py`, schéma `PublicProfileOut` (n'expose jamais la date brute, seulement l'âge calculé) | Jusqu'à suppression de compte |
+| Genre déclaré + préférences de découverte (genre recherché, tranche d'âge) | Filtres de base du feed de découverte (A.5) | Exécution du contrat, consentement (champs facultatifs) | `models/profile.py` (`PublicProfile.gender`/`looking_for_gender`/`age_min`/`age_max`) | Jusqu'à suppression de compte |
 | Photos privées | Déblocage du profil physique après flammes | Exécution du contrat | `models/profile.py` (`PrivateProfile.photo_keys`), fichiers dans MinIO | Jusqu'à suppression de compte |
 | Messages | Messagerie du match | Exécution du contrat | `models/message.py` | Jusqu'à suppression de compte (contenu de l'auteur supprimé anonymisé, pas le fil pour l'autre participant) |
 | Notes + commentaires | Score de confiance, modération | Intérêt légitime (sécurité de la plateforme) | `models/rating.py`, `services/moderation.py` | Conservés (nécessaires à l'historique de confiance d'un tiers) |
