@@ -424,7 +424,21 @@ Flutter SDK is never installed on the host):
   thrown exception) instead of driving `onPressed`; fixed with a `_tapAfterScrollingTo` helper
   that calls `tester.ensureVisible()` before every tap on a motif or the submit button, rather
   than enlarging the test viewport (which would just hide the same bug on any other screen this
-  tall).
+  tall). `test/screens/otp_screen_test.dart` is the third — `OtpScreen`, the very first screen
+  every user hits, pinning its button to the bottom with a `Spacer` rather than a scroll view
+  (unlike `ReportScreen`), so its step-2 content (debug banner included) overflows the 800×600
+  test viewport by 1px on a constraint no real device ever hits; here enlarging the test viewport
+  (`tester.binding.setSurfaceSize`) is the right fix, the opposite call from `ReportScreen`.
+  Writing the "already-published profile -> `RootShell`" case surfaced a real production bug in
+  `discovery_screen.dart`: `_exitController` was a lazily-initialized `late final =
+  AnimationController(vsync: this, ...)` field read only from `_swipe()` and `dispose()`, never
+  `build()` — a user who opens Discover, never swipes, then leaves the screen makes `dispose()`
+  the field's first-ever access, constructing a ticker-backed `AnimationController` at a point
+  where the element is already deactivated and can't resolve its `TickerMode` ancestor, throwing
+  "Looking up a deactivated widget's ancestor is unsafe." Fixed by constructing it in
+  `initState()` instead, where the widget is guaranteed mounted — this had been broken since the
+  swipe-exit animation was introduced and nothing exercised the no-swipe teardown path before this
+  test did.
 
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not

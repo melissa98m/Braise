@@ -26,10 +26,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
   bool _loading = true;
   String? _error;
 
-  late final AnimationController _exitController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 280),
-  );
+  // Pas un initialiseur `late final = AnimationController(...)` : ce champ n'est lu que dans
+  // `_swipe()` et `dispose()`, jamais `build()` — un `late` paresseux le construirait pour la
+  // première fois *dans* `dispose()` si l'utilisateur quitte l'écran sans jamais swiper, à un
+  // moment où l'élément est déjà désactivé (`vsync: this` a besoin de remonter l'arbre pour
+  // trouver un `TickerMode`, ce qui échoue une fois désactivé — "Looking up a deactivated
+  // widget's ancestor is unsafe."). Construit dans `initState()` à la place, où le widget est
+  // garanti monté.
+  late final AnimationController _exitController;
   // -1 = "Passer" (sort à gauche), 1 = "Braise" (sort à droite) — même sens que le swipe
   // Tinder classique, même si le geste de glisser n'existe pas ici (cahier des charges A.7).
   int _exitSign = 0;
@@ -38,6 +42,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
+    _exitController = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
     _loadFeed();
   }
 

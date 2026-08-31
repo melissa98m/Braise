@@ -294,6 +294,28 @@ techniques : cahier des charges sections A, B, C, D.
   helper `_tapAfterScrollingTo` qui appelle `tester.ensureVisible()` avant chaque tap sur un motif
   ou le bouton, plutôt qu'agrandir artificiellement le viewport de test (qui masquerait le même
   bug si un écran réel a une hauteur similaire). 20/20 tests Flutter au total.
+  `test/screens/otp_screen_test.dart` (5 tests) couvre `OtpScreen` — le tout premier écran que
+  traverse chaque utilisateur, donc l'un des plus coûteux à casser en silence : demande de code
+  (débogage local pré-rempli, erreur API), puis vérification vers ses deux destinations réelles
+  (`ProfileSetupScreen` pour un profil jamais publié, `RootShell` pour un profil déjà publié) et
+  l'erreur de code invalide. `OtpScreen` épingle son bouton en bas via `Spacer` plutôt qu'un
+  `SingleChildScrollView` (contrairement à `ReportScreen`) : son étape 2 (bandeau debug compris)
+  déborde de 1px sur le viewport de test 800×600, un écran réel n'ayant jamais cette contrainte —
+  élargir le viewport de test (`tester.binding.setSurfaceSize`) est donc le bon correctif ici,
+  pas la même situation que `ReportScreen` où l'agrandir aurait masqué un vrai bug de scroll.
+  En écrivant le scénario "profil déjà publié -> `RootShell`", un vrai bug de production trouvé :
+  `DiscoveryScreen._exitController` (l'animation de sortie de carte, Phase 6 tardive) était un
+  champ `late final = AnimationController(vsync: this, ...)` — jamais lu dans `build()`, seulement
+  dans `_swipe()` et `dispose()`. Un utilisateur qui ouvre Découvrir sans jamais swiper puis quitte
+  l'écran (déconnexion, navigation, `RootShell` démonté) fait de `dispose()` le tout premier accès
+  à ce champ paresseux : `AnimationController(vsync: this)` tente alors de remonter l'arbre pour
+  trouver un `TickerMode`, ce qui échoue puisque l'élément est déjà désactivé à ce stade
+  ("Looking up a deactivated widget's ancestor is unsafe."). Corrigé en construisant
+  `_exitController` dans `initState()` (où le widget est garanti monté) plutôt que via
+  l'initialiseur paresseux du champ — un bug qui existait en production depuis l'introduction du
+  swipe animé (`e7da7df`), jamais remarqué faute de test déclenchant ce chemin de démontage sans
+  swipe préalable. 25/25 tests Flutter au total, `flutter analyze` propre (à l'exception d'un
+  avertissement `info` préexistant et sans rapport dans `moderation_api.dart`).
 
 - [x] **Post-MVP P5.3 — Lint backend (ruff).** Le mobile a `flutter_lints` depuis la Phase 6 ; le
   backend Python n'avait aucun linter. `backend/ruff.toml` (E/F/W/I/UP, `line-length = 110` —
