@@ -392,6 +392,21 @@ techniques : cahier des charges sections A, B, C, D.
   (`tester.fling` sur le `ListView`, compteur d'appels vérifié à 2). 35/35 tests Flutter au
   total, `flutter analyze` propre.
 
+- [x] **Post-MVP P7.2 — Couverture de test de `ProfileTrustScreen`, et vrai bug corrigé au
+  passage.** Onglet "Moi" : `_load()` attendait 3 appels en parallèle (profil, score de
+  confiance, matchs) via `Future.wait` sans aucun `try/catch` — une erreur transitoire sur
+  n'importe lequel des trois laissait `_loading` bloqué à `true` pour toujours, sans rien de
+  scrollable pour déclencher un nouveau tirer-pour-rafraîchir (`RootShell` garde cet écran monté
+  en permanence via `IndexedStack`, `initState` ne se relance jamais) — un spinner infini sans
+  recours pour l'utilisateur, découvert en écrivant le scénario d'erreur de ce fichier de test,
+  pas en l'y cherchant délibérément. Corrigé : `_load()` capture désormais l'`ApiException`,
+  bascule vers un état d'erreur (`_error`) affiché dans un `ListView` (donc toujours
+  rafraîchissable par tirer-pour-rafraîchir), au lieu de laisser l'exception se propager dans le
+  vide. 2 tests : chargement réussi (profil, badges VÉRIFIÉ/BRAISE+, score, flammes agrégées,
+  échanges actifs) et échec sur un des trois appels suivi d'un tirer-pour-rafraîchir qui réussit
+  cette fois — la preuve que la sortie de l'état bloqué fonctionne réellement, pas seulement que
+  l'erreur s'affiche. 37/37 tests Flutter au total, `flutter analyze` propre.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/api_exception.dart';
 import '../../models/discovery.dart';
 import '../../models/moderation.dart';
 import '../../models/public_profile.dart';
@@ -30,6 +31,7 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
   TrustScore? _trust;
   List<MatchSummary> _matches = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -38,19 +40,36 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
   }
 
   Future<void> _load() async {
-    final services = context.read<AppServices>();
-    final results = await Future.wait([
-      services.profilesApi.getMyPublicProfile(),
-      services.moderationApi.getTrustScore(),
-      services.discoveryApi.getMatches(),
-    ]);
-    if (!mounted) return;
     setState(() {
-      _profile = results[0] as PublicProfile;
-      _trust = results[1] as TrustScore;
-      _matches = results[2] as List<MatchSummary>;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    final services = context.read<AppServices>();
+    try {
+      final results = await Future.wait([
+        services.profilesApi.getMyPublicProfile(),
+        services.moderationApi.getTrustScore(),
+        services.discoveryApi.getMatches(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _profile = results[0] as PublicProfile;
+        _trust = results[1] as TrustScore;
+        _matches = results[2] as List<MatchSummary>;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      // Sans ce catch, une erreur transitoire sur n'importe lequel des 3 appels laissait cet
+      // onglet bloqué sur un spinner infini : `_loading` ne repassait jamais à `false`, et rien
+      // n'était scrollable pour déclencher un nouveau tirer-pour-rafraîchir — l'utilisateur
+      // n'avait aucun moyen de réessayer sans redémarrer l'app (RootShell garde cet écran monté
+      // en permanence via IndexedStack, `initState` ne se relance jamais).
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    }
   }
 
   int get _totalFlames => _matches.fold(0, (sum, m) => sum + m.flameCount);
@@ -61,6 +80,24 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
 
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
+
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Moi')),
+        // ListView (pas juste Center) : reste scrollable donc tirer-pour-rafraîchir marche même
+        // depuis l'état d'erreur, seul moyen de réessayer sans redémarrer l'app.
+        body: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(BraiseSpacing.xxl),
+            children: [
+              Text(_error!, style: textTheme.bodyMedium?.copyWith(color: tokens.erreur)),
+            ],
+          ),
+        ),
+      );
+    }
+
     final profile = _profile!;
     final trust = _trust!;
 

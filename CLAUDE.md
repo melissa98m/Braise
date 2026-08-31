@@ -485,7 +485,17 @@ Flutter SDK is never installed on the host):
   (`ChatSocket`, no injectable channel factory yet). 4 tests: unlocked vs locked match subtitles
   (`MatchSummary.isUnlocked` derived from `blurStage == 'net'`), the empty "go discover" state,
   a load error, and pull-to-refresh (`tester.fling` on the `ListView`, asserting the fetch count
-  goes from 1 to 2).
+  goes from 1 to 2). `test/screens/profile_trust_screen_test.dart` (P7.2) is the sixth, and found
+  a real bug rather than just documenting existing behavior: `ProfileTrustScreen._load()` awaited
+  3 parallel calls (profile, trust score, matches) via `Future.wait` with no `try/catch` at
+  all — a transient failure on any one of them left `_loading` stuck at `true` forever, with
+  nothing scrollable to pull-to-refresh from (`RootShell` keeps this screen mounted permanently
+  via `IndexedStack`, so `initState` never reruns) — an infinite spinner with no recovery short of
+  restarting the app. Fixed by catching `ApiException` and switching to an error state rendered
+  inside a `ListView` (so pull-to-refresh keeps working from it), instead of letting the
+  exception propagate unhandled. 2 tests: a successful load, and a failure on one of the three
+  calls followed by a pull-to-refresh that succeeds — proving recovery actually works, not just
+  that the error renders.
 
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not
