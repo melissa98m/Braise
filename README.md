@@ -57,6 +57,18 @@ docker compose up -d uptime-kuma
 
 Détail des risques couverts et de ceux qui restent : `docs/DPIA.md`.
 
+## KPIs de succès (cahier des charges A.10)
+
+```bash
+docker compose run --rm backend python scripts/compute_kpis.py
+docker compose run --rm backend python scripts/compute_kpis.py --recent-days 30 --retention-days 30
+```
+
+Calcule les 9 indicateurs (acquisition, activation, engagement, rétention, confiance,
+monétisation, produit) directement depuis les tables existantes — pas de tableau de bord séparé
+à maintenir. La rétention est un proxy documenté dans le script (pas de journal de
+connexion/session dans ce projet), pas une vraie mesure DAU/MAU.
+
 ## Stack (figée, cahier des charges section D.11)
 
 Flutter · FastAPI · PostgreSQL · WebSockets custom · MinIO · scikit-learn maison. Aucun service

@@ -225,6 +225,17 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   separate, standalone data-collection script — not part of the running API, not imported by
   anything under `app/`. Its output lands in `backend/scripts/data/` (gitignored). Read it before
   assuming what it does; it wasn't written as part of the phase work above.
+- `backend/scripts/compute_kpis.py` computes the 9 A.10 KPIs directly against the DB (`SessionLocal`,
+  not the API) — there's no staff/admin role in this project, so a script fits the existing pattern
+  (Reports/BanAppeal are already "consult via Adminer", not via a protected endpoint that doesn't
+  exist) better than inventing an auth boundary for one read-only report. It inserts the backend
+  root onto `sys.path` explicitly before importing `app.*` — running a script as `python
+  scripts/x.py` (rather than `python -m scripts.x`) puts `scripts/`, not `/app`, on `sys.path[0]`,
+  which `pytest` never hits because it resolves `app.*` for `tests/` a different way (it's its own
+  console-script entry point, not a plain script invocation). "Rétention à J7/J30" has no real
+  signal to compute from — this project has no login/session event log — so `retention_proxy` is
+  explicitly documented as an approximation (swiped again ≥N days after signup), not a real DAU/MAU
+  retention figure; don't quote it outside internal debugging without that caveat attached.
 
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):

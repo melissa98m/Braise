@@ -201,6 +201,19 @@ techniques : cahier des charges sections A, B, C, D.
   au badge vérifié sur la carte de découverte ("VÉRIFIÉ · CONFIANCE 88"). Vérifié par un nouveau
   test pytest (73/73 au total) et une lecture directe du schéma OpenAPI du backend qui tourne.
 
+- [x] **Post-MVP P4.1 — Instrumentation des KPIs (A.10).** Aucun des 9 indicateurs de succès
+  n'était mesurable nulle part ; sans ça, le jalon "Bilan bêta" du planning (B.2) n'a rien à
+  produire. `backend/scripts/compute_kpis.py` les calcule directement depuis les tables
+  existantes — aucun ne nécessitait de nouvelle infra de tracking. Pas de nouvel endpoint API :
+  ce projet n'a pas de notion de rôle staff (`Report`/`BanAppeal` se consultent déjà via Adminer,
+  jamais via une route protégée), donc un script cohérent avec le reste de l'outillage
+  opérationnel plutôt qu'une route à qui il faudrait inventer un contrôle d'accès. La rétention
+  J7/J30 est un proxy explicitement documenté (pas de journal de connexion/session dans ce
+  projet) — approximée par "a swipé de nouveau au moins N jours après l'inscription", à ne pas
+  citer hors contexte de debug interne sans cette réserve. Chaque nombre vérifié à la main contre
+  des requêtes SQL directes sur la base de dev (complétion de profil 65/5395, déblocage 120/1999,
+  matchs → 3 jours 0/1999 — tous exacts).
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
