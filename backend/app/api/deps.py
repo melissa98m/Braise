@@ -12,7 +12,7 @@ from app.models.user import User
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/verify-otp", auto_error=False)
 
 
-def user_from_token(token: str | None, db: Session) -> User:
+def _resolve_user(token: str | None, db: Session) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Identifiants invalides ou expirés.",
@@ -30,10 +30,6 @@ def user_from_token(token: str | None, db: Session) -> User:
     user = db.get(User, user_id)
     if user is None:
         raise credentials_error
-    if user.is_banned:
-        # Choix délibéré : couper l'accès partout (y compris /auth/me) plutôt que de garder un
-        # cas particulier pour afficher un écran "compte suspendu" — cahier des charges A.4.4.
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Compte suspendu.")
     if user.deleted_at is not None:
         # Un token émis avant la suppression reste cryptographiquement valide jusqu'à expiration
         # (pas de révocation de JWT) — c'est ce garde-fou qui empêche de continuer à l'utiliser.
@@ -41,7 +37,29 @@ def user_from_token(token: str | None, db: Session) -> User:
     return user
 
 
+def user_from_token(token: str | None, db: Session) -> User:
+    user = _resolve_user(token, db)
+    if user.is_banned:
+        # Choix délibéré : couper l'accès partout (y compris /auth/me) plutôt que de garder un
+        # cas particulier pour afficher un écran "compte suspendu" — cahier des charges A.4.4.
+        # La seule exception volontaire est get_current_user_even_if_banned ci-dessous, réservée
+        # à la contestation de bannissement (A.9) : sans elle, le bannissement automatique n'a
+        # aucune voie de recours joignable.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Compte suspendu.")
+    return user
+
+
 def get_current_user(
     token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> User:
     return user_from_token(token, db)
+
+
+def get_current_user_even_if_banned(
+    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User:
+    """Ne pas réutiliser ailleurs — le reste de l'API doit continuer à passer par
+    get_current_user/user_from_token. Réservé aux endpoints POST /moderation/ban-appeal et
+    GET /moderation/ban-appeal/mine : c'est le seul point d'accès qu'un compte banni doit
+    pouvoir atteindre."""
+    return _resolve_user(token, db)

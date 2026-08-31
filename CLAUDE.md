@@ -71,8 +71,13 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 - `api/deps.py` — `user_from_token` is the single place that turns a JWT into a `User`, used both
   by the `get_current_user` HTTP dependency and manually by the messaging WebSocket handler (which
   can't use `Depends`). It also enforces `is_banned` — a banned user gets 403 from *every* protected
-  endpoint, no per-router exception. Any new protected endpoint takes
-  `user: User = Depends(get_current_user)`, nothing bespoke per-router.
+  endpoint. Any new protected endpoint takes `user: User = Depends(get_current_user)`, nothing
+  bespoke per-router — with exactly one deliberate exception:
+  `get_current_user_even_if_banned` (shares the same JWT-decoding/deleted-account checks via the
+  private `_resolve_user` helper, just skips the `is_banned` check) is used only by
+  `POST /moderation/ban-appeal` and `GET /moderation/ban-appeal/mine`, because a banned user
+  needs exactly one reachable endpoint to contest the ban (cahier des charges A.9) — see Trust &
+  moderation below. Don't reuse it anywhere else.
 - Migrations are in `app/migrations/versions/`, generated with `alembic revision --autogenerate`
   against the live dev Postgres — don't hand-write migration files; let Alembic diff the models.
 - **Profiles** (`models/profile.py`): `PublicProfile` (display_name, bio, interests, `avatar_seed`)
@@ -147,7 +152,15 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   floor so one or two bad-faith ratings can't zero out a brand-new user (cahier des charges A.9).
   Reports (`Report`) always start `status="pending"`: there's no automatic founded/unfounded
   triage or reviewer UI yet (cahier des charges C.1 explicitly scopes that to V2) — inspect them
-  via Adminer for now, not a moderation endpoint that doesn't exist.
+  via Adminer for now, not a moderation endpoint that doesn't exist. `GET /moderation/me/trust-score`
+  only ever returns the caller's own score (derived from the JWT) — it used to be
+  `GET /moderation/users/{user_id}/trust-score`, a straight IDOR (any authenticated user could
+  read anyone else's `rating_count`/`flagged_count` by guessing a UUID; the app itself never
+  called it with anything but the caller's own id). `BanAppeal` (`models/ban_appeal.py`) is the
+  human-contestation path A.9 requires for an auto-ban: same shape as `Report` (starts `pending`,
+  reviewed via Adminer, no auto-triage), reachable through `get_current_user_even_if_banned` (see
+  `api/deps.py` above) since a banned user is 403'd everywhere else. One pending appeal per user
+  at a time; filing requires `user.is_banned` (400 otherwise — nothing to contest).
 - **Monetization & security** (`models/subscription.py`, `models/photo_access_log.py`,
   `services/subscriptions.py`, `services/account.py`): `Subscription` is one current-state row per
   user (no history table — single tier per cahier des charges C.1), `is_premium` computed from
@@ -229,7 +242,11 @@ Flutter SDK is never installed on the host):
 - `lib/theme/braise_tokens.dart` (`BraiseTokens.dark`/`.light`, `BraiseSpacing`, `BraiseRadii`) and
   `lib/theme/braise_theme.dart` (`buildBraiseTheme(Brightness)`) port `docs/DESIGN_TOKENS.md` 1:1 —
   don't hand-pick colors/spacing in a screen, add a token first if one's missing. Dark is the
-  default (`ThemeMode.dark` in `main.dart`), matching the spec.
+  default at install (`ThemeController` starts at `ThemeMode.dark`, matching the spec's "Sombre
+  reste le défaut"), but the user can switch to Clair/Système from Settings — persisted in
+  `shared_preferences` (`braise_theme_mode`), read by `MaterialApp.themeMode` via a `Builder` so it
+  can `context.watch` the controller (`main.dart`'s `MaterialApp` is a descendant of the
+  `MultiProvider`, not a sibling — that ordering matters here).
 - `lib/api/` is a thin typed wrapper per backend module (`auth_api.dart`, `profiles_api.dart`,
   etc.) over `api_client.dart`, which injects `Authorization: Bearer <token>` via a `tokenProvider`
   closure and throws `ApiException` (with `isUnauthorized`/`isForbidden`/`isPaymentRequired`
@@ -241,14 +258,26 @@ Flutter SDK is never installed on the host):
   (`ChangeNotifier`, JWT persisted via `shared_preferences` under `braise_token`) into one
   `Provider`-injected bundle; the circular dependency (the API client needs a token from the auth
   controller, which needs an API client) is resolved with a `late final` + closure, not a second
-  bespoke wiring pattern.
+  bespoke wiring pattern. `AuthController` has 4 states, not 3 (`AuthStatus.unknown/signedOut/
+  signedIn/banned`): the backend lets a banned user's OTP verify succeed and only 403s on the
+  follow-up `/auth/me` call (`services/otp.py` doesn't check `is_banned`), so both `verifyOtp` and
+  `restoreSession` must catch that specific `ApiException` (matched on the exact backend detail
+  string `'Compte suspendu.'`, kept in sync with `api/deps.py` by a comment on both ends) and route
+  to `banned` — keeping the token, unlike every other `ApiException` case, which signs out. Without
+  this, a banned user was just silently bounced to the OTP screen with no explanation and no way to
+  reach the ban-appeal endpoint at all.
 - Screens live under `lib/screens/<module>/`, one subfolder per backend module, and are adapted
   from the mockups rather than copied verbatim where the backend doesn't match: OTP entry replaces
   the mockup's KYC/ID-scan step (no KYC exists), discovery is a single-card feed rather than a
   swipe grid (the spec's "no catalog" principle), the private-photo grid and GDPR export/delete
-  actions were added with no mockup equivalent because otherwise those Phase 1/5 endpoints had no
-  UI at all, and root navigation is 3 tabs (Découvrir/Échanges/Moi) rather than the mockup's 4 —
-  no screen justifies a dedicated "Braises" tab beyond what Échanges/Moi already show.
+  actions live in `screens/settings/` (moved out of the profile/trust screen so that screen stays
+  about profile info, not account settings) with no mockup equivalent because otherwise those Phase
+  1/5 endpoints had no UI at all, and root navigation is 3 tabs (Découvrir/Échanges/Moi) rather
+  than the mockup's 4 — no screen justifies a dedicated "Braises" tab beyond what Échanges/Moi
+  already show. `screens/moderation/report_screen.dart` is one shared report flow (motif + texte
+  obligatoires) reused from conversation, unlock, and rating screens, instead of three separate
+  ad-hoc dialogs. `screens/moderation/ban_appeal_screen.dart` is what `AuthStatus.banned` routes
+  to from `main.dart` — shows the latest `BanAppeal` status or the form to file one.
 - `test/widget_test.dart` exercises the theme system (background tokens per brightness, WCAG
   contrast ratio on `inkFloor`) rather than pumping the full `BraiseApp`, which would make a real
   network call via `restoreSession()` with no HTTP-mocking infrastructure in place. It uses

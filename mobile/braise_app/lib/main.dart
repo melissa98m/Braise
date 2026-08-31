@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'screens/moderation/ban_appeal_screen.dart';
 import 'screens/onboarding/otp_screen.dart';
 import 'screens/root_shell.dart';
 import 'state/app_services.dart';
@@ -68,6 +69,7 @@ class _AuthGateState extends State<_AuthGate> {
       AuthStatus.unknown => const Scaffold(body: Center(child: CircularProgressIndicator())),
       AuthStatus.signedOut => const OtpScreen(),
       AuthStatus.signedIn => const RootShell(),
+      AuthStatus.banned => const BanAppealScreen(),
     };
   }
 }

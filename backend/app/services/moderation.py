@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.ban_appeal import BanAppeal, BanAppealStatus
 from app.models.match import Match
 from app.models.rating import Rating
 from app.models.report import Report, ReportStatus
@@ -145,3 +146,33 @@ def list_my_reports(db: Session, user: User) -> list[Report]:
 
 def get_trust_score(db: Session, user_id: uuid.UUID) -> dict:
     return compute_trust_score(db, user_id)
+
+
+def file_ban_appeal(db: Session, user: User, message: str) -> BanAppeal:
+    if not user.is_banned:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ce compte n'est pas banni.")
+
+    existing_pending = (
+        db.query(BanAppeal)
+        .filter(BanAppeal.user_id == user.id, BanAppeal.status == BanAppealStatus.PENDING.value)
+        .one_or_none()
+    )
+    if existing_pending is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Une contestation est déjà en cours d'examen."
+        )
+
+    appeal = BanAppeal(user_id=user.id, message=message, status=BanAppealStatus.PENDING.value)
+    db.add(appeal)
+    db.commit()
+    db.refresh(appeal)
+    return appeal
+
+
+def list_my_ban_appeals(db: Session, user: User) -> list[BanAppeal]:
+    return (
+        db.query(BanAppeal)
+        .filter(BanAppeal.user_id == user.id)
+        .order_by(BanAppeal.created_at.desc())
+        .all()
+    )

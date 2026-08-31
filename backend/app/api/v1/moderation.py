@@ -3,10 +3,18 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_even_if_banned
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.moderation import RatingIn, RatingOut, ReportIn, ReportOut, TrustScoreOut
+from app.schemas.moderation import (
+    BanAppealIn,
+    BanAppealOut,
+    RatingIn,
+    RatingOut,
+    ReportIn,
+    ReportOut,
+    TrustScoreOut,
+)
 from app.services import moderation as moderation_service
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
@@ -43,3 +51,20 @@ def my_trust_score(
     db: Session = Depends(get_db),
 ):
     return moderation_service.get_trust_score(db, user.id)
+
+
+@router.post("/ban-appeal", response_model=BanAppealOut, status_code=201)
+def file_ban_appeal(
+    payload: BanAppealIn,
+    user: User = Depends(get_current_user_even_if_banned),
+    db: Session = Depends(get_db),
+):
+    return moderation_service.file_ban_appeal(db, user, payload.message)
+
+
+@router.get("/ban-appeal/mine", response_model=list[BanAppealOut])
+def my_ban_appeals(
+    user: User = Depends(get_current_user_even_if_banned),
+    db: Session = Depends(get_db),
+):
+    return moderation_service.list_my_ban_appeals(db, user)

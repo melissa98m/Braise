@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from tests.helpers import (
     auth_headers,
+    ban_user,
     create_match,
     create_match_with,
     create_published_user,
@@ -219,3 +220,63 @@ def test_trust_score_cannot_target_another_user():
         f"/moderation/users/{match['id_b']}/trust-score", headers=match["headers_a"]
     )
     assert response.status_code == 404
+
+
+def test_ban_appeal_requires_banned_account():
+    headers, _ = create_published_user(client, "Pas banni")
+    response = client.post(
+        "/moderation/ban-appeal", headers=headers, json={"message": "Pourquoi suis-je banni ?"}
+    )
+    assert response.status_code == 400
+
+
+def test_ban_appeal_round_trip():
+    victim_headers, victim_id = create_published_user(client, "Contestataire")
+    ban_user(client, victim_headers, victim_id)
+
+    # Un compte banni est rejeté partout ailleurs (cahier des charges A.4.4)...
+    assert client.get("/auth/me", headers=victim_headers).status_code == 403
+
+    # ...sauf sur la contestation elle-même (A.9 : la seule exception délibérée).
+    filed = client.post(
+        "/moderation/ban-appeal",
+        headers=victim_headers,
+        json={"message": "Cette note ne reflète pas du tout notre échange, je conteste."},
+    )
+    assert filed.status_code == 201
+    body = filed.json()
+    assert body["status"] == "pending"
+    assert body["decided_at"] is None
+
+    mine = client.get("/moderation/ban-appeal/mine", headers=victim_headers).json()
+    assert len(mine) == 1
+    assert mine[0]["id"] == body["id"]
+
+
+def test_ban_appeal_rejects_too_short_message():
+    victim_headers, victim_id = create_published_user(client, "Message trop court")
+    ban_user(client, victim_headers, victim_id)
+
+    response = client.post(
+        "/moderation/ban-appeal", headers=victim_headers, json={"message": "non"}
+    )
+    assert response.status_code == 422
+
+
+def test_ban_appeal_blocks_duplicate_pending():
+    victim_headers, victim_id = create_published_user(client, "Deux contestations")
+    ban_user(client, victim_headers, victim_id)
+
+    payload = {"message": "Je conteste ce bannissement, ce n'est pas justifié."}
+    first = client.post("/moderation/ban-appeal", headers=victim_headers, json=payload)
+    assert first.status_code == 201
+
+    second = client.post("/moderation/ban-appeal", headers=victim_headers, json=payload)
+    assert second.status_code == 409
+
+
+def test_ban_appeal_requires_authentication():
+    response = client.post(
+        "/moderation/ban-appeal", json={"message": "Je conteste ce bannissement."}
+    )
+    assert response.status_code == 401

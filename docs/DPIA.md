@@ -79,7 +79,7 @@ paiement des stores Apple/Google (D.8), qui ne transite par aucune donnée perso
 | Perte de données (panne serveur, corruption) | Tout | **Comblé par ce palier P0** : sauvegardes Postgres + réplication photos, testées par restauration réelle (voir `infra/backup/`) | Résiduel tant que le volume de sauvegarde n'est pas répliqué hors du même hôte Docker (à faire au moment du passage en VPS de prod, D.7) |
 | Ré-identification via le profil public | Bio, intérêts, avatar | Pas de photo réelle en public, pas de date de naissance brute exposée | Faible, à revalider si de nouveaux champs sont ajoutés au profil public |
 | Rancune / abus du système de notation | Commentaires de notation | Détection combinée règle + modèle ML (`services/moderation_ml.py`), exclusion du score plutôt que sanction directe | Modéré — modèle entraîné sur un jeu de données jouet, à réentraîner sur données réelles de bêta avant d'en faire un signal fort |
-| Bannissement automatique à tort | Score de confiance | Seuil `MIN_RATINGS_FOR_AUTO_BAN = 3` (pas de ban sur 1-2 avis) | **Élevé — aucune procédure de contestation implémentée alors que A.9 l'exige explicitement.** Voir plan d'action P1. |
+| Bannissement automatique à tort | Score de confiance | Seuil `MIN_RATINGS_FOR_AUTO_BAN = 3` (pas de ban sur 1-2 avis). **Comblé (P1.1)** : `BanAppeal` + `api/deps.get_current_user_even_if_banned` + `BanAppealScreen` — un compte banni peut désormais déposer une contestation et voir son statut, revue via Adminer | Résiduel : la revue reste manuelle (pas de délai de traitement garanti côté produit) |
 | Disponibilité / supervision | Tout | **Comblé par ce palier P0** : Uptime Kuma sur backend/DB/MinIO | Résiduel tant qu'aucune notification (email/webhook) n'est configurée sur les moniteurs — étape manuelle à faire après le premier démarrage |
 
 ## 5. Actions restant à mener avant une bêta avec des utilisateurs externes
@@ -88,11 +88,9 @@ paiement des stores Apple/Google (D.8), qui ne transite par aucune donnée perso
    la supervision existe mais personne n'est alerté.
 2. Répliquer `backup_data` hors de l'hôte Docker local dès le passage en VPS de production
    (rclone/rsync vers un second emplacement physique, D.7).
-3. Implémenter la procédure de contestation de bannissement (A.9) — actuellement le seul recours
-   est un accès manuel à la base via Adminer, ce qui n'est pas une procédure pour l'utilisateur.
-4. Rédiger et publier les CGU / la politique de confidentialité côté produit (hors périmètre code).
-5. Réentraîner `moderation_ml.py` dès que la bêta produit un premier volume réel de commentaires.
-6. Générer un vrai `JWT_SECRET` et un vrai `MINIO_KMS_SECRET_KEY` avant tout déploiement hors
+3. Rédiger et publier les CGU / la politique de confidentialité côté produit (hors périmètre code).
+4. Réentraîner `moderation_ml.py` dès que la bêta produit un premier volume réel de commentaires.
+5. Générer un vrai `JWT_SECRET` et un vrai `MINIO_KMS_SECRET_KEY` avant tout déploiement hors
    poste de dev — les valeurs actuelles dans `.env` sont explicitement des valeurs de dev.
 
 ## 6. Suivi

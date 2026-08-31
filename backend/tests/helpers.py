@@ -138,6 +138,23 @@ def read_trust_score(user_id: str) -> dict:
         db.close()
 
 
+def ban_user(client, victim_headers: dict, victim_id: str) -> None:
+    # Fait passer un compte sous le seuil MIN_RATINGS_FOR_AUTO_BAN via 3 notes basses de 3
+    # comptes distincts, exactement le chemin réel de bannissement automatique
+    # (services/moderation.create_rating) — pas un raccourci en base, pour que les tests de
+    # contestation partent d'un compte réellement banni par le code, pas d'un état simulé.
+    base = create_match_with(client, victim_headers, victim_id)
+    rater_2 = create_match_with(client, victim_headers, victim_id)
+    rater_3 = create_match_with(client, victim_headers, victim_id)
+    for rater in (base, rater_2, rater_3):
+        response = client.post(
+            f"/moderation/matches/{rater['match_id']}/rating",
+            headers=rater["headers"],
+            json={"score": 1, "comment": "Le courant n'est vraiment pas passé entre nous deux."},
+        )
+        assert response.status_code == 200
+
+
 def force_match_unlocked(match_id: str, hours_ago: float = 1) -> None:
     # Atteindre unlock_threshold flammes par le vrai flux (une question/jour/utilisateur) prendrait
     # plusieurs jours réels : on pose directement l'état "match débloqué depuis X" en base plutôt

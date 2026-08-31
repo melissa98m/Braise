@@ -90,3 +90,22 @@ techniques : cahier des charges sections A, B, C, D.
   Volontairement hors de ce palier : réplication du volume de sauvegarde hors de l'hôte Docker
   local (n'a de sens qu'une fois sur un vrai VPS, D.7) et notification effective sur les moniteurs
   Uptime Kuma (étape manuelle documentée dans le README, pas automatisable sans API dédiée).
+
+- [x] **Post-MVP P1.1 — Procédure de contestation de bannissement.** Le bannissement automatique
+  existait depuis la Phase 4 (`services/moderation.create_rating`) mais sans la voie de recours
+  humaine explicitement exigée par le cahier des charges A.9 — `docs/DPIA.md` l'avait classé
+  "risque élevé". Modèle `BanAppeal` (même schéma que `Report` : démarre `pending`, revue via
+  Adminer, pas d'outillage de tri automatique — cohérent avec le reste de la modération MVP).
+  `api/deps.get_current_user_even_if_banned` est la seule exception délibérée à la coupure totale
+  d'accès d'un compte banni (`user_from_token` continue de bloquer partout ailleurs, y compris
+  `/auth/me`) : sans elle, `POST /moderation/ban-appeal` serait lui-même inatteignable par la
+  personne qui en a besoin. Un seul appel non-bannissant peut avoir une contestation `pending` à
+  la fois. Côté mobile, `AuthController` distingue désormais "banni" (403 détail exact
+  `Compte suspendu.`, token conservé) de "token invalide/compte supprimé" (déconnexion normale) —
+  avant ce correctif, un compte banni était silencieusement renvoyé à l'écran OTP sans explication
+  ni recours possible, ce qui rendait la procédure inatteignable en pratique malgré son existence
+  côté API. `BanAppealScreen` (nouvel état `AuthStatus.banned` routé depuis `main.dart`) affiche le
+  statut de la dernière contestation ou le formulaire pour en déposer une. Vérifié par un scénario
+  bout en bout réel contre le backend qui tourne (bannissement via 3 notes basses de 3 comptes
+  distincts → 403 partout → contestation acceptée → doublon rejeté en 409), pas seulement par les
+  tests pytest (63/63 passent, dont 5 nouveaux pour ce palier).

@@ -50,3 +50,18 @@ class ReportOut(BaseModel):
     reason: str
     status: str
     created_at: datetime
+
+
+class BanAppealIn(BaseModel):
+    message: str = Field(min_length=10, max_length=1000)
+
+
+class BanAppealOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    status: str
+    message: str
+    created_at: datetime
+    decided_at: datetime | None
+    decision_note: str | None

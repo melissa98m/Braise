@@ -35,6 +35,31 @@ class RatingResult {
   final int? trustScore;
 }
 
+class BanAppeal {
+  const BanAppeal({
+    required this.id,
+    required this.status,
+    required this.message,
+    required this.decisionNote,
+  });
+
+  factory BanAppeal.fromJson(Map<String, dynamic> json) {
+    return BanAppeal(
+      id: json['id'] as String,
+      status: json['status'] as String,
+      message: json['message'] as String,
+      decisionNote: json['decision_note'] as String?,
+    );
+  }
+
+  final String id;
+  final String status;
+  final String message;
+  final String? decisionNote;
+
+  bool get isPending => status == 'pending';
+}
+
 const reportReasons = <String, String>{
   'harcelement': 'Harcèlement',
   'faux_profil': 'Faux profil',
