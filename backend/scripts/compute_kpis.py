@@ -139,9 +139,18 @@ def trust_ban_false_positive_rate(db) -> tuple[int, int]:
 
 def monetization_conversion_rate(db) -> tuple[int, int]:
     verified_total = db.query(func.count(User.id)).filter(User.is_verified.is_(True)).scalar()
-    premium = db.query(func.count(Subscription.user_id)).filter(
-        Subscription.is_active.is_(True)
-    ).scalar()
+    # Même critère que services/subscriptions.is_premium (is_active ET expires_at > now) — pas
+    # seulement is_active, qui reste vrai jusqu'à ce qu'un abonnement expiré soit désactivé et
+    # surcompterait donc des conversions déjà retombées côté produit (voir CLAUDE.md).
+    premium = (
+        db.query(func.count(Subscription.user_id))
+        .filter(
+            Subscription.is_active.is_(True),
+            Subscription.expires_at.isnot(None),
+            Subscription.expires_at > datetime.now(timezone.utc),
+        )
+        .scalar()
+    )
     return premium, verified_total
 
 
