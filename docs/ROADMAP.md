@@ -347,6 +347,30 @@ techniques : cahier des charges sections A, B, C, D.
   chemin de throttle n'est pas atteignable depuis l'UI actuelle — c'est un filet de sécurité
   purement côté serveur.
 
+- [x] **Post-MVP P6.2 — Intégration continue (GitHub Actions).** Rien n'exécutait
+  `pytest`/`ruff`/`flutter analyze`/`flutter test` automatiquement ; cette session a trouvé
+  plusieurs régressions réelles (épuisement du pool DB en P4.3, crash au `dispose()` de
+  `DiscoveryScreen` en P5.2/P6, décodage Latin-1 par défaut) uniquement en les faisant tourner à
+  la main. `.github/workflows/ci.yml` (deux jobs, `backend`/`mobile`, en parallèle) lance sur
+  chaque push/PR exactement les commandes Docker déjà documentées dans `README.md`/`CLAUDE.md` —
+  pas de mock, les mêmes conteneurs Postgres/MinIO réels qu'en local. Gratuit (minutes GitHub
+  Actions), conforme à la contrainte "pas de service payant" (`CLAUDE.md`).
+  Deux correctifs nécessaires pour que le pipeline parte vert dès le premier commit, tous les deux
+  de vrais bugs et pas des artefacts CI : (1) `docker-compose.yml` — le service `backend` ne
+  dépendait que de `minio: service_healthy`, pas de `minio-init`, donc `docker compose run backend
+  ...` pouvait démarrer avant que le bucket `braise-photos` existe (course locale bénigne la
+  plupart du temps vu la rapidité de `minio-init`, mais réelle en CI où rien n'a encore "réchauffé"
+  les conteneurs) — ajout de `minio-init: condition: service_completed_successfully` comme
+  dépendance explicite, ce qui fiabilise aussi `docker compose up backend` en local, pas seulement
+  la CI. (2) `flutter analyze` retourne un code de sortie non-nul même pour un simple finding de
+  niveau `info` — un avertissement `use_null_aware_elements` préexistant et sans rapport dans
+  `moderation_api.dart:19` (`if (comment != null) 'comment': comment`) aurait fait échouer le job
+  mobile dès le premier run ; corrigé avec la syntaxe null-aware native de Dart 3.8+
+  (`'comment': ?comment`), qui omet l'entrée si `comment` est `null` — comportement identique,
+  zéro `info` restant. 80/80 tests backend, `ruff check .` propre, 25/25 tests Flutter,
+  `flutter analyze` propre (0 issue), les deux jobs vérifiés localement dans les mêmes conditions
+  qu'en CI avant de committer le workflow.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

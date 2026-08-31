@@ -90,6 +90,13 @@ Validation croisée à 5 plis du classifieur de rancune au seuil de décision r�
 production — précision/rappel/matrice de confusion, pas juste "ça s'entraîne sans erreur".
 Résultats actuels et méthode : `docs/MODEL_EVALUATION.md`.
 
+## Intégration continue
+
+`.github/workflows/ci.yml` lance à chaque push/PR exactement les mêmes commandes Docker que
+ci-dessus (backend : migrations + `ruff check .` + `pytest -q` ; mobile : `flutter analyze` +
+`flutter test`) — pas de mock, les mêmes conteneurs Postgres/MinIO réels qu'en local. Gratuit
+(minutes GitHub Actions), aucun service tiers payant.
+
 ## Stack (figée, cahier des charges section D.11)
 
 Flutter · FastAPI · PostgreSQL · WebSockets custom · MinIO · scikit-learn maison. Aucun service

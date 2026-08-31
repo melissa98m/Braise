@@ -1,0 +1,53 @@
+# P6.2 : rien n'exécutait pytest/ruff/flutter analyze/flutter test automatiquement — tout se
+# lançait à la main, et cette session a trouvé plusieurs régressions réelles (épuisement du pool
+# DB, crash au dispose() de DiscoveryScreen, décodage Latin-1 par défaut) uniquement parce
+# qu'elles ont fini par être exécutées manuellement. Ce workflow lance exactement les mêmes
+# commandes Docker Compose que celles documentées dans README.md/CLAUDE.md — pas de service
+# tiers, pas de mock : les mêmes conteneurs Postgres/MinIO réels qu'en local.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Préparer .env
+        run: cp .env.example .env
+
+      - name: Migrations (Postgres + MinIO réels)
+        run: docker compose run --rm backend alembic upgrade head
+
+      - name: Lint (ruff)
+        run: docker compose run --rm backend ruff check .
+
+      - name: Tests (pytest)
+        run: docker compose run --rm backend pytest -q
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Préparer .env
+        run: cp .env.example .env
+
+      - name: Construire l'image Flutter
+        run: docker compose build mobile
+
+      # --entrypoint bash : l'ENTRYPOINT par défaut du service sert le web sur :5000 en continu
+      # (voir mobile/entrypoint.sh) — jamais ce qu'on veut pour un job CI qui doit se terminer.
+      - name: Analyse statique (flutter analyze)
+        run: >
+          docker compose run --rm --entrypoint bash mobile
+          -c "cd /app/braise_app && flutter analyze"
+
+      - name: Tests (flutter test)
+        run: >
+          docker compose run --rm --entrypoint bash mobile
+          -c "cd /app/braise_app && flutter test"

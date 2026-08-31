@@ -298,7 +298,23 @@ that runs `infra/minio/init.sh` to create the `braise-photos` bucket via `mc`), 
 (not started by default — its `entrypoint.sh` runs `flutter create` on first launch since the
 Flutter SDK is never installed on the host, only inside that container). The backend has
 `CORSMiddleware` enabled (`main.py`, origins from `Settings.cors_origin_list` / `CORS_ORIGINS` env
-var, default `http://localhost:5000`) so the Flutter web app can call it cross-origin.
+var, default `http://localhost:5000`) so the Flutter web app can call it cross-origin. `backend`
+depends on `minio-init: condition: service_completed_successfully`, not just `minio:
+service_healthy` (P6.2) — without it, `docker compose run backend ...`/`up backend` could start
+before the `braise-photos` bucket actually exists (`minio` reports healthy once it can answer
+requests, independently of whether `minio-init` has finished creating the bucket yet), a race
+that's usually invisible locally (`minio-init` is fast) but real in CI where nothing has "warmed
+up" yet.
+
+**Continuous integration** (`.github/workflows/ci.yml`, P6.2): two parallel jobs, `backend`
+(migrations, `ruff check .`, `pytest -q`) and `mobile` (`flutter analyze`, `flutter test`), each
+running the exact Docker commands documented in `README.md` against real Postgres/MinIO
+containers — no mocks, no third-party service. Free (GitHub Actions minutes), matches the
+project's no-paid-service constraint. `flutter analyze` exits non-zero even for an `info`-level
+finding, so the pipeline needed one pre-existing lint hint fixed to start green
+(`moderation_api.dart`'s conditional map entry rewritten with Dart 3.8+'s null-aware map-value
+syntax, `'comment': ?comment`, instead of `if (comment != null) 'comment': comment` — same
+behavior, no lint finding).
 
 **Operational hardening** (`infra/backup/`, post-MVP P0 — cahier des charges B.3/D.7/D.12
 "sauvegardes automatisées et testées" was a listed critical dependency that phases 0-6 never

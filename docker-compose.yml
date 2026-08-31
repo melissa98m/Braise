@@ -57,6 +57,13 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      # Sans ça, `docker compose up backend` (ou `run`) ne garantit pas que le bucket
+      # braise-photos existe déjà — minio-init tourne en parallèle de backend, pas avant, tant
+      # qu'on ne dépend que de `minio: service_healthy` (le serveur MinIO peut répondre en bonne
+      # santé avant que minio-init ait fini de créer le bucket). Une course locale bénigne la
+      # plupart du temps (minio-init est rapide), mais réelle en CI où pytest peut démarrer avant.
+      minio-init:
+        condition: service_completed_successfully
 
   adminer:
     image: adminer

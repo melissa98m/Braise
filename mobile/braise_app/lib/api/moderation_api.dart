@@ -16,7 +16,7 @@ class ModerationApi {
   Future<void> report(String matchId, String reason, String? comment) async {
     await _client.post(
       '/moderation/matches/$matchId/report',
-      body: {'reason': reason, if (comment != null) 'comment': comment},
+      body: {'reason': reason, 'comment': ?comment},
     );
   }
 
