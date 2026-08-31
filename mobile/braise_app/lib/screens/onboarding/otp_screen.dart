@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../api/api_exception.dart';
+import '../../state/app_services.dart';
 import '../../state/auth_controller.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/braise_page_route.dart';
 import '../../widgets/sign_shapes.dart';
+import '../profile/profile_setup_screen.dart';
 import '../root_shell.dart';
 
 /// Écran 01 — adapté à ce qui existe réellement côté backend (OTP téléphone), pas le scan de
@@ -54,9 +56,18 @@ class _OtpScreenState extends State<OtpScreen> {
     try {
       final auth = context.read<AuthController>();
       await auth.verifyOtp(_phoneController.text.trim(), _codeController.text.trim());
-      if (mounted) {
-        Navigator.of(context).pushReplacement(braiseRoute(context, const RootShell()));
-      }
+      if (!mounted) return;
+      // Un profil public jamais publié (nouvelle inscription) passe d'abord par sa création —
+      // pas de découverte tant qu'il n'y a rien à montrer aux autres.
+      final services = context.read<AppServices>();
+      final profile = await services.profilesApi.getMyPublicProfile();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        braiseRoute(
+          context,
+          profile.isPublished ? const RootShell() : const ProfileSetupScreen(isOnboarding: true),
+        ),
+      );
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } finally {

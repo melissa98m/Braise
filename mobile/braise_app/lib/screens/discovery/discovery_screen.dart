@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,7 +8,9 @@ import '../../models/discovery.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
+import '../../widgets/braise_page_route.dart';
 import '../../widgets/sign_shapes.dart';
+import '../messaging/conversation_screen.dart';
 
 /// Écran 03 — pas de swipe façon catalogue : une carte à la fois, hiérarchie phrase > intérêts
 /// > avatar (cahier des charges A.7 : refuse le tri purement visuel).
@@ -77,9 +81,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
       });
       _exitController.value = 0;
       if (matched && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Vous avez matché avec ${candidate.displayName} !')),
-        );
+        unawaited(_celebrateMatch(services, candidate));
       }
     } on ApiException catch (e) {
       // Refusé (ex. 402 limite gratuite) : la carte revient à sa place plutôt que de rester
@@ -93,6 +95,45 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
         setState(() => _error = e.message);
       }
     }
+  }
+
+  /// Les deux ont braisé : on va chercher le match fraîchement créé (le swipe ne renvoie que
+  /// `matched: bool`, pas l'objet complet) pour pouvoir ouvrir directement la conversation.
+  Future<void> _celebrateMatch(AppServices services, DiscoveryCandidate candidate) async {
+    final matches = await services.discoveryApi.getMatches();
+    MatchSummary? match;
+    for (final m in matches) {
+      if (m.otherUserId == candidate.userId) {
+        match = m;
+        break;
+      }
+    }
+    if (!mounted || match == null) return;
+    final tokens = BraiseTokens.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Braise commune avec ${candidate.displayName} !'),
+        content: const Text('Vous vous êtes braisés tous les deux. Lancez la conversation ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Continuer à découvrir'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: tokens.braiseInk,
+              foregroundColor: tokens.braiseFillText,
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              Navigator.of(context).push(braiseRoute(context, ConversationScreen(match: match!)));
+            },
+            child: const Text('Commencer à discuter'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

@@ -7,11 +7,18 @@ import '../../models/public_profile.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
+import '../../widgets/braise_page_route.dart';
+import '../root_shell.dart';
 
 /// Écran 02 — le compteur d'indice (bio) et les intérêts guident vers du concret, pas une bio
 /// vide type "demandez-moi" (cahier des charges Module 1).
 class ProfileSetupScreen extends StatefulWidget {
-  const ProfileSetupScreen({super.key});
+  const ProfileSetupScreen({super.key, this.isOnboarding = false});
+
+  /// true juste après l'inscription (profil jamais publié) : la publication enchaîne directement
+  /// sur la découverte plutôt que de laisser l'utilisateur sur cet écran (il n'y a rien "avant"
+  /// vers quoi revenir avec Navigator.pop).
+  final bool isOnboarding;
 
   @override
   State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
@@ -138,11 +145,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         _profile = updated;
         _isPublished = updated.isPublished;
       });
-      if (mounted && publish) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profil public publié.')),
-        );
+      if (!mounted || !publish) return;
+      if (widget.isOnboarding) {
+        Navigator.of(context).pushReplacement(braiseRoute(context, const RootShell()));
+        return;
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profil public publié.')),
+      );
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     }
