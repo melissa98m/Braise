@@ -6,6 +6,8 @@
 
 import 'dart:convert';
 
+import 'package:braise_app/notifications/notification_prefs.dart';
+import 'package:braise_app/notifications/notifications_service.dart';
 import 'package:braise_app/screens/discovery/discovery_screen.dart';
 import 'package:braise_app/state/app_services.dart';
 import 'package:flutter/material.dart';
@@ -175,6 +177,78 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Braise commune avec Camille !'), findsNothing);
+  });
+
+  testWidgets(
+    'getting matched fires a browser notification when the "new match" preference is on '
+    '(the default)',
+    (tester) async {
+      final client = MockClient((request) async {
+        if (request.method == 'GET' && request.url.path == '/discovery/feed') {
+          return _json([_candidate(userId: 'u1', displayName: 'Camille')], 200);
+        }
+        if (request.method == 'POST' && request.url.path == '/discovery/swipe') {
+          return _json({'matched': true}, 200);
+        }
+        if (request.method == 'GET' && request.url.path == '/discovery/matches') {
+          return _json([_matchSummary(matchId: 'match-1', otherUserId: 'u1')], 200);
+        }
+        return http.Response('not found', 404);
+      });
+      String? notifiedTitle;
+      String? notifiedBody;
+      final services = AppServices(
+        httpClient: client,
+        notificationsService: NotificationsService(
+          notify: ({required String title, String? body}) {
+            notifiedTitle = title;
+            notifiedBody = body;
+          },
+        ),
+      );
+
+      await tester.pumpWidget(_harness(services));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Braise'));
+      await tester.pumpAndSettle();
+
+      expect(notifiedTitle, 'Braise commune !');
+      expect(notifiedBody, 'Vous avez matché avec Camille.');
+    },
+  );
+
+  testWidgets('getting matched fires no notification when the preference is off', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({NotificationPrefs.match: false});
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path == '/discovery/feed') {
+        return _json([_candidate(userId: 'u1', displayName: 'Camille')], 200);
+      }
+      if (request.method == 'POST' && request.url.path == '/discovery/swipe') {
+        return _json({'matched': true}, 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/discovery/matches') {
+        return _json([_matchSummary(matchId: 'match-1', otherUserId: 'u1')], 200);
+      }
+      return http.Response('not found', 404);
+    });
+    var notified = false;
+    final services = AppServices(
+      httpClient: client,
+      notificationsService: NotificationsService(notify: ({required title, body}) => notified = true),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Braise'));
+    await tester.pumpAndSettle();
+
+    expect(notified, isFalse);
+    // Le dialogue de célébration, lui, reste indépendant de cette préférence.
+    expect(find.text('Braise commune avec Camille !'), findsOneWidget);
   });
 
   testWidgets('a rejected swipe (402) shows a snackbar and keeps the card in place', (

@@ -444,6 +444,51 @@ techniques : cahier des charges sections A, B, C, D.
   n'a pas de fabrique de canal injectable — un refactor à part entière, hors périmètre de cette
   passe de couverture d'écrans.
 
+- [x] **P9.1 — Notifications locales réelles.** Les 3 bascules de `SettingsScreen` ne faisaient
+  que mémoriser une préférence, honnêtement documentées comme sans effet ("prochaine version") —
+  jamais aucune notification n'était réellement envoyée. Contrainte découverte en démarrant ce
+  chantier : ce projet ne tourne qu'en Flutter **web** (voir CLAUDE.md, section Mobile — tous les
+  dossiers de plateforme existent parce que `flutter create` les scaffold par défaut, mais seul
+  `web` est jamais réellement servi), ce qui exclut `flutter_local_notifications` d'office
+  (aucune implémentation web). Mécanisme retenu : l'API `Notification` native du navigateur via
+  `dart:js_interop`/`package:web` (gratuit, local, sans Firebase/APNs) — mais fondamentalement
+  limitée au premier plan : une page web ne peut pas programmer une notification à une heure
+  future si son onglet est fermé, ça demande un Service Worker (+ souvent Web Push), un chantier
+  distinct et plus lourd, hors périmètre de cette passe.
+
+  Piège de compilation trouvé en le posant : `dart:js_interop` est une vraie bibliothèque Dart,
+  mais uniquement sur les cibles de compilation web — un fichier qui l'importe ne compile même
+  pas pour la VM, celle sur laquelle tournent `flutter test`/`flutter analyze` par défaut.
+  `lib/notifications/notification_platform.dart` résout ça par un export conditionnel
+  (`if (dart.library.js_interop) ...`, le remplaçant standard de l'ancien `dart.library.html`) :
+  `notification_platform_web.dart` sur le web, `notification_platform_stub.dart` (no-op) partout
+  ailleurs. `flutter build web` (exécuté et vérifié avant ce commit) est ce qui prouve réellement
+  que le code d'interop compile pour la vraie cible — `flutter test` ne peut pas du tout
+  l'exercer, tournant sur la VM. `NotificationsService` enveloppe ces deux fonctions de
+  plateforme derrière des callbacks injectables — même motif que `ApiClient(httpClient: ...)` —
+  pour que les tests d'écran vérifient "déclenché au bon moment, avec le bon message" sans jamais
+  toucher un vrai navigateur ni dépendre d'une permission réellement accordée.
+  `NotificationPrefs` centralise les 3 clés SharedPreferences (déclarées avant comme constantes
+  privées dans `SettingsScreen`, maintenant une source unique lue aussi par les points de
+  déclenchement). La permission est demandée depuis `SettingsScreen` uniquement quand une bascule
+  passe sur "activé" par un tap explicite, jamais au démarrage de l'app ni au chargement de
+  l'écran — les navigateurs traitent souvent une demande de permission hors d'un geste utilisateur
+  comme du spam et la refusent d'office.
+
+  Trois points de déclenchement, chacun honnête sur ce qu'il peut et ne peut pas faire vu la
+  contrainte "premier plan uniquement" : `DiscoveryScreen._celebrateMatch` (nouveau match mutuel —
+  en plus du dialogue de célébration déjà affiché, pas à sa place), `ConversationScreen`'s
+  `socket.messages.listen` (message de l'autre côté pendant que cette conversation précise est
+  ouverte — pas d'écoute globale sur tous les matchs à la fois, seulement la conversation
+  activement ouverte), et `RootShell.initState` (rappel "question du jour", au plus une fois par
+  jour calendaire, suivi par un horodatage dans `shared_preferences` plutôt que réellement
+  programmé — l'approximation honnête la plus proche d'un "rappel quotidien" atteignable sans
+  Service Worker).
+
+  81/81 tests Flutter au total (13 nouveaux : 6 tests unitaires sur `NotificationsService`/
+  `NotificationPrefs`, 7 sur les points de déclenchement Discovery/Settings/RootShell),
+  `flutter analyze` propre, `flutter build web` réussi, 80/80 tests backend inchangés.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

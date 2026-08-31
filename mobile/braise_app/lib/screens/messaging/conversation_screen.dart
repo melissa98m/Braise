@@ -7,6 +7,7 @@ import '../../api/api_exception.dart';
 import '../../api/messaging_api.dart';
 import '../../models/discovery.dart';
 import '../../models/messaging.dart';
+import '../../notifications/notification_prefs.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/braise_page_route.dart';
@@ -63,7 +64,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
       _scrollToEnd();
       // On regarde activement l'écran quand ce message arrive : on marque tout de suite comme
       // lu plutôt que d'attendre une action explicite qui n'existe pas dans cette UI.
-      if (message.senderId != _myId) socket.markRead();
+      if (message.senderId != _myId) {
+        socket.markRead();
+        unawaited(_maybeNotifyNewMessage(services, message));
+      }
     });
     socket.typingEvents.listen((event) {
       if (!mounted || event.senderId == _myId) return;
@@ -88,6 +92,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
       });
     });
     setState(() => _socket = socket);
+  }
+
+  /// P9.1 : vraie notification navigateur pour un message reçu pendant que la conversation est
+  /// ouverte — n'affiche rien si la préférence "Messages" est désactivée ou si la permission
+  /// navigateur n'a jamais été accordée. `defaultValue: false` reprend celui de `SettingsScreen`
+  /// (seule des 3 préférences désactivée par défaut).
+  Future<void> _maybeNotifyNewMessage(AppServices services, ChatMessage message) async {
+    if (!await NotificationPrefs.isEnabled(NotificationPrefs.messages, defaultValue: false)) {
+      return;
+    }
+    if (!mounted) return;
+    services.notificationsService.show(
+      title: 'Nouveau message de ${_match.otherDisplayName}',
+      body: message.body,
+    );
   }
 
   Future<void> _loadHistory() async {

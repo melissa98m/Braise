@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../api/api_exception.dart';
+import '../../notifications/notification_prefs.dart';
 import '../../state/app_services.dart';
 import '../../state/theme_controller.dart';
 import '../../theme/braise_tokens.dart';
@@ -12,9 +13,9 @@ import '../onboarding/otp_screen.dart';
 /// Écran Paramètres — regroupe compte, apparence, confidentialité RGPD et notifications, qui
 /// n'avaient sinon aucun écran dédié : l'export/suppression de données vivait avant dans
 /// ProfileTrustScreen (Phase 5), ce qui encombrait l'écran de confiance avec des réglages plutôt
-/// que des informations de profil. Les 3 bascules de notifications sont des préférences locales
-/// uniquement — aucun backend de push n'existe encore (cahier des charges D.x, hors scope MVP) —
-/// donc elles ne font que se souvenir du choix, honnêtement, sans laisser croire à un envoi réel.
+/// que des informations de profil. Les 3 bascules de notifications pilotent désormais de vraies
+/// notifications navigateur (P9.1, `notifications/`) — plus une préférence sans effet : basculer
+/// une bascule sur "activé" demande la permission navigateur si elle n'a jamais été tranchée.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -23,10 +24,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  static const _notifMatchKey = 'braise_notif_match';
-  static const _notifQuestionKey = 'braise_notif_question';
-  static const _notifMessagesKey = 'braise_notif_messages';
-
   bool _notifMatch = true;
   bool _notifQuestion = true;
   bool _notifMessages = false;
@@ -42,9 +39,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _notifMatch = prefs.getBool(_notifMatchKey) ?? true;
-      _notifQuestion = prefs.getBool(_notifQuestionKey) ?? true;
-      _notifMessages = prefs.getBool(_notifMessagesKey) ?? false;
+      _notifMatch = prefs.getBool(NotificationPrefs.match) ?? true;
+      _notifQuestion = prefs.getBool(NotificationPrefs.question) ?? true;
+      _notifMessages = prefs.getBool(NotificationPrefs.messages) ?? false;
       _loadingPrefs = false;
     });
   }
@@ -52,6 +49,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setNotifPref(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
+    // Demander la permission ici (activation explicite d'une bascule), pas au chargement de
+    // l'écran ni au démarrage de l'app : les navigateurs traitent une demande de permission hors
+    // d'un geste utilisateur explicite comme du spam et la rejettent souvent d'office.
+    if (value && mounted) {
+      await context.read<AppServices>().notificationsService.requestPermission();
+    }
   }
 
   String _maskPhone(String phone) {
@@ -197,7 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: _notifMatch,
                       onChanged: (v) {
                         setState(() => _notifMatch = v);
-                        _setNotifPref(_notifMatchKey, v);
+                        _setNotifPref(NotificationPrefs.match, v);
                       },
                     ),
                     Divider(height: 1, color: tokens.borderHairline),
@@ -207,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: _notifQuestion,
                       onChanged: (v) {
                         setState(() => _notifQuestion = v);
-                        _setNotifPref(_notifQuestionKey, v);
+                        _setNotifPref(NotificationPrefs.question, v);
                       },
                     ),
                     Divider(height: 1, color: tokens.borderHairline),
@@ -217,7 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: _notifMessages,
                       onChanged: (v) {
                         setState(() => _notifMessages = v);
-                        _setNotifPref(_notifMessagesKey, v);
+                        _setNotifPref(NotificationPrefs.messages, v);
                       },
                     ),
                   ],

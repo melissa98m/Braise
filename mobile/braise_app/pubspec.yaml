@@ -51,6 +51,7 @@ dependencies:
   google_fonts: ^6.2.1
   # Sélection de photo pour le profil privé, fonctionne sur web (input file) comme sur mobile.
   image_picker: ^1.1.2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

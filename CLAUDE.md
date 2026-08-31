@@ -290,7 +290,8 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 - Payments/subscriptions: real free/premium logic exists (Phase 5), but activation is
   `POST /subscriptions/debug-activate` rather than a real purchase — no StoreKit/Play Billing
   integration until there's an actual store build to attach it to (cahier des charges D.8).
-- Push notifications: not implemented at all yet — not needed to validate product logic.
+- Push notifications: still not real push (no Firebase/APNs, no Service Worker registered — see
+  `notifications/` below for what P9.1 added instead, which is a different, more limited thing).
 
 **Infra** (`docker-compose.yml` + `infra/`): Postgres, MinIO (+ a one-shot `minio-init` container
 that runs `infra/minio/init.sh` to create the `braise-photos` bucket via `mc`), the FastAPI
@@ -399,6 +400,38 @@ Flutter SDK is never installed on the host):
   to `banned` — keeping the token, unlike every other `ApiException` case, which signs out. Without
   this, a banned user was just silently bounced to the OTP screen with no explanation and no way to
   reach the ban-appeal endpoint at all.
+- `lib/notifications/` (P9.1) gives the 3 notification toggles in `SettingsScreen` a real effect
+  — before this they only remembered a preference, honestly documented as inert ("prochaine
+  version"). This project is Flutter **web only** (see Mobile intro below — every platform folder
+  `flutter create` scaffolds exists, but only `web` is ever actually served), which rules out
+  `flutter_local_notifications` entirely: it has no web implementation. The real mechanism is the
+  browser's native `Notification` API via `dart:js_interop`/`package:web`
+  (`notification_platform_web.dart`) — free, local, no Firebase/APNs/Service Worker, but also
+  fundamentally foreground-only: a plain web page cannot schedule a notification for a future
+  time when its tab is closed, that needs a Service Worker (+ often Web Push), a separate,
+  heavier piece of infra out of scope for this pass. `dart:js_interop` is a real Dart core
+  library, but only on **web compile targets** — a file importing it cannot even compile for the
+  VM, which is what `flutter test`/`flutter analyze` run on by default. `notification_platform.dart`
+  resolves this with a conditional export (`if (dart.library.js_interop) ...`, the standard
+  pattern replacing the old `dart.library.html` check), picking `notification_platform_web.dart`
+  on web and the no-op `notification_platform_stub.dart` everywhere else — `flutter build web` is
+  what actually proves the interop code compiles for the real target (run and confirmed working
+  before this shipped; `flutter test`'s VM run can't exercise it at all). `NotificationsService`
+  wraps those two platform functions behind injectable callbacks — same pattern as
+  `ApiClient(httpClient: ...)` — so widget tests verify "fires with the right title/body at the
+  right moment" without ever touching a real browser or depending on a granted permission.
+  `NotificationPrefs` centralizes the 3 SharedPreferences keys (`SettingsScreen` used to declare
+  them as private constants, now the single source both it and the firing sites read). Permission
+  is requested from `SettingsScreen` only when a toggle is switched *on* by an explicit tap, never
+  on app start or screen load — browsers routinely auto-deny or flag as spam a permission prompt
+  not tied to a user gesture. Three fire points, each honest about what it can and can't do given
+  the foreground-only constraint: `DiscoveryScreen._celebrateMatch` (a new mutual match — fires
+  alongside the existing celebration dialog, not instead of it), `ConversationScreen`'s
+  `socket.messages.listen` (a message from the other side while that conversation is open — there
+  is no app-wide message listener across all matches, only the one conversation actively open),
+  and `RootShell.initState` (a daily-question nudge, at most once per calendar day, tracked by a
+  date stamp in `shared_preferences` rather than genuinely scheduled — the closest honest
+  approximation of "daily reminder" achievable without a Service Worker).
 - Screens live under `lib/screens/<module>/`, one subfolder per backend module, and are adapted
   from the mockups rather than copied verbatim where the backend doesn't match: OTP entry replaces
   the mockup's KYC/ID-scan step (no KYC exists), discovery is a single-card feed rather than a

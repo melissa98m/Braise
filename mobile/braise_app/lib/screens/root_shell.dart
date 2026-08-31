@@ -1,5 +1,11 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../notifications/notification_prefs.dart';
+import '../state/app_services.dart';
 import '../theme/braise_tokens.dart';
 import '../widgets/sign_shapes.dart';
 import 'discovery/discovery_screen.dart';
@@ -17,6 +23,11 @@ class RootShell extends StatefulWidget {
 }
 
 class _RootShellState extends State<RootShell> {
+  // P9.1 : au plus une fois par jour calendaire — évite de renotifier à chaque fois que
+  // RootShell est reconstruit dans la même session (ce n'est pas juste un montage unique : voir
+  // les allers-retours possibles depuis _AuthGate).
+  static const _questionLastShownKey = 'braise_notif_question_last_shown';
+
   int _index = 0;
 
   static const _screens = [
@@ -24,6 +35,27 @@ class _RootShellState extends State<RootShell> {
     MatchesListScreen(),
     ProfileTrustScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_maybeNotifyDailyQuestion());
+  }
+
+  Future<void> _maybeNotifyDailyQuestion() async {
+    if (!await NotificationPrefs.isEnabled(NotificationPrefs.question, defaultValue: true)) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    if (prefs.getString(_questionLastShownKey) == today) return;
+    await prefs.setString(_questionLastShownKey, today);
+    if (!mounted) return;
+    context.read<AppServices>().notificationsService.show(
+      title: 'Question du jour disponible',
+      body: 'Répondez pour gagner une flamme avec vos matchs.',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

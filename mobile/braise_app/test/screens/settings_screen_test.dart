@@ -5,6 +5,7 @@
 
 import 'dart:convert';
 
+import 'package:braise_app/notifications/notifications_service.dart';
 import 'package:braise_app/screens/onboarding/otp_screen.dart';
 import 'package:braise_app/screens/settings/settings_screen.dart';
 import 'package:braise_app/state/app_services.dart';
@@ -104,6 +105,56 @@ void main() {
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('braise_notif_messages'), isTrue);
+  });
+
+  testWidgets('turning a notification preference on requests browser permission', (
+    tester,
+  ) async {
+    await _useTallViewport(tester);
+    final client = MockClient((_) async => http.Response('not found', 404));
+    var permissionRequested = false;
+    final services = AppServices(
+      httpClient: client,
+      notificationsService: NotificationsService(
+        requestPermission: () async {
+          permissionRequested = true;
+          return true;
+        },
+      ),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(Switch).last); // "Messages", false -> true
+    await tester.pumpAndSettle();
+
+    expect(permissionRequested, isTrue);
+  });
+
+  testWidgets('turning a notification preference off does not request permission', (
+    tester,
+  ) async {
+    await _useTallViewport(tester);
+    final client = MockClient((_) async => http.Response('not found', 404));
+    var permissionRequested = false;
+    final services = AppServices(
+      httpClient: client,
+      notificationsService: NotificationsService(
+        requestPermission: () async {
+          permissionRequested = true;
+          return true;
+        },
+      ),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(Switch).first); // "Nouveau match", true -> false
+    await tester.pumpAndSettle();
+
+    expect(permissionRequested, isFalse);
   });
 
   testWidgets('exporting data shows the RGPD confirmation', (tester) async {

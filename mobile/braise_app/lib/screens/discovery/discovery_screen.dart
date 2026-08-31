@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../api/api_exception.dart';
 import '../../models/discovery.dart';
+import '../../notifications/notification_prefs.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
@@ -114,6 +115,16 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
       }
     }
     if (!mounted || match == null) return;
+    // P9.1 : vraie notification navigateur (en plus du dialogue déjà affiché ci-dessous, qui
+    // reste le retour principal) — n'affiche rien si la préférence "Nouveau match" est
+    // désactivée ou si la permission navigateur n'a jamais été accordée.
+    if (await NotificationPrefs.isEnabled(NotificationPrefs.match, defaultValue: true)) {
+      services.notificationsService.show(
+        title: 'Braise commune !',
+        body: 'Vous avez matché avec ${candidate.displayName}.',
+      );
+    }
+    if (!mounted) return;
     final tokens = BraiseTokens.of(context);
     await showDialog<void>(
       context: context,
