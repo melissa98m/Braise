@@ -479,6 +479,13 @@ Flutter SDK is never installed on the host):
   out of scope for this file), and a 402-rejected swipe (snackbar shown, card stays put). Unlike
   `OtpScreen`/`ReportScreen`, no viewport or scroll trap here — the body is
   `Expanded`/`AnimatedSwitcher`-driven, not a fixed-height content stack.
+  `test/screens/matches_list_screen_test.dart` (P7.1) is the fifth — `MatchesListScreen` (the
+  "Échanges" root tab) is a plain `GET /discovery/matches`, unlike `ConversationScreen` which
+  can't use this project's `httpClient`-mock infra at all since it talks over a real WebSocket
+  (`ChatSocket`, no injectable channel factory yet). 4 tests: unlocked vs locked match subtitles
+  (`MatchSummary.isUnlocked` derived from `blurStage == 'net'`), the empty "go discover" state,
+  a load error, and pull-to-refresh (`tester.fling` on the `ListView`, asserting the fetch count
+  goes from 1 to 2).
 
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not

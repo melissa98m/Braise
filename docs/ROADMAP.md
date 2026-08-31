@@ -383,6 +383,15 @@ techniques : cahier des charges sections A, B, C, D.
   contenu fixe. 31/31 tests Flutter au total, `flutter analyze` propre — clôt le plan d'action P6
   dans son intégralité (P6.1 anti-brute-force OTP, P6.2 CI, P6.3 couverture Discovery).
 
+- [x] **Post-MVP P7.1 — Couverture de test de `MatchesListScreen`.** Onglet racine ("Échanges")
+  sans aucun test — contrairement à `ConversationScreen` (WebSocket réel, pas mockable avec
+  l'infra HTTP existante `httpClient`), ce n'est qu'un `GET /discovery/matches`, donc même
+  gabarit que `discovery_screen_test.dart`. 4 tests : distinction match débloqué (`blurStage ==
+  'net'`) vs verrouillé (sous-titre différent — "Profil privé débloqué" vs le pourcentage), liste
+  vide ("Direction Découvrir !"), erreur de chargement, et tirer-pour-rafraîchir
+  (`tester.fling` sur le `ListView`, compteur d'appels vérifié à 2). 35/35 tests Flutter au
+  total, `flutter analyze` propre.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
