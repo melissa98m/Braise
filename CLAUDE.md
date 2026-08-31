@@ -288,6 +288,25 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   signal to compute from — this project has no login/session event log — so `retention_proxy` is
   explicitly documented as an approximation (swiped again ≥N days after signup), not a real DAU/MAU
   retention figure; don't quote it outside internal debugging without that caveat attached.
+- `backend/scripts/seed_test_data.py` publishes 6 fixed personas (phone, profile, `city` — the
+  last for exercising the P9.3 distance filter without hand-publishing 6 different profiles) via
+  the real HTTP API, not direct DB writes — idempotent, since each persona has a fixed phone
+  number and OTP verify just re-authenticates the same account rather than creating a duplicate.
+  `seed_persona()` returns `(token, headers, user_id)` specifically so
+  `backend/scripts/seed_beta_tester.py` can reuse an already-open session instead of requesting a
+  second OTP for the same number moments later — the P6.1 throttle (`MIN_RESEND_INTERVAL_SECONDS`)
+  correctly refuses that, caught by actually running this against the live stack, not assumed.
+  `seed_beta_tester.py` layers a ready-to-explore tester account on top: publishes a profile open
+  to everyone (no gender/age/distance filter, so every seeded persona shows up in its feed), then
+  mutually likes two personas to create real matches via the actual swipe endpoint (not a
+  shortcut) — one forced fully unlocked (`Match.flame_count = unlock_threshold`, direct DB write,
+  same principle as `tests.helpers.force_match_unlocked`: simulating real daily-question days
+  would take real days) with a real uploaded photo and two waiting messages, one left partially
+  progressed (`flame_count = 2`) with today's daily question still answerable, and 4 personas
+  left completely unswiped for testing discovery/matching from scratch. Messages are sent over a
+  real `ChatSocket`-equivalent WebSocket connection (`websockets`, matching the pattern in
+  `load_test_messaging.py`), not inserted directly into the `messages` table, so the same
+  read/unread and broadcast logic a real conversation goes through actually ran.
 - **OTP brute-force protection (P6.1)**: `services/otp.py` had no limits at all — a 6-digit code
   (10^6 possibilities) valid for `OTP_TTL_MINUTES = 10` with unlimited verify attempts is a real
   account-takeover path, not a robustness nitpick, given anyone who learns a victim's phone number

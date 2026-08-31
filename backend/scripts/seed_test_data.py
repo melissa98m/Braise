@@ -7,6 +7,11 @@ que de créer des doublons.
 
 Usage (le backend applicatif doit déjà tourner) :
     docker compose run --rm backend python scripts/seed_test_data.py
+
+`city` (P9.3) est une valeur de la liste fermée de `services/geo.py` — sert à tester le filtre de
+distance sans avoir à publier manuellement 6 profils différents. Voir aussi
+`scripts/seed_beta_tester.py`, qui réutilise ces personas et y ajoute un compte testeur déjà
+matché/en conversation, pour un bêta-test qui n'a pas à tout construire à la main non plus.
 """
 
 import httpx
@@ -24,6 +29,7 @@ PERSONAS = [
         "looking_for_gender": "homme",
         "age_min": 22,
         "age_max": 32,
+        "city": "Paris",
     },
     {
         "phone": "+33600000002",
@@ -35,6 +41,7 @@ PERSONAS = [
         "looking_for_gender": "femme",
         "age_min": 20,
         "age_max": 30,
+        "city": "Lyon",
     },
     {
         "phone": "+33600000003",
@@ -46,6 +53,7 @@ PERSONAS = [
         "looking_for_gender": "homme",
         "age_min": 23,
         "age_max": 33,
+        "city": "Marseille",
     },
     {
         "phone": "+33600000004",
@@ -57,6 +65,7 @@ PERSONAS = [
         "looking_for_gender": "femme",
         "age_min": 21,
         "age_max": 29,
+        "city": "Reims",
     },
     {
         "phone": "+33600000005",
@@ -68,6 +77,7 @@ PERSONAS = [
         "looking_for_gender": "non_binaire",
         "age_min": 22,
         "age_max": 34,
+        "city": "Lille",
     },
     {
         "phone": "+33600000006",
@@ -79,11 +89,15 @@ PERSONAS = [
         "looking_for_gender": "homme",
         "age_min": 25,
         "age_max": 38,
+        "city": "Nice",
     },
 ]
 
 
-def seed_persona(client: httpx.Client, persona: dict) -> None:
+def seed_persona(client: httpx.Client, persona: dict) -> tuple[str, dict, str]:
+    """Renvoie (token, headers, user_id) — pour que `seed_beta_tester.py` puisse réutiliser cette
+    même session au lieu de redemander un OTP pour le même numéro juste après (le throttle
+    anti-brute-force posé en P6.1, `MIN_RESEND_INTERVAL_SECONDS`, le refuserait à raison)."""
     phone = persona["phone"]
 
     otp_response = client.post("/auth/request-otp", json={"phone": phone})
@@ -116,11 +130,13 @@ def seed_persona(client: httpx.Client, persona: dict) -> None:
             "looking_for_gender": persona["looking_for_gender"],
             "age_min": persona["age_min"],
             "age_max": persona["age_max"],
+            "city": persona["city"],
         },
     )
     profile_response.raise_for_status()
 
     print(f"{persona['display_name']:<8} user_id={user_id}  phone={phone}  token={token}")
+    return token, headers, user_id
 
 
 def main() -> None:

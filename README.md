@@ -75,6 +75,25 @@ variables d'environnement ci-dessus. `DEBUG_OTP=true` reste actif (défaut de `.
 code de vérification s'affiche directement dans l'app, pas besoin d'un vrai SMS pour ce type de
 bêta.
 
+### Données de test
+
+Pour tester chaque fonctionnalité sans tout construire à la main (swiper des dizaines de profils
+avant d'obtenir un match, attendre des jours de questions quotidiennes pour débloquer un profil
+privé...) :
+
+```bash
+docker compose run --rm backend python scripts/seed_beta_tester.py
+```
+
+Crée 6 profils candidats variés (genre, âge, ville — de quoi tester les filtres de découverte,
+voir `services/geo.py`) et un compte testeur (`+33600000099`) déjà dans un état riche : un match
+déjà débloqué avec 2 messages non lus et une vraie photo privée visible (`Alice`), un match en
+cours à 2/5 flammes avec la question du jour encore disponible (`Bruno`), et 4 profils jamais
+swipés pour tester la découverte/le matching à froid. Se connecter avec `+33600000099` — le code
+s'affiche directement dans l'app (`DEBUG_OTP=true`). Idempotent pour les profils (même numéro à
+chaque lancement) ; le déblocage forcé et le flame_count partiel sont réappliqués à chaque
+exécution, sans conséquence si déjà en place.
+
 Pour revenir au mode développement normal (hot reload) ensuite : repasser `MOBILE_MODE=dev` (ou
 retirer la ligne) dans `.env`, puis `docker compose build mobile && docker compose --profile
 mobile up -d --force-recreate mobile`.
