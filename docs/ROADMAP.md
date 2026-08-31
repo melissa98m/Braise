@@ -137,6 +137,19 @@ techniques : cahier des charges sections A, B, C, D.
   quelqu'un qui modifie juste son profil plus tard. Clôt le plan d'action P1 initial (filtres +
   contestation + onboarding pédagogique) dans son intégralité.
 
+- [x] **Post-MVP P3 — Infrastructure de mock HTTP côté Flutter.** Les deux items restants du P2
+  (interface de revue humaine pour les signalements, réentraînement du modèle ML) n'étaient pas
+  actionnables maintenant : le premier contredit le périmètre V2 explicite du cahier des charges
+  (C.1/C.2), le second suppose des données de bêta réelles qui n'existent pas encore. Bascule sur
+  le P3 le plus concret : `ApiClient` prenait `http.get`/`.post`/etc. en appels de fonctions
+  top-level, ce qui rendait tout mock impossible sans réécrire l'app. Un seul changement — accepter
+  un `http.Client` injectable, `httpClient` optionnel, défaut inchangé en dehors des tests — ouvre
+  `package:http/testing.dart` (déjà fourni par la dépendance `http` existante, pas besoin de
+  mockito). `test/state/auth_controller_test.dart` (8 tests) est la première chose construite
+  dessus : couvre `AuthController.restoreSession`/`verifyOtp` contre un `/auth/me` mocké, y compris
+  la branche `AuthStatus.banned` ajoutée en P1.1 qui n'avait jusqu'ici aucune couverture de test.
+  11/11 tests Flutter au total (3 thème + 8 nouveaux).
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

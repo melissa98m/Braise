@@ -295,11 +295,22 @@ Flutter SDK is never installed on the host):
   mixing `screens/settings/settings_screen.dart` already does for its own icons.
 - `test/widget_test.dart` exercises the theme system (background tokens per brightness, WCAG
   contrast ratio on `inkFloor`) rather than pumping the full `BraiseApp`, which would make a real
-  network call via `restoreSession()` with no HTTP-mocking infrastructure in place. It uses
-  `testWidgets`/`pumpAndSettle`, not a bare `test()` — `buildBraiseTheme` calls into `google_fonts`,
-  which resolves fonts asynchronously outside the widget-test zone and fails the test late
-  ("failed after it had already completed") under plain `test()`. `GoogleFonts.config
-  .allowRuntimeFetching = false` keeps tests offline (silent fallback font, never a real fetch).
+  network call via `restoreSession()` — that gap is now closed for `ApiClient` specifically (see
+  below), not for the full app tree. It uses `testWidgets`/`pumpAndSettle`, not a bare `test()` —
+  `buildBraiseTheme` calls into `google_fonts`, which resolves fonts asynchronously outside the
+  widget-test zone and fails the test late ("failed after it had already completed") under plain
+  `test()`. `GoogleFonts.config.allowRuntimeFetching = false` keeps tests offline (silent fallback
+  font, never a real fetch).
+- `ApiClient` takes an optional `httpClient` (`http.Client`, defaults to a real one) instead of
+  calling the top-level `http.get`/`.post`/etc. functions directly — the one-line change that makes
+  HTTP mocking possible at all. Tests inject `package:http/testing.dart`'s `MockClient` (shipped by
+  the `http` package already in `pubspec.yaml`, no `mockito` needed) to fake backend responses.
+  `test/state/auth_controller_test.dart` is the first thing built on this: it exercises
+  `AuthController.restoreSession`/`verifyOtp` against a mocked `/auth/me`/`/auth/verify-otp` —
+  signedIn, signedOut (expired/deleted token), and specifically `banned` (403 exact detail
+  `'Compte suspendu.'`, token must survive) — the branch added for `AuthStatus.banned` that had
+  zero test coverage before this. Plain `test()`, not `testWidgets()`: `AuthController` is a
+  `ChangeNotifier` with no widget tree to pump.
 
 **Tests run against the real dev Postgres/MinIO, not a throwaway database** — there's no
 per-test transaction rollback or fixture teardown. Any test that creates a `User` (i.e. touches

@@ -10,10 +10,16 @@ import 'api_exception.dart';
 /// non-2xx en [ApiException] avec le `detail` de FastAPI. Pas de dio/retry/intercepteurs — pas
 /// nécessaire pour 8 écrans MVP (voir pubspec.yaml).
 class ApiClient {
-  ApiClient({required this.tokenProvider});
+  ApiClient({required this.tokenProvider, http.Client? httpClient})
+    : _http = httpClient ?? http.Client();
 
   /// Callback plutôt que dépendance directe à AuthController : garde api/ indépendant de state/.
   final String? Function() tokenProvider;
+
+  /// Injectable pour les tests (`package:http/testing.dart`'s `MockClient`, déjà fourni par la
+  /// dépendance `http` existante — pas besoin de mockito). En dehors des tests, `httpClient` est
+  /// toujours omis et ce client réel unique sert tous les appels de l'app.
+  final http.Client _http;
 
   Map<String, String> _headers({bool json = true}) {
     final headers = <String, String>{};
@@ -45,12 +51,12 @@ class ApiClient {
   }
 
   Future<dynamic> get(String path, {Map<String, String>? query}) async {
-    final response = await http.get(_uri(path, query), headers: _headers(json: false));
+    final response = await _http.get(_uri(path, query), headers: _headers(json: false));
     return _decode(response);
   }
 
   Future<dynamic> post(String path, {Object? body}) async {
-    final response = await http.post(
+    final response = await _http.post(
       _uri(path),
       headers: _headers(),
       body: body == null ? null : jsonEncode(body),
@@ -59,7 +65,7 @@ class ApiClient {
   }
 
   Future<dynamic> put(String path, {Object? body}) async {
-    final response = await http.put(
+    final response = await _http.put(
       _uri(path),
       headers: _headers(),
       body: body == null ? null : jsonEncode(body),
@@ -68,7 +74,7 @@ class ApiClient {
   }
 
   Future<dynamic> delete(String path) async {
-    final response = await http.delete(_uri(path), headers: _headers(json: false));
+    final response = await _http.delete(_uri(path), headers: _headers(json: false));
     return _decode(response);
   }
 
@@ -90,7 +96,7 @@ class ApiClient {
         contentType: MediaType.parse(contentType),
       ),
     );
-    final streamed = await request.send();
+    final streamed = await _http.send(request);
     final response = await http.Response.fromStream(streamed);
     return _decode(response);
   }
