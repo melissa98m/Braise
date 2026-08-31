@@ -52,6 +52,7 @@ dependencies:
   # Sélection de photo pour le profil privé, fonctionne sur web (input file) comme sur mobile.
   image_picker: ^1.1.2
   web: ^1.1.1
+  stream_channel: ^2.1.4
 
 dev_dependencies:
   flutter_test:

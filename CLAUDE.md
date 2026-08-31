@@ -593,9 +593,35 @@ Flutter SDK is never installed on the host):
   pending animation and times out; and `SettingsScreen`'s long `ListView` doesn't even build
   elements far below the fold (past the underlying `Sliver`'s `cacheExtent`), so
   `tester.ensureVisible()` has nothing to target — a tall enough test viewport sidesteps this
-  rather than working around it. Only `ConversationScreen` remains untested: it talks over a real
-  WebSocket (`ChatSocket`, no injectable channel factory), a refactor of its own and out of scope
-  for this coverage pass.
+  rather than working around it. Only `ConversationScreen` remained untested at this point: it
+  talks over a real WebSocket (`ChatSocket`, no injectable channel factory at the time), a
+  refactor of its own and out of scope for this coverage pass — picked up in P10 below.
+
+**Testing a real WebSocket screen** (`test/screens/conversation_screen_test.dart`, P10): closing
+the one gap P8 left open. `ChatSocket` (`api/messaging_api.dart`) now takes an optional `channel`
+(typed `StreamChannel<dynamic>`, not `WebSocketChannel` — the latter is what
+`WebSocketChannel.connect` returns and is-a `StreamChannel`, but the field needs to also accept a
+non-network fake in tests) defaulting to the real `WebSocketChannel.connect`; `ConversationScreen`
+similarly takes an optional `chatSocketFactory`. Same injection shape as
+`AppServices(httpClient: ...)` throughout this project. Tests build a
+`package:stream_channel` `StreamChannelController<dynamic>()`, hand `ChatSocket` its `.local` end,
+and use `.foreign.sink.add(...)` to simulate server frames / `.foreign.stream` to capture what the
+screen actually sends. Two traps found writing this:
+- A raw `.foreign.stream.listen((data) => ...)` call reliably hung `pumpAndSettle()` forever —
+  not a timeout, an actual deadlock specific to mixing `stream_channel`'s controller with
+  `flutter_test`'s `FakeAsync` test zone; `expectLater(stream, emits(...))` (or `emitsThrough`),
+  the officially-blessed way to assert on a stream in the `test`/`flutter_test` packages, doesn't
+  have this problem. Lesson: prefer `expectLater`/stream matchers over manual `.listen()` when
+  asserting on any stream inside a widget test.
+- `emits(matcher)` checks only the *very next* event, and this screen sends "housekeeping" frames
+  incidentally — `_loadHistory()` always sends a `read` frame on load, and the composer sends a
+  `typing` frame before the actual `message` frame it's testing. `emitsThrough(matcher)` (skip
+  until a match, rather than require the first event to match) is what these tests actually need.
+
+6 tests: history load, a message received over the socket (appears + triggers a `read` frame
+back), sending a message (composer clears + a `message` frame goes out), the daily question
+(render + answer + result), the typing indicator (appears on a `typing` event, clears after 3s of
+silence), and a `read` event flipping "Envoyé" to "Lu" on the sender's own last message.
 
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not

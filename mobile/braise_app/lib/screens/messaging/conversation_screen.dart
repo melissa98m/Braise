@@ -20,9 +20,16 @@ import '../unlock/unlock_screen.dart';
 /// jamais une seule couleur) ; le quiz du jour redirige vers la relecture du profil en cas
 /// d'erreur, jamais une pénalité (cahier des charges A.7).
 class ConversationScreen extends StatefulWidget {
-  const ConversationScreen({super.key, required this.match});
+  const ConversationScreen({super.key, required this.match, this.chatSocketFactory});
 
   final MatchSummary match;
+
+  /// Injectable (P10) : `null` en production (`ChatSocket.new`, vraie connexion), un factice
+  /// dans les tests d'écran — même motif que `AppServices(httpClient: ...)`. `ChatSocket` lui-même
+  /// accepte déjà un `channel` factice ; ce champ est ce qui permet à un test de fournir ce canal
+  /// au moment précis où `_connect()` construit le socket, sans que `ConversationScreen` ait
+  /// besoin de connaître `StreamChannelController` lui-même.
+  final ChatSocket Function({required String matchId, required String token})? chatSocketFactory;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -57,7 +64,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final services = context.read<AppServices>();
     final token = services.authController.token;
     if (token == null) return;
-    final socket = ChatSocket(matchId: _match.matchId, token: token);
+    final factory = widget.chatSocketFactory ?? ChatSocket.new;
+    final socket = factory(matchId: _match.matchId, token: token);
     socket.messages.listen((message) {
       if (!mounted) return;
       setState(() => _messages.add(message));

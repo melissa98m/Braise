@@ -551,6 +551,44 @@ techniques : cahier des charges sections A, B, C, D.
   backend, `ruff check .` propre — clôt le plan d'action P9 dans son intégralité (P9.1
   notifications locales, P9.2 badge de messages non lus, P9.3 filtre de découverte par distance).
 
+- [x] **P10 — Couverture de test de `ConversationScreen`, le dernier écran restant.** Seul écran
+  encore non testé après P8 : il parle en WebSocket réel (`ChatSocket`), sans fabrique de canal
+  injectable — un refactor à part entière, explicitement laissé de côté à l'époque.
+
+  `ChatSocket` (`api/messaging_api.dart`) accepte désormais un `channel` optionnel (typé
+  `StreamChannel<dynamic>`, pas `WebSocketChannel` — ce que renvoie `WebSocketChannel.connect`,
+  qui EST un `StreamChannel`, mais le champ doit aussi accepter un factice sans vraie connexion
+  réseau derrière), par défaut la vraie `WebSocketChannel.connect`. `ConversationScreen` accepte
+  de même un `chatSocketFactory` optionnel. Même motif d'injection que
+  `AppServices(httpClient: ...)` partout ailleurs dans ce projet. Les tests construisent un
+  `StreamChannelController<dynamic>()` (`package:stream_channel`), donnent son bout `.local` à
+  `ChatSocket`, et utilisent `.foreign.sink.add(...)` pour simuler des frames serveur /
+  `.foreign.stream` pour observer ce que l'écran envoie réellement.
+
+  Deux pièges trouvés en écrivant ces tests :
+  - Un `.foreign.stream.listen((data) => ...)` posé à la main bloquait systématiquement
+    `pumpAndSettle()` indéfiniment — pas un simple timeout, un vrai blocage propre au mélange du
+    contrôleur `stream_channel` avec la zone `FakeAsync` de `flutter_test` ; `expectLater(stream,
+    emits(...))` (ou `emitsThrough`), la façon officiellement recommandée d'asserter sur un flux
+    dans `test`/`flutter_test`, n'a pas ce problème. Leçon retenue : préférer `expectLater`/les
+    matchers de flux à un `.listen()` manuel pour vérifier un flux dans un test de widget.
+  - `emits(matcher)` ne vérifie que le tout premier événement, or cet écran envoie des frames
+    "de service" en passant — `_loadHistory()` envoie toujours un `read` au chargement, le
+    composeur envoie un `typing` avant le `message` réellement testé. `emitsThrough(matcher)`
+    (ignorer jusqu'à trouver une correspondance, plutôt qu'exiger que le premier événement
+    corresponde) est ce qu'il fallait ici.
+
+  6 tests : chargement de l'historique, réception d'un message via le socket (apparaît + déclenche
+  un "read" en retour), envoi d'un message (composeur vidé + frame "message" envoyée), question du
+  jour (affichage + réponse + résultat), indicateur de saisie (apparaît sur un événement "typing",
+  disparaît après 3 s de silence), et un événement "read" qui fait passer "Envoyé" à "Lu" sur le
+  dernier message envoyé.
+
+  93/93 tests Flutter au total, `flutter analyze` propre, `flutter build web` réussi, 85/85 tests
+  backend inchangés — clôt entièrement la couverture de test des écrans mobiles (13/13, en
+  comptant `RootShell` qui n'était pas un écran de module dédié mais est maintenant lui aussi
+  couvert via P9).
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

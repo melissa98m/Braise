@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/messaging.dart';
@@ -51,11 +52,20 @@ class ReadEvent {
 /// Connexion WebSocket au chat d'un match. Le token voyage en query string : un navigateur ne
 /// peut pas poser de header Authorization sur une poignée de main WebSocket (voir
 /// backend/CLAUDE.md, même contrainte des deux côtés).
+///
+/// `channel` optionnel (P10) : `null` en production (vraie connexion `WebSocketChannel.connect`),
+/// un `StreamChannelController().local`/`.foreign` factice dans les tests d'écran — même motif
+/// d'injection que `ApiClient(httpClient: ...)`. Typé `StreamChannel<dynamic>` plutôt que
+/// `WebSocketChannel` (que `WebSocketChannel.connect` renvoie bien, `WebSocketChannel` en étant
+/// un) précisément pour que ce champ accepte aussi le canal factice des tests, qui n'a pas de
+/// vraie connexion WebSocket derrière lui.
 class ChatSocket {
-  ChatSocket({required String matchId, required String token})
-    : _channel = WebSocketChannel.connect(
-        Uri.parse('${ApiConfig.wsBaseUrl}/messaging/ws/$matchId?token=$token'),
-      ) {
+  ChatSocket({required String matchId, required String token, StreamChannel<dynamic>? channel})
+    : _channel =
+          channel ??
+          WebSocketChannel.connect(
+            Uri.parse('${ApiConfig.wsBaseUrl}/messaging/ws/$matchId?token=$token'),
+          ) {
     // Un seul flux brut, démultiplexé en 3 par type — le serveur tague déjà chaque frame
     // ("message"/"typing"/"read", voir api/v1/messaging.py), donc pas besoin d'une classe
     // d'union scellée pour ça.
@@ -76,7 +86,7 @@ class ChatSocket {
         );
   }
 
-  final WebSocketChannel _channel;
+  final StreamChannel<dynamic> _channel;
   late final Stream<ChatMessage> _messages;
   late final Stream<TypingEvent> _typing;
   late final Stream<ReadEvent> _reads;
