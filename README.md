@@ -30,11 +30,36 @@ docker compose run --rm backend pytest
 docker compose run --rm backend ruff check .   # lint (P5.3, backend/ruff.toml)
 ```
 
-Mobile (Phase 6, pas encore développé) :
+Mobile (Flutter web) :
 
 ```bash
 docker compose --profile mobile up mobile
 ```
+
+- App : http://localhost:5000
+
+## Bêta-test entre proches sur le réseau local
+
+Pas de VPS ni de domaine (voir `docs/V2_FEATURES.md`) : pour qu'un·e proche sur le même Wi-Fi/LAN
+puisse utiliser l'app depuis son propre téléphone/PC, il faut lui donner l'IP locale de cette
+machine, pas `localhost` (qui sur son appareil ne désignerait que lui-même).
+
+1. Trouver l'IP locale de cette machine : `hostname -I` (Linux) — premier résultat, souvent en
+   `192.168.x.x`.
+2. Dans `.env` (pas `.env.example`, qui reste générique) :
+   - `MINIO_PUBLIC_ENDPOINT=<ip-locale>:9000` (sinon les photos privées ne s'affichent que sur ce
+     poste).
+   - `CORS_ORIGINS=http://localhost:5000,http://<ip-locale>:5000` (sinon le navigateur du
+     testeur bloque les appels vers l'API).
+3. Redémarrer le backend et le mobile pour appliquer : `docker compose up -d --force-recreate
+   backend && docker compose restart mobile`.
+4. Donner aux testeur·se·s l'adresse `http://<ip-locale>:5000` — même réseau Wi-Fi requis.
+
+L'app Flutter (`lib/api/api_config.dart`) résout déjà l'hôte de l'API dynamiquement depuis l'URL
+de la page (`Uri.base.host`) : aucune modification côté mobile nécessaire, seulement les deux
+variables d'environnement ci-dessus côté backend. `DEBUG_OTP=true` reste actif (défaut de
+`.env.example`) : le code de vérification s'affiche directement dans l'app, pas besoin d'un vrai
+SMS pour ce type de bêta.
 
 ## Sauvegardes & supervision (durcissement opérationnel, cahier des charges B.3/D.7/D.12)
 

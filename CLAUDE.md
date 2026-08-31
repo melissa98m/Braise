@@ -390,6 +390,18 @@ Flutter SDK is never installed on the host):
   `shared_preferences` (`braise_theme_mode`), read by `MaterialApp.themeMode` via a `Builder` so it
   can `context.watch` the controller (`main.dart`'s `MaterialApp` is a descendant of the
   `MultiProvider`, not a sibling — that ordering matters here).
+- `lib/api/api_config.dart` (`ApiConfig.httpBaseUrl`/`.wsBaseUrl`) derives the API host from
+  `Uri.base.host` (the page's own URL) at runtime rather than hardcoding `localhost` — needed for
+  a friends-and-family beta on the local network (no VPS, see `docs/V2_FEATURES.md`): a tester's
+  device visits the app via the host machine's LAN IP (`http://192.168.1.x:5000`), and
+  `localhost` on *their* device would resolve to their own device, not the host running the
+  backend. The same build works unmodified whether loaded via `localhost` or a LAN IP. Falls
+  back to `'localhost'` when `Uri.base.host` is empty (the VM target `flutter test` runs on, not
+  a real web context) — harmless, since screen tests never hit the real network
+  (`AppServices(httpClient: ...)`). This only fixes the mobile side of the LAN-reachability
+  problem: `MINIO_PUBLIC_ENDPOINT` and `CORS_ORIGINS` (backend `.env`, not committed) both still
+  need the host's LAN IP added manually for private-photo URLs and cross-origin requests to work
+  from another device — see the comments in `.env.example`.
 - `lib/api/` is a thin typed wrapper per backend module (`auth_api.dart`, `profiles_api.dart`,
   etc.) over `api_client.dart`, which injects `Authorization: Bearer <token>` via a `tokenProvider`
   closure and throws `ApiException` (with `isUnauthorized`/`isForbidden`/`isPaymentRequired`
