@@ -631,9 +631,10 @@ techniques : cahier des charges sections A, B, C, D.
   (backend, MinIO, Postgres) par script plutôt qu'à la main, idempotent, exécuté et vérifié
   contre l'instance réelle (les 3 moniteurs confirmés `UP` via l'API après coup). Le canal
   d'alerte webhook (Discord/Slack/générique — noms de champs vérifiés dans le
-  `notification_providers.py` du paquet installé, pas devinés) est scripté aussi, configuré si
-  `UPTIME_KUMA_WEBHOOK_URL` est fourni ; sans elle, compte admin et moniteurs sont posés quand
-  même, et cette seule étape reste manuelle (à relancer le script une fois l'URL choisie).
+  `notification_providers.py` du paquet installé, pas devinés) est scripté aussi, configuré via
+  `UPTIME_KUMA_WEBHOOK_URL` — alerte Discord posée et vérifiée avec une vraie notification de
+  test (`test_notification` → `Sent Successfully.`, reçue dans le salon Discord). Supervision et
+  alerte toutes deux en place de bout en bout, plus aucune étape manuelle restante.
 
 ## Backlog V2 (hors périmètre MVP)
 
