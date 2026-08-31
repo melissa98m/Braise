@@ -79,6 +79,16 @@ Simule N matchs concurrents (2 participants connectés en websocket chacun) et r
 de connexion/diffusion et taux de succès. C'est ce script qui a mis au jour l'épuisement du pool
 de connexions DB corrigé dans `api/v1/messaging.py` — voir `docs/ROADMAP.md` (P4.3).
 
+## Évaluation du modèle de modération (cahier des charges D.5, jalon B.2)
+
+```bash
+docker compose run --rm backend python scripts/evaluate_moderation_model.py
+```
+
+Validation croisée à 5 plis du classifieur de rancune au seuil de décision réellement utilisé en
+production — précision/rappel/matrice de confusion, pas juste "ça s'entraîne sans erreur".
+Résultats actuels et méthode : `docs/MODEL_EVALUATION.md`.
+
 ## Stack (figée, cahier des charges section D.11)
 
 Flutter · FastAPI · PostgreSQL · WebSockets custom · MinIO · scikit-learn maison. Aucun service

@@ -200,7 +200,18 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   `POST_UNLOCK_RANCOR_WINDOW` of `Match.unlocked_at`) or `moderation_ml.predict_is_rancor` (a
   TF-IDF + logistic regression pipeline trained at import time on a hand-written seed dataset in
   that file — real scikit-learn, real training, but a toy dataset; retrain on bêta data before
-  trusting it, per the docstring there). Flagged ratings are excluded from the trust-score average
+  trusting it, per the docstring there). `build_pipeline()`/`load_dataset()` are factored out
+  (not private) so `backend/scripts/evaluate_moderation_model.py` (P5.1) can cross-validate the
+  *exact* production architecture rather than a hand-copied approximation that could silently
+  drift from what's actually served — the module-level `_pipeline` still fits once on the full
+  490-example dataset at import for runtime use (more training data is strictly better for the
+  model that actually runs), evaluation is a separate concern measured by 5-fold stratified CV,
+  never by looking at training accuracy on data the model already saw. At the production decision
+  threshold (`RANCOR_PROBABILITY_THRESHOLD = 0.6`), measured false-positive rate on that seed set
+  is 0 % (0/295 authentic comments wrongly flagged) at the cost of a 9.7% false-negative rate —
+  numbers and method in `docs/MODEL_EVALUATION.md`, guarded against regression by
+  `tests/test_moderation_ml.py::test_model_false_positive_rate_at_production_threshold` (same CV,
+  fixed seed, fails if the false-positive rate on this dataset climbs past 2%). Flagged ratings are excluded from the trust-score average
   rather than counted against it — human review decides, the model doesn't punish directly.
   Auto-ban (`User.is_banned`) only fires past `MIN_RATINGS_FOR_AUTO_BAN = 3` — a deliberate
   floor so one or two bad-faith ratings can't zero out a brand-new user (cahier des charges A.9).

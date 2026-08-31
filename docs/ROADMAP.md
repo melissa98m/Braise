@@ -254,6 +254,23 @@ techniques : cahier des charges sections A, B, C, D.
   publics. CGU/politique de confidentialité et vrai fournisseur SMS restent explicitement hors de
   ce palier — décisions produit/juridiques, pas des artefacts techniques à improviser.
 
+- [x] **Post-MVP P5.1 — Évaluation du modèle de classification (jalon B.2).** Le planning exige
+  explicitement un "modèle de classification v0 évalué" avant le jalon "Go/No-go bêta" ; jusqu'ici
+  le pipeline s'entraînait sur les 490 exemples du CSV en entier, sans jeu de test séparé —
+  jamais mesuré, seulement supposé correct parce qu'il s'entraînait sans erreur.
+  `backend/scripts/evaluate_moderation_model.py` : validation croisée stratifiée à 5 plis
+  (`cross_val_predict`, prédictions hors-échantillon poolées sur les 490 exemples plutôt qu'un
+  split fixe bruyant à cette taille), réévaluée au seuil de décision réellement servi en
+  production (0,6, pas le 0,5 par défaut de scikit-learn) pour mesurer le comportement exact de
+  `predict_is_rancor`. Résultat : **0 % de faux positifs** sur les commentaires authentiques
+  (0/295), 9,7 % de rancune manquée (19/195) — exactement le compromis visé par le choix de seuil
+  documenté dans `moderation_ml.py`, maintenant mesuré au lieu d'affirmé. `build_pipeline()`/
+  `load_dataset()` extraits du module (n'étaient pas exposés avant) pour que le script évalue
+  l'architecture *réellement* servie, jamais une copie qui pourrait diverger en silence.
+  `docs/MODEL_EVALUATION.md` consigne méthode et résultats ; `tests/test_moderation_ml.py`
+  ajoute un garde-fou de non-régression (même validation croisée, échoue si le taux de faux
+  positifs dépasse 2 %) — 76/76 tests backend désormais.
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
