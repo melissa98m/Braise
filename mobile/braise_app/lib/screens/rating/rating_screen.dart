@@ -3,9 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../api/api_exception.dart';
 import '../../models/discovery.dart';
-import '../../models/moderation.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
+import '../../widgets/braise_page_route.dart';
+import '../moderation/report_screen.dart';
 
 /// Écran 06 — note en chiffres (pas d'étoiles, non ambigu), commentaire obligatoire ≥ 4 mots
 /// expliqué plutôt que subi (cahier des charges A.4.4).
@@ -60,30 +61,8 @@ class _RatingScreenState extends State<RatingScreen> {
     }
   }
 
-  Future<void> _report() async {
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Motif du signalement'),
-        children: [
-          for (final entry in reportReasons.entries)
-            SimpleDialogOption(
-              onPressed: () => Navigator.of(context).pop(entry.key),
-              child: Text(entry.value),
-            ),
-        ],
-      ),
-    );
-    if (reason == null || !mounted) return;
-    await context.read<AppServices>().moderationApi.report(
-      widget.match.matchId,
-      reason,
-      null,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Signalement envoyé, merci de votre vigilance.')),
-    );
+  void _report() {
+    Navigator.of(context).push(braiseRoute(context, ReportScreen(match: widget.match)));
   }
 
   @override

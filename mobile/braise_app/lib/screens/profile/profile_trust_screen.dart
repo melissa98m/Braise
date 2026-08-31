@@ -9,13 +9,14 @@ import '../../theme/braise_tokens.dart';
 import '../../widgets/avatar_sigil.dart';
 import '../../widgets/braise_page_route.dart';
 import '../../widgets/flame_diamonds.dart';
-import '../onboarding/otp_screen.dart';
 import '../paywall/paywall_screen.dart';
+import '../settings/settings_screen.dart';
 import 'profile_setup_screen.dart';
 
 /// Écran 07 — le score se lit de trois façons (chiffre, barres, mot), jamais un simple
-/// rouge/vert (cahier des charges, accessibilité). Regroupe aussi les outils RGPD de la Phase 5
-/// (export / suppression), qui n'avaient sinon aucune surface visible dans l'app.
+/// rouge/vert (cahier des charges, accessibilité). Les outils RGPD (export / suppression) vivent
+/// désormais dans Paramètres (icône réglages ci-dessous), pas ici : cet écran reste centré sur
+/// les informations de confiance du profil, pas sur les réglages de compte.
 class ProfileTrustScreen extends StatefulWidget {
   const ProfileTrustScreen({super.key});
 
@@ -37,10 +38,9 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
 
   Future<void> _load() async {
     final services = context.read<AppServices>();
-    final userId = services.authController.userId!;
     final results = await Future.wait([
       services.profilesApi.getMyPublicProfile(),
-      services.moderationApi.getTrustScore(userId),
+      services.moderationApi.getTrustScore(),
       services.discoveryApi.getMatches(),
     ]);
     if (!mounted) return;
@@ -54,44 +54,6 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
 
   int get _totalFlames => _matches.fold(0, (sum, m) => sum + m.flameCount);
 
-  Future<void> _exportData() async {
-    final services = context.read<AppServices>();
-    await services.apiClient.get('/auth/me/export');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Export généré côté serveur (droit à la portabilité, RGPD).')),
-    );
-  }
-
-  Future<void> _deleteAccount() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Supprimer votre compte ?'),
-        content: const Text(
-          'Votre profil et vos photos privées seront effacés. Vos échanges avec vos matchs '
-          'restent visibles pour eux, sans votre nom. Action irréversible.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Annuler')),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    final services = context.read<AppServices>();
-    await services.apiClient.delete('/auth/me');
-    await services.authController.signOut();
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushAndRemoveUntil(braiseRoute(context, const OtpScreen()), (route) => false);
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -102,7 +64,17 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
     final trust = _trust!;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Moi')),
+      appBar: AppBar(
+        title: const Text('Moi'),
+        actions: [
+          IconButton(
+            onPressed: () =>
+                Navigator.of(context).push(braiseRoute(context, const SettingsScreen())),
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Paramètres',
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -210,19 +182,6 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
                   Navigator.of(context).push(braiseRoute(context, const PaywallScreen())),
               style: ElevatedButton.styleFrom(backgroundColor: tokens.alerte, foregroundColor: tokens.surfaceRoot),
               child: const Text('Braise+'),
-            ),
-            const SizedBox(height: BraiseSpacing.xxl),
-            Text('Vos données', style: textTheme.titleMedium),
-            const SizedBox(height: BraiseSpacing.sm),
-            OutlinedButton(onPressed: _exportData, child: const Text('Exporter mes données')),
-            const SizedBox(height: BraiseSpacing.sm),
-            OutlinedButton(
-              onPressed: _deleteAccount,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: tokens.erreur,
-                side: BorderSide(color: tokens.erreur),
-              ),
-              child: const Text('Supprimer mon compte'),
             ),
           ],
         ),

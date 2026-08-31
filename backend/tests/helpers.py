@@ -124,6 +124,20 @@ def create_match_with(client, other_headers: dict, other_id: str) -> dict:
     return {"token": token, "headers": headers, "id": my_id, "match_id": match_id}
 
 
+def read_trust_score(user_id: str) -> dict:
+    # /moderation/me/trust-score only exposes the caller's own score (fixed IDOR: it used to take
+    # an arbitrary user_id) — tests that need to inspect *another* account's score after the fact
+    # (e.g. a banned victim whose own token now 403s) read it straight from the service instead.
+    from app.db.session import SessionLocal
+    from app.services.moderation import compute_trust_score
+
+    db = SessionLocal()
+    try:
+        return compute_trust_score(db, uuid.UUID(user_id))
+    finally:
+        db.close()
+
+
 def force_match_unlocked(match_id: str, hours_ago: float = 1) -> None:
     # Atteindre unlock_threshold flammes par le vrai flux (une question/jour/utilisateur) prendrait
     # plusieurs jours réels : on pose directement l'état "match débloqué depuis X" en base plutôt

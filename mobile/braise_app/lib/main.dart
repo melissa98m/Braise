@@ -5,6 +5,7 @@ import 'screens/onboarding/otp_screen.dart';
 import 'screens/root_shell.dart';
 import 'state/app_services.dart';
 import 'state/auth_controller.dart';
+import 'state/theme_controller.dart';
 import 'theme/braise_theme.dart';
 
 void main() {
@@ -17,22 +18,30 @@ class BraiseApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final services = AppServices();
+    final themeController = ThemeController()..restore();
 
     return MultiProvider(
       providers: [
         Provider<AppServices>.value(value: services),
         ChangeNotifierProvider<AuthController>.value(value: services.authController),
+        ChangeNotifierProvider<ThemeController>.value(value: themeController),
       ],
-      child: MaterialApp(
-        title: 'Braise',
-        debugShowCheckedModeBanner: false,
-        theme: buildBraiseTheme(Brightness.light),
-        darkTheme: buildBraiseTheme(Brightness.dark),
-        // Sombre reste le défaut à l'installation (docs/DESIGN_TOKENS.md) ; un vrai bouton
-        // clair/sombre/auto est laissé pour une prochaine passe, pas essentiel à la fidélité
-        // fonctionnelle de ce MVP.
-        themeMode: ThemeMode.dark,
-        home: const _AuthGate(),
+      // Builder : le MaterialApp a besoin de lire ThemeController via context.watch, donc son
+      // context doit être un descendant de MultiProvider, pas celui de BraiseApp lui-même.
+      child: Builder(
+        builder: (context) {
+          final mode = context.watch<ThemeController>().mode;
+          return MaterialApp(
+            title: 'Braise',
+            debugShowCheckedModeBanner: false,
+            theme: buildBraiseTheme(Brightness.light),
+            darkTheme: buildBraiseTheme(Brightness.dark),
+            // Sombre reste le réglage par défaut à l'installation (docs/DESIGN_TOKENS.md) ;
+            // l'utilisateur peut désormais changer ce choix depuis Paramètres (ThemeController).
+            themeMode: mode,
+            home: const _AuthGate(),
+          );
+        },
       ),
     );
   }

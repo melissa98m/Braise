@@ -6,6 +6,9 @@ import '../../models/discovery.dart';
 import '../../models/public_profile.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
+import '../../widgets/braise_page_route.dart';
+import '../moderation/report_screen.dart';
+import '../rating/rating_screen.dart';
 
 /// Écran 05 — le voile est une matière (dégradé + trame côté maquette), jamais un flou de
 /// censure ; ici la maquette est déjà levée pour de vrai (accès conditionnel réel, Phase 5),
@@ -67,7 +70,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
             radius: 0.9,
             colors: isDark
                 ? [const Color(0xFF2A1A12), tokens.surfaceRoot]
-                : [const Color(0xFFFFE6CE), tokens.surfaceRoot],
+                : [const Color(0xFFFFEEDC), tokens.surfaceRoot],
           ),
         ),
         child: _loading
@@ -145,6 +148,26 @@ class _UnlockScreenState extends State<UnlockScreen> {
                             ],
                           ),
                         ),
+                      const SizedBox(height: BraiseSpacing.xxl),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(
+                            context,
+                          ).push(braiseRoute(context, RatingScreen(match: widget.match))),
+                          child: const Text('Noter cet échange'),
+                        ),
+                      ),
+                      const SizedBox(height: BraiseSpacing.sm),
+                      TextButton(
+                        onPressed: () => Navigator.of(
+                          context,
+                        ).push(braiseRoute(context, ReportScreen(match: widget.match))),
+                        child: Text(
+                          'Signaler un problème',
+                          style: textTheme.labelSmall?.copyWith(color: tokens.inkSecondary),
+                        ),
+                      ),
                     ],
                   ),
                 ),

@@ -20,8 +20,8 @@ class ModerationApi {
     );
   }
 
-  Future<TrustScore> getTrustScore(String userId) async {
-    final json = await _client.get('/moderation/users/$userId/trust-score');
+  Future<TrustScore> getTrustScore() async {
+    final json = await _client.get('/moderation/me/trust-score');
     return TrustScore.fromJson(json as Map<String, dynamic>);
   }
 }

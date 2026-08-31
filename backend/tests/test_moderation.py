@@ -7,6 +7,7 @@ from tests.helpers import (
     create_match_with,
     create_published_user,
     force_match_unlocked,
+    read_trust_score,
     unique_phone,
 )
 
@@ -35,9 +36,7 @@ def test_rating_round_trip_updates_trust_score():
     assert body["suspected_rancor"] is False
     assert body["trust_score"] == 100
 
-    trust = client.get(
-        f"/moderation/users/{match['id_b']}/trust-score", headers=match["headers_a"]
-    ).json()
+    trust = client.get("/moderation/me/trust-score", headers=match["headers_b"]).json()
     assert trust["score"] == 100
     assert trust["label"] == "EXEMPLAIRE"
     assert trust["rating_count"] == 1
@@ -131,11 +130,9 @@ def test_auto_ban_after_enough_low_ratings_and_ban_is_enforced():
         )
         assert response.status_code == 200
 
-    # Le compte visé est désormais banni : on ne peut plus utiliser son propre token pour
-    # consulter quoi que ce soit (voir plus bas), donc on relit son score via un autre compte.
-    trust = client.get(
-        f"/moderation/users/{victim_id}/trust-score", headers=base["headers_a"]
-    ).json()
+    # Le compte visé est désormais banni : son propre token est rejeté partout (y compris
+    # /moderation/me/trust-score, voir plus bas), donc on relit son score directement en base.
+    trust = read_trust_score(victim_id)
     assert trust["score"] == 0
     assert trust["rating_count"] == 3
 
@@ -161,9 +158,7 @@ def test_two_low_ratings_do_not_trigger_ban():
     still_ok = client.get("/auth/me", headers=victim_headers)
     assert still_ok.status_code == 200
 
-    trust = client.get(
-        f"/moderation/users/{victim_id}/trust-score", headers=victim_headers
-    ).json()
+    trust = client.get("/moderation/me/trust-score", headers=victim_headers).json()
     assert trust["score"] == 0
     assert trust["rating_count"] == 2
 
@@ -205,8 +200,22 @@ def test_report_invalid_reason_rejected():
 
 
 def test_trust_score_null_when_no_ratings_yet():
-    _, user_id = create_published_user(client, "Jamais noté")
-    headers = auth_headers(client, unique_phone())
-    trust = client.get(f"/moderation/users/{user_id}/trust-score", headers=headers).json()
+    headers, _ = create_published_user(client, "Jamais noté")
+    trust = client.get("/moderation/me/trust-score", headers=headers).json()
     assert trust["score"] is None
     assert trust["rating_count"] == 0
+
+
+def test_trust_score_requires_authentication():
+    trust = client.get("/moderation/me/trust-score")
+    assert trust.status_code == 401
+
+
+def test_trust_score_cannot_target_another_user():
+    # Régression pour l'IDOR corrigé : /moderation/me/trust-score ne prend plus de user_id en
+    # paramètre, donc il n'y a plus de route qui accepterait un identifiant arbitraire.
+    match = create_match(client)
+    response = client.get(
+        f"/moderation/users/{match['id_b']}/trust-score", headers=match["headers_a"]
+    )
+    assert response.status_code == 404

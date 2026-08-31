@@ -9,6 +9,7 @@ import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/braise_page_route.dart';
 import '../../widgets/flame_diamonds.dart';
+import '../moderation/report_screen.dart';
 import '../rating/rating_screen.dart';
 import '../unlock/unlock_screen.dart';
 
@@ -203,6 +204,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
           if (!_loadingQuestion && _dailyQuestion != null) _DailyQuestionCard(
             question: _dailyQuestion!,
             onAnswer: _answer,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: BraiseSpacing.sm),
+            child: Center(
+              child: TextButton(
+                onPressed: () => Navigator.of(
+                  context,
+                ).push(braiseRoute(context, ReportScreen(match: _match))),
+                child: Text(
+                  'Signaler ce profil',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: tokens.inkSecondary,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(BraiseSpacing.lg),

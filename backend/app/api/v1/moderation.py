@@ -37,10 +37,9 @@ def my_reports(user: User = Depends(get_current_user), db: Session = Depends(get
     return moderation_service.list_my_reports(db, user)
 
 
-@router.get("/users/{user_id}/trust-score", response_model=TrustScoreOut)
-def trust_score(
-    user_id: uuid.UUID,
+@router.get("/me/trust-score", response_model=TrustScoreOut)
+def my_trust_score(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return moderation_service.get_trust_score(db, user_id)
+    return moderation_service.get_trust_score(db, user.id)
