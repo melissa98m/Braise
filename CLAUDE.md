@@ -418,6 +418,13 @@ Flutter SDK is never installed on the host):
   by accident: `'Compte suspendu.'` has no accent so it happened to round-trip fine, while
   `'Compte supprimé.'` silently decoded to a generic fallback message that the test never
   compared against, only the resulting `AuthStatus` (which still landed right by coincidence).
+  `test/screens/report_screen_test.dart` is the second screen built on this same infra —
+  `ReportScreen`'s 5 motif tiles + text field + button exceed the default 800×600 test viewport,
+  so a plain `tester.tap()` on anything below the fold misses silently (a hit-test warning, not a
+  thrown exception) instead of driving `onPressed`; fixed with a `_tapAfterScrollingTo` helper
+  that calls `tester.ensureVisible()` before every tap on a motif or the submit button, rather
+  than enlarging the test viewport (which would just hide the same bug on any other screen this
+  tall).
 
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not

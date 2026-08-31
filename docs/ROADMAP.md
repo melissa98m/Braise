@@ -285,7 +285,15 @@ techniques : cahier des charges sections A, B, C, D.
   ne l'ait remarqué — `'Compte suspendu.'` n'a pas d'accent donc passait par accident,
   `'Compte supprimé.'` en a un et décodait silencieusement vers un message générique jamais
   comparé par ce fichier, seul le statut final l'était (qui retombait juste au bon endroit par
-  coïncidence). Corrigé dans les deux fichiers de test. 16/16 tests Flutter au total.
+  coïncidence). Corrigé dans les deux fichiers de test.
+  `test/screens/report_screen_test.dart` (4 tests) couvre le deuxième écran — `ReportScreen`,
+  partagé par 3 points d'entrée (conversation, déblocage, notation). Piège différent cette fois :
+  ses 5 tuiles de motif + champ texte + bouton dépassent la hauteur du viewport de test par défaut
+  (800×600), donc `tester.tap()` sur le bouton "Envoyer le signalement" échouait silencieusement
+  (avertissement de hit-test hors bornes du render tree, pas d'exception) — corrigé avec un
+  helper `_tapAfterScrollingTo` qui appelle `tester.ensureVisible()` avant chaque tap sur un motif
+  ou le bouton, plutôt qu'agrandir artificiellement le viewport de test (qui masquerait le même
+  bug si un écran réel a une hauteur similaire). 20/20 tests Flutter au total.
 
 - [x] **Post-MVP P5.3 — Lint backend (ruff).** Le mobile a `flutter_lints` depuis la Phase 6 ; le
   backend Python n'avait aucun linter. `backend/ruff.toml` (E/F/W/I/UP, `line-length = 110` —
