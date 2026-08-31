@@ -385,13 +385,22 @@ the source → drop both. Run it with `docker compose run --rm backup /scripts/t
 being silently swallowed by the default infinite loop — this was a real bug caught by actually
 running the test, not just writing it) and only falls into the backup loop when invoked with no
 args (`docker compose up backup`). Basic uptime supervision is `uptime-kuma` (official image,
-port 8082, one-time manual setup: create the admin account, add HTTP monitors on
-`http://backend:8000/health` and `http://minio:9000/minio/health/live` plus a TCP monitor on
-`db:5432`, and a notification channel — nothing is pre-seeded, Uptime Kuma has no declarative
-config format for that). `docs/DPIA.md` is the AIPD/DPIA required before any real beta (A.9/B.3):
-data inventory, legal basis, existing technical measures already in the code (SSE-S3 encryption,
-`PhotoAccessLog`, anonymizing deletion), and the residual risks/actions that are still open —
-notably that A.9 requires a human contestation procedure for auto-bans and none exists yet.
+port 8082) — HTTP monitors on `http://backend:8000/health` and
+`http://minio:9000/minio/health/live` plus a TCP monitor on `db:5432`, and the admin account
+itself, are set up via `infra/uptime-kuma/setup.py` (P12.2) rather than by hand in the UI:
+Uptime Kuma has no declarative config format, but its internal Socket.IO API is reachable from
+outside the web UI through the `uptime-kuma-api` pip package (a client for the container's own
+already-exposed API, not a third-party service), so the setup is scripted and idempotent instead
+of a one-time manual ritual nobody can reproduce later. The notification channel (webhook —
+Discord/Slack/generic JSON, `NotificationType` field names verified against the installed
+package's `notification_providers.py`, not guessed) is scripted too, but needs a real webhook URL
+passed in (`UPTIME_KUMA_WEBHOOK_URL`) that only the person running it can provide — the script
+still creates the admin account and monitors without it, leaving just that one step manual.
+`docs/DPIA.md` is the AIPD/DPIA required before any real beta (A.9/B.3): data inventory, legal
+basis, existing technical measures already in the code (SSE-S3 encryption, `PhotoAccessLog`,
+anonymizing deletion, `BanAppeal` — A.9's human contestation procedure for auto-bans, live since
+P1.1, not the open item this sentence used to say it was), and the residual risks/actions that
+are still open.
 
 **Production deployment** (`docker-compose.prod.yml`, `infra/deploy/`, `docs/DEPLOYMENT.md`,
 post-MVP P4.4 — D.7/D.11's VPS-auto-géré recommendation, never scripted until this palier): the

@@ -624,6 +624,17 @@ techniques : cahier des charges sections A, B, C, D.
   (`legal_screen_test.dart` + un test ajouté à `welcome_screen_test.dart`), 99/99 tests Flutter
   au total, `flutter analyze` propre.
 
+- [x] **P12.2 — Alerting Uptime Kuma scripté (DPIA, action 1).** Uptime Kuma n'a pas de format de
+  config déclaratif, mais son API interne (Socket.IO) est atteignable hors de l'UI web via le
+  paquet `uptime-kuma-api` (client pour l'API déjà exposée par le conteneur, pas un service
+  tiers) — `infra/uptime-kuma/setup.py` configure donc le compte admin et les 3 moniteurs
+  (backend, MinIO, Postgres) par script plutôt qu'à la main, idempotent, exécuté et vérifié
+  contre l'instance réelle (les 3 moniteurs confirmés `UP` via l'API après coup). Le canal
+  d'alerte webhook (Discord/Slack/générique — noms de champs vérifiés dans le
+  `notification_providers.py` du paquet installé, pas devinés) est scripté aussi, configuré si
+  `UPTIME_KUMA_WEBHOOK_URL` est fourni ; sans elle, compte admin et moniteurs sont posés quand
+  même, et cette seule étape reste manuelle (à relancer le script une fois l'URL choisie).
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

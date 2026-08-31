@@ -84,12 +84,15 @@ paiement des stores Apple/Google (D.8), qui ne transite par aucune donnée perso
 | Ré-identification via le profil public | Bio, intérêts, avatar | Pas de photo réelle en public, pas de date de naissance brute exposée | Faible, à revalider si de nouveaux champs sont ajoutés au profil public |
 | Rancune / abus du système de notation | Commentaires de notation | Détection combinée règle + modèle ML (`services/moderation_ml.py`), exclusion du score plutôt que sanction directe | Modéré — modèle entraîné sur un jeu de données jouet, à réentraîner sur données réelles de bêta avant d'en faire un signal fort |
 | Bannissement automatique à tort | Score de confiance | Seuil `MIN_RATINGS_FOR_AUTO_BAN = 3` (pas de ban sur 1-2 avis). **Comblé (P1.1)** : `BanAppeal` + `api/deps.get_current_user_even_if_banned` + `BanAppealScreen` — un compte banni peut désormais déposer une contestation et voir son statut, revue via Adminer | Résiduel : la revue reste manuelle (pas de délai de traitement garanti côté produit) |
-| Disponibilité / supervision | Tout | **Comblé par ce palier P0** : Uptime Kuma sur backend/DB/MinIO | Résiduel tant qu'aucune notification (email/webhook) n'est configurée sur les moniteurs — étape manuelle à faire après le premier démarrage |
+| Disponibilité / supervision | Tout | **Comblé (P0 + P12.2)** : Uptime Kuma sur backend/DB/MinIO, compte admin et 3 moniteurs posés par script (`infra/uptime-kuma/setup.py`), les 3 confirmés UP | Résiduel tant que le canal d'alerte webhook n'a pas reçu une vraie URL (`UPTIME_KUMA_WEBHOOK_URL`) — le script la configure aussi si elle est fournie, sinon reste la seule étape manuelle |
 
 ## 5. Actions restant à mener avant une bêta avec des utilisateurs externes
 
-1. Configurer une notification réelle (email ou webhook) sur les moniteurs Uptime Kuma — sans ça,
-   la supervision existe mais personne n'est alerté.
+1. ~~Configurer une notification réelle (email ou webhook) sur les moniteurs Uptime Kuma~~ — fait
+   pour le compte admin et les 3 moniteurs (`infra/uptime-kuma/setup.py`, P12.2), scriptés plutôt
+   que posés à la main. **Reste à faire** : relancer le script avec une vraie
+   `UPTIME_KUMA_WEBHOOK_URL` une fois qu'un canal d'alerte (Discord/Slack/autre) est choisi —
+   sans notification configurée, la supervision existe mais personne n'est alerté.
 2. Répliquer `backup_data` hors de l'hôte Docker local dès le passage en VPS de production
    (rclone/rsync vers un second emplacement physique, D.7).
 3. ~~Rédiger et publier les CGU / la politique de confidentialité côté produit~~ — fait :

@@ -115,9 +115,25 @@ Supervision basique (Uptime Kuma, gratuit, auto-hébergé) :
 docker compose up -d uptime-kuma
 ```
 
-- Dashboard : http://localhost:8082 — au premier démarrage, créer le compte admin puis ajouter 3
-  moniteurs : HTTP `http://backend:8000/health`, HTTP `http://minio:9000/minio/health/live`, TCP
-  `db:5432`, avec une notification (email/webhook) en cas d'échec.
+- Dashboard : http://localhost:8082
+
+Uptime Kuma n'a pas de format de config déclaratif (rien à committer) : `infra/uptime-kuma/setup.py`
+configure le compte admin, les 3 moniteurs (backend, MinIO, Postgres) et, si tu fournis une URL de
+webhook, l'alerte en cas de panne — par l'API plutôt qu'à la main dans l'UI, pour que ce soit
+reproductible.
+
+```bash
+python3 -m venv /tmp/kuma-venv && /tmp/kuma-venv/bin/pip install -r infra/uptime-kuma/requirements.txt
+UPTIME_KUMA_USERNAME=braise UPTIME_KUMA_PASSWORD=<choisis un mot de passe fort> \
+  /tmp/kuma-venv/bin/python infra/uptime-kuma/setup.py
+
+# Pour ajouter aussi l'alerte webhook (Discord/Slack/générique) :
+UPTIME_KUMA_USERNAME=braise UPTIME_KUMA_PASSWORD=<...> \
+  UPTIME_KUMA_WEBHOOK_URL=<url du webhook> UPTIME_KUMA_WEBHOOK_KIND=discord \
+  /tmp/kuma-venv/bin/python infra/uptime-kuma/setup.py
+```
+
+Idempotent : relançable sans dupliquer les moniteurs/notifications déjà créés.
 
 Détail des risques couverts et de ceux qui restent : `docs/DPIA.md`.
 

@@ -1,0 +1,4 @@
+# Client Python pour l'API interne (Socket.IO) d'Uptime Kuma — pas un service tiers, juste ce
+# qui permet de configurer le conteneur `uptime-kuma` par script plutôt qu'à la main (voir
+# setup.py). Volontairement séparé de backend/requirements.txt : hors du runtime de l'API.
+uptime-kuma-api==1.2.1
