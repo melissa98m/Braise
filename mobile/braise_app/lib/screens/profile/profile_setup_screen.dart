@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -87,11 +89,32 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String? _lookingForGender;
   RangeValues _ageRange = _fullAgeRange;
 
+  // Distance (P9.3) : liste fermée de villes plutôt qu'un champ libre — seuls ces noms résolvent
+  // en coordonnées côté backend (services/geo.py), un texte libre n'y correspondrait jamais.
+  List<String> _cities = [];
+  String? _city;
+  static const _defaultMaxDistanceKm = 100;
+  int? _maxDistanceKm;
+
   @override
   void initState() {
     super.initState();
     _bioPromptIndex = DateTime.now().millisecond % _bioPrompts.length;
     _load();
+    unawaited(_loadCities());
+  }
+
+  Future<void> _loadCities() async {
+    // Purement décoratif (peuple un sélecteur) : une erreur ici laisse juste la liste vide,
+    // jamais une exception non gérée ni une erreur affichée à la place du reste de l'écran.
+    try {
+      final cities = await context.read<AppServices>().profilesApi.getCities();
+      if (!mounted) return;
+      setState(() => _cities = cities);
+    } on ApiException {
+      // Laisse `_cities` vide — le sélecteur de ville n'a alors aucune option, sans bloquer
+      // le reste du formulaire.
+    }
   }
 
   void _shuffleBioPrompt() {
@@ -123,6 +146,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           (profile.ageMin ?? _fullAgeRange.start.round()).toDouble(),
           (profile.ageMax ?? _fullAgeRange.end.round()).toDouble(),
         );
+        _city = profile.city;
+        _maxDistanceKm = profile.maxDistanceKm;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -175,6 +200,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           lookingForGender: _profile!.lookingForGender,
           ageMin: _profile!.ageMin,
           ageMax: _profile!.ageMax,
+          city: _profile!.city,
+          maxDistanceKm: _profile!.maxDistanceKm,
         );
       });
     }
@@ -222,6 +249,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         ageMax: _ageRange.end.round() == _fullAgeRange.end.round()
             ? null
             : _ageRange.end.round(),
+        city: _city,
+        // Sans ville choisie, un rayon n'a rien à mesurer depuis — le backend l'ignorerait de
+        // toute façon (services/discovery.get_feed : `my_location is None` désactive le filtre),
+        // mais autant ne jamais l'envoyer plutôt que de laisser une valeur orpheline en base.
+        // `?? _defaultMaxDistanceKm` : si une ville vient d'être choisie mais que le curseur
+        // n'a jamais été touché, `_maxDistanceKm` reste `null` alors que le curseur affiche déjà
+        // "100 km" par défaut (voir le `Text` juste au-dessus dans `build()`) — sans ce repli,
+        // le profil publié n'aurait en réalité *aucun* filtre de distance malgré ce qu'affichait
+        // l'écran au moment de publier.
+        maxDistanceKm: _city == null ? null : (_maxDistanceKm ?? _defaultMaxDistanceKm),
       );
       setState(() {
         _profile = updated;
@@ -419,6 +456,35 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               ),
               onChanged: (value) => setState(() => _ageRange = value),
             ),
+            const SizedBox(height: BraiseSpacing.lg),
+            Text('Votre ville', style: textTheme.bodyLarge),
+            const SizedBox(height: BraiseSpacing.sm),
+            DropdownButtonFormField<String?>(
+              // `_cities` peut être vide un instant (chargement, ou échec silencieux — voir
+              // _loadCities) : rien de bloquant, juste aucune option tant que ça ne résout pas.
+              initialValue: _cities.contains(_city) ? _city : null,
+              decoration: const InputDecoration(hintText: 'Non renseignée'),
+              items: [
+                const DropdownMenuItem<String?>(value: null, child: Text('Non renseignée')),
+                for (final city in _cities) DropdownMenuItem(value: city, child: Text(city)),
+              ],
+              onChanged: (value) => setState(() => _city = value),
+            ),
+            if (_city != null) ...[
+              const SizedBox(height: BraiseSpacing.lg),
+              Text(
+                'Rayon de recherche : ${_maxDistanceKm ?? _defaultMaxDistanceKm} km',
+                style: textTheme.bodyLarge,
+              ),
+              Slider(
+                value: (_maxDistanceKm ?? _defaultMaxDistanceKm).toDouble(),
+                min: 1,
+                max: 1000,
+                divisions: 999,
+                label: '${_maxDistanceKm ?? _defaultMaxDistanceKm} km',
+                onChanged: (value) => setState(() => _maxDistanceKm = value.round()),
+              ),
+            ],
             const SizedBox(height: BraiseSpacing.xxl),
             Container(
               padding: const EdgeInsets.all(BraiseSpacing.lg),

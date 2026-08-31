@@ -28,6 +28,8 @@ def create_published_user(
     looking_for_gender: str | None = None,
     age_min: int | None = None,
     age_max: int | None = None,
+    city: str | None = None,
+    max_distance_km: int | None = None,
 ) -> tuple[dict, str]:
     headers = auth_headers(client, unique_phone())
     me = client.get("/auth/me", headers=headers).json()
@@ -44,6 +46,8 @@ def create_published_user(
             "looking_for_gender": looking_for_gender,
             "age_min": age_min,
             "age_max": age_max,
+            "city": city,
+            "max_distance_km": max_distance_km,
         },
     )
     return headers, me["id"]

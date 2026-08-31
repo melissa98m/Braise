@@ -14,6 +14,11 @@ class PublicProfile {
     required this.lookingForGender,
     required this.ageMin,
     required this.ageMax,
+    // Optionnels (P9.3) plutôt que `required` : évite de forcer chaque construction directe
+    // existante (ProfileSetupScreen._regenerateAvatar, qui reconstruit un PublicProfile à la
+    // main) à connaître ces deux champs alors qu'elle les recopie déjà depuis l'ancien profil.
+    this.city,
+    this.maxDistanceKm,
   });
 
   factory PublicProfile.fromJson(Map<String, dynamic> json) {
@@ -30,6 +35,8 @@ class PublicProfile {
       lookingForGender: json['looking_for_gender'] as String?,
       ageMin: json['age_min'] as int?,
       ageMax: json['age_max'] as int?,
+      city: json['city'] as String?,
+      maxDistanceKm: json['max_distance_km'] as int?,
     );
   }
 
@@ -45,6 +52,8 @@ class PublicProfile {
   final String? lookingForGender;
   final int? ageMin;
   final int? ageMax;
+  final String? city;
+  final int? maxDistanceKm;
 }
 
 /// "homme" / "femme" / "non_binaire" — doit rester en phase avec Gender côté backend

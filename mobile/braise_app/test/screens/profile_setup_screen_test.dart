@@ -34,6 +34,8 @@ Map<String, dynamic> _publicProfile({
   List<String> interests = const ['Cinéma'],
   bool isPublished = false,
   String? gender,
+  String? city,
+  int? maxDistanceKm,
 }) => {
   'display_name': displayName,
   'age': 27,
@@ -47,6 +49,8 @@ Map<String, dynamic> _publicProfile({
   'looking_for_gender': null,
   'age_min': null,
   'age_max': null,
+  'city': city,
+  'max_distance_km': maxDistanceKm,
 };
 
 /// L'écran est dans un `SingleChildScrollView` (comme ReportScreen) : ce qui est sous la ligne
@@ -296,5 +300,82 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Erreur serveur.'), findsOneWidget);
+  });
+
+  testWidgets('loads and pre-fills the city and distance radius', (tester) async {
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path == '/profiles/me/public') {
+        return _json(_publicProfile(city: 'Paris', maxDistanceKm: 150), 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/profiles/me/private') {
+        return _json({'photos': []}, 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/profiles/cities') {
+        return _json(['Paris', 'Lyon', 'Marseille'], 200);
+      }
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Paris'), findsOneWidget);
+    expect(find.text('Rayon de recherche : 150 km'), findsOneWidget);
+  });
+
+  testWidgets('no city set hides the distance slider', (tester) async {
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path == '/profiles/me/public') {
+        return _json(_publicProfile(), 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/profiles/me/private') {
+        return _json({'photos': []}, 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/profiles/cities') {
+        return _json(['Paris', 'Lyon'], 200);
+      }
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Rayon de recherche'), findsNothing);
+  });
+
+  testWidgets('publishing sends the chosen city and distance radius', (tester) async {
+    Map<String, dynamic>? sentBody;
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path == '/profiles/me/public') {
+        return _json(_publicProfile(), 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/profiles/me/private') {
+        return _json({'photos': []}, 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/profiles/cities') {
+        return _json(['Paris', 'Lyon'], 200);
+      }
+      if (request.method == 'PUT' && request.url.path == '/profiles/me/public') {
+        sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return _json(_publicProfile(isPublished: true), 200);
+      }
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    await _tapAfterScrollingTo(tester, find.text('Non renseignée'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lyon').last);
+    await tester.pumpAndSettle();
+
+    await _tapAfterScrollingTo(tester, find.text('Publier mon profil public'));
+    await tester.pumpAndSettle();
+
+    expect(sentBody, isNotNull);
+    expect(sentBody!['city'], 'Lyon');
+    // Le rayon par défaut (aucun encore choisi manuellement) suit la valeur affichée par défaut.
+    expect(sentBody!['max_distance_km'], 100);
   });
 }

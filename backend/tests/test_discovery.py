@@ -382,3 +382,42 @@ def test_match_list_reports_unread_count_from_the_other_side_only():
 
     matches_a_after_read = client.get("/discovery/matches", headers=match["headers_a"]).json()
     assert matches_a_after_read[0]["unread_count"] == 0
+
+
+def test_list_cities_returns_known_french_cities():
+    response = client.get("/profiles/cities")
+    assert response.status_code == 200
+    cities = response.json()
+    assert "Paris" in cities
+    assert "Lyon" in cities
+    assert cities == sorted(cities)
+
+
+def test_distance_filter_excludes_a_candidate_beyond_the_radius():
+    headers_me, _ = create_published_user(
+        client, "Distance moi", city="Paris", max_distance_km=200
+    )
+    _, id_far = create_published_user(client, "Distance loin", city="Marseille")
+    _, id_close = create_published_user(client, "Distance proche", city="Reims")
+
+    feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=headers_me).json()}
+    assert id_far not in feed_ids
+    assert id_close in feed_ids
+
+
+def test_distance_filter_excludes_candidate_with_no_city():
+    headers_me, _ = create_published_user(
+        client, "Distance moi sans loin", city="Paris", max_distance_km=50
+    )
+    _, id_no_city = create_published_user(client, "Sans ville")
+
+    feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=headers_me).json()}
+    assert id_no_city not in feed_ids
+
+
+def test_no_distance_filter_when_max_distance_km_is_unset():
+    headers_me, _ = create_published_user(client, "Distance moi sans filtre", city="Paris")
+    _, id_far = create_published_user(client, "Distance loin sans filtre", city="Marseille")
+
+    feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=headers_me).json()}
+    assert id_far in feed_ids

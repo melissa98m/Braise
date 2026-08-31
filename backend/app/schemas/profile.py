@@ -28,6 +28,12 @@ class PublicProfileIn(BaseModel):
     looking_for_gender: Gender | None = None
     age_min: int | None = Field(default=None, ge=MIN_FEED_AGE, le=MAX_FEED_AGE)
     age_max: int | None = Field(default=None, ge=MIN_FEED_AGE, le=MAX_FEED_AGE)
+    # Distance (P9.3) : `city` doit être une ville de la liste fermée exposée par
+    # `GET /profiles/cities` — voir services/geo.py — sinon elle est acceptée mais ne résout à
+    # aucune coordonnée (donc ignorée comme filtre, jamais une erreur 422 : une ville hors liste
+    # reste un nom d'affichage valide, seul son usage comme filtre de distance est concerné).
+    city: str | None = Field(default=None, max_length=80)
+    max_distance_km: int | None = Field(default=None, ge=1, le=1000)
 
     @field_validator("birth_date")
     @classmethod
@@ -69,6 +75,8 @@ class PublicProfileOut(BaseModel):
     looking_for_gender: Gender | None
     age_min: int | None
     age_max: int | None
+    city: str | None
+    max_distance_km: int | None
 
 
 class PrivatePhotoOut(BaseModel):

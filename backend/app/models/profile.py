@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.db.base import Base
@@ -17,13 +17,21 @@ class PublicProfile(Base):
     avatar_seed = Column(String, nullable=False)
     is_published = Column(Boolean, nullable=False, default=False, index=True)
     # Filtres de découverte de base (cahier des charges A.5 Module 2 : "tranche d'âge, distance,
-    # genre recherché" — la distance est hors scope ici, aucune capture de géolocalisation
-    # n'existe dans l'app). Tous nullable : un profil qui ne les renseigne pas n'est filtré par
-    # rien, exactement le comportement d'avant ces colonnes (voir services/discovery.get_feed).
+    # genre recherché"). Tous nullable : un profil qui ne les renseigne pas n'est filtré par rien,
+    # exactement le comportement d'avant ces colonnes (voir services/discovery.get_feed).
     gender = Column(String(20), nullable=True)
     looking_for_gender = Column(String(20), nullable=True, index=True)
     age_min = Column(Integer, nullable=True)
     age_max = Column(Integer, nullable=True)
+    # Distance (P9.3) : pas de géocodage payant ni de capture GPS — `city` est le nom choisi dans
+    # une liste fermée de villes françaises (services/geo.py), `city_lat`/`city_lon` sa position
+    # résolue une seule fois à l'enregistrement du profil (services/profiles.upsert_public_profile)
+    # plutôt qu'à chaque requête de feed. `max_distance_km` est ma propre préférence de recherche,
+    # symétrique à `age_min`/`age_max` : nulle = pas de filtre.
+    city = Column(String(80), nullable=True)
+    city_lat = Column(Float, nullable=True)
+    city_lon = Column(Float, nullable=True)
+    max_distance_km = Column(Integer, nullable=True)
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

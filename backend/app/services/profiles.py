@@ -10,6 +10,7 @@ from app.models.user import User
 from app.schemas.profile import PublicProfileIn
 from app.services import storage
 from app.services.avatar import avatar_spec_from_seed, generate_avatar_seed
+from app.services.geo import resolve_city
 from app.services.matches import get_match_or_404, other_user_id
 from app.services.subscriptions import is_premium
 
@@ -56,6 +57,13 @@ def upsert_public_profile(db: Session, user: User, data: PublicProfileIn) -> Pub
     profile.looking_for_gender = data.looking_for_gender
     profile.age_min = data.age_min
     profile.age_max = data.age_max
+    profile.city = data.city
+    # Résolu une seule fois ici plutôt qu'à chaque feed (services/discovery.get_feed) : une ville
+    # hors de la liste fermée (services/geo.py) donne `None`, donc pas de coordonnées — le nom
+    # reste affiché tel quel, seul son usage comme filtre de distance est concerné.
+    resolved = resolve_city(data.city)
+    profile.city_lat, profile.city_lon = resolved if resolved else (None, None)
+    profile.max_distance_km = data.max_distance_km
     profile.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(profile)
@@ -84,6 +92,8 @@ def to_public_profile_out(db: Session, profile: PublicProfile, is_verified: bool
         "looking_for_gender": profile.looking_for_gender,
         "age_min": profile.age_min,
         "age_max": profile.age_max,
+        "city": profile.city,
+        "max_distance_km": profile.max_distance_km,
     }
 
 

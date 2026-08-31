@@ -517,6 +517,40 @@ techniques : cahier des charges sections A, B, C, D.
   84/84 tests Flutter au total, `flutter analyze` propre, `flutter build web` réussi, 81/81 tests
   backend, `ruff check .` propre.
 
+- [x] **P9.3 — Filtre de découverte par distance (cahier des charges A.5).** Explicitement hors
+  périmètre jusqu'ici ("aucune capture de géolocalisation n'existe dans l'app"). Pas de GPS, pas
+  d'API de géocodage payante : l'utilisateur choisit une ville dans une liste fermée d'environ 50
+  grandes villes françaises (`backend/app/services/geo.py` +
+  `services/data/french_cities.csv`, coordonnées connues du domaine public, précision suffisante
+  pour un filtre de rayon, pas un usage cartographique). Résolution en `city_lat`/`city_lon` une
+  seule fois à l'enregistrement du profil (`upsert_public_profile`), jamais recalculée à chaque
+  requête de feed — une ville hors liste reste acceptée comme simple texte d'affichage
+  (`city`), sans jamais résoudre de coordonnées, donc silencieusement ignorée comme filtre plutôt
+  que rejetée en erreur. `max_distance_km` est ma préférence de recherche, symétrique à
+  `age_min`/`age_max` : nulle = pas de filtre. `get_feed` l'applique dans la même boucle Python
+  que la tranche d'âge (`services/geo.haversine_km`, distance à vol d'oiseau) ; un candidat sans
+  coordonnées résolues est exclu d'une recherche filtrée par distance, faute de pouvoir vérifier
+  qu'il est dans le rayon. `GET /profiles/cities` (sans authentification — donnée de référence
+  statique, rien de propre à un utilisateur) peuple le sélecteur mobile. 4 nouveaux tests backend
+  (liste des villes, exclusion au-delà du rayon, exclusion d'un candidat sans ville, absence de
+  filtrage sans `max_distance_km`).
+
+  Côté mobile, `ProfileSetupScreen` ajoute un sélecteur de ville et un curseur de distance à la
+  section "Préférences de découverte" existante. Piège trouvé en écrivant le test de publication :
+  le curseur affiche "100 km" par défaut tant que l'utilisateur ne l'a jamais touché, mais
+  `_maxDistanceKm` restait `null` dans ce cas — `_save()` publiait alors *aucun* filtre de
+  distance malgré ce que l'écran affichait clairement à l'instant de publier. Corrigé avec un
+  repli `_maxDistanceKm ?? _defaultMaxDistanceKm` au moment d'envoyer, pour que ce qui part vers
+  le serveur corresponde toujours à ce qui était affiché. `PublicProfile.city`/`.maxDistanceKm`
+  sont des paramètres de constructeur optionnels (pas `required`) spécifiquement pour que
+  `_regenerateAvatar()` (qui reconstruit un `PublicProfile` à la main) n'ait pas à changer à
+  chaque nouveau champ du modèle — il les recopie quand même explicitement depuis l'ancien
+  profil, sinon régénérer son avatar aurait silencieusement effacé la ville/le rayon choisis.
+
+  87/87 tests Flutter au total, `flutter analyze` propre, `flutter build web` réussi, 85/85 tests
+  backend, `ruff check .` propre — clôt le plan d'action P9 dans son intégralité (P9.1
+  notifications locales, P9.2 badge de messages non lus, P9.3 filtre de découverte par distance).
+
 ## Backlog V2 (hors périmètre MVP)
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà

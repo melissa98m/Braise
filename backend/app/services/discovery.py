@@ -12,6 +12,7 @@ from app.models.profile import PublicProfile
 from app.models.swipe import Swipe, SwipeDecision
 from app.models.user import User
 from app.services.avatar import avatar_spec_from_seed
+from app.services.geo import haversine_km
 from app.services.matches import other_user_id
 from app.services.moderation import compute_trust_scores_batch
 from app.services.profiles import compute_age
@@ -58,6 +59,15 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
 
     age_min = my_profile.age_min if my_profile else None
     age_max = my_profile.age_max if my_profile else None
+    # Distance (P9.3) : opt-in comme l'âge/le genre — sans `max_distance_km` renseigné, aucun
+    # filtrage. Avec, un candidat sans ville résolue (jamais renseignée, ou hors de la liste
+    # fermée de services/geo.py) est exclu : impossible de vérifier qu'il est dans le rayon.
+    my_location = (
+        (my_profile.city_lat, my_profile.city_lon)
+        if my_profile and my_profile.city_lat is not None and my_profile.city_lon is not None
+        else None
+    )
+    max_distance_km = my_profile.max_distance_km if my_profile else None
 
     # Batché en une requête IN(...) plutôt qu'un aller-retour par candidat — même règle que
     # list_my_matches (services/matches, cf. CLAUDE.md) pour éviter un N+1.
@@ -72,6 +82,12 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
             continue
         if age_max is not None and age > age_max:
             continue
+        if max_distance_km is not None:
+            if my_location is None or profile.city_lat is None or profile.city_lon is None:
+                continue
+            distance_km = haversine_km(my_location, (profile.city_lat, profile.city_lon))
+            if distance_km > max_distance_km:
+                continue
         common = sorted(set(my_interests) & set(profile.interests))
         scored.append(
             {

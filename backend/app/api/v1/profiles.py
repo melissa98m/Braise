@@ -13,8 +13,17 @@ from app.schemas.profile import (
     PublicProfileOut,
 )
 from app.services import profiles as profiles_service
+from app.services.geo import CITIES
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
+
+
+@router.get("/cities", response_model=list[str])
+def list_cities():
+    # Référence statique (services/geo.py), aucune donnée utilisateur : pas besoin
+    # d'authentification, contrairement au reste de ce routeur — sert à peupler le sélecteur de
+    # ville mobile (P9.3) avec exactement les noms que `city` peut résoudre en coordonnées.
+    return sorted(CITIES)
 
 
 @router.get("/me/public", response_model=PublicProfileOut)

@@ -144,15 +144,27 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   same "batch the query, filter in Python" split as the compatibility scoring above. A swipe
   target that doesn't exist and one that exists but isn't `is_published` return the
   *same* 404 — don't let that distinction leak through, it's a user-enumeration vector. Base
-  discovery filters (cahier des charges A.5: age range + looking-for gender; distance stays out of
-  scope, no geolocation capture exists anywhere in the app) live as nullable columns on
-  `PublicProfile` (`gender`, `looking_for_gender`, `age_min`, `age_max`) set via the same
-  `PUT /profiles/me/public` that edits the rest of the profile — no separate preferences endpoint.
-  `get_feed` pushes the gender filter into the SQL query (plain equality, shrinks the pool before
-  scoring) and applies the age range in the same Python loop that already computes
-  `compatibility_score`, matching the existing "don't push age math into SQL" pattern above. A
-  profile that hasn't set `looking_for_gender`/`age_min`/`age_max` filters nothing — those
-  preferences are opt-in, not required at signup.
+  discovery filters (cahier des charges A.5: age range, looking-for gender, distance — the third
+  added in P9.3, see below) live as nullable columns on `PublicProfile` (`gender`,
+  `looking_for_gender`, `age_min`, `age_max`) set via the same `PUT /profiles/me/public` that
+  edits the rest of the profile — no separate preferences endpoint. `get_feed` pushes the gender
+  filter into the SQL query (plain equality, shrinks the pool before scoring) and applies the age
+  range in the same Python loop that already computes `compatibility_score`, matching the
+  existing "don't push age math into SQL" pattern above. A profile that hasn't set
+  `looking_for_gender`/`age_min`/`age_max` filters nothing — those preferences are opt-in, not
+  required at signup. **Distance (P9.3)**: no GPS capture and no paid geocoding API — the user
+  picks a city from a closed list of ~50 major French cities (`services/geo.py`,
+  `data/french_cities.csv`, hand-curated public-knowledge coordinates, not survey-grade but
+  plenty for a city-level radius filter), resolved to `PublicProfile.city_lat`/`city_lon` once at
+  `upsert_public_profile` time rather than re-geocoded on every feed request; a city outside that
+  list is still saved as a display string (`city`) but resolves to no coordinates, so it's simply
+  never usable as a distance filter — never a validation error, since `city` is just free text
+  from the API's point of view. `max_distance_km` is my own opt-in search radius, symmetric to
+  `age_min`/`age_max`: null means no filter. `get_feed` applies it in the same Python loop as the
+  age range (`services/geo.haversine_km`, plain great-circle distance) — a candidate is excluded
+  outright if either side lacks resolved coordinates, since there's no way to verify they're
+  within range. `GET /profiles/cities` (no auth required — static reference data, nothing
+  user-specific) lists the closed set for the mobile city picker.
 
 - **Messaging & daily question** (`models/message.py`, `models/daily_question.py`,
   `ws/connection_manager.py`, `services/messaging.py`): `ConnectionManager` is an in-memory
@@ -450,6 +462,22 @@ Flutter SDK is never installed on the host):
   open (no cross-screen event bus exists) — the badge updates on mount and when the user
   navigates away from the Échanges tab, which covers the real case (it clears after visiting the
   inbox) without new shared-state machinery.
+- **Distance filter (P9.3)**: `ProfileSetupScreen` adds a city picker and a distance slider to
+  the existing "PRÉFÉRENCES DE DÉCOUVERTE" section, alongside gender/age. `_loadCities()` fetches
+  `GET /profiles/cities` independently of `_load()` (profile + photos) and fails silently on
+  error — same "decorative feature, must never break the screen" rule as the P9.2 badge: an empty
+  city list just means an empty dropdown, not a broken form. The distance `Slider` only appears
+  once a city is picked (`if (_city != null)`); its label defaults to showing `100 km`
+  (`_defaultMaxDistanceKm`) before the user ever drags it, which surfaced a real bug while
+  writing this screen's test: `_save()` sent whatever `_maxDistanceKm` actually held — `null` if
+  the slider was never touched — silently publishing *no* distance filter at all despite the
+  screen visibly showing "100 km" the whole time. Fixed by falling back to
+  `_maxDistanceKm ?? _defaultMaxDistanceKm` at save time, so what's sent always matches what was
+  shown. `PublicProfile.city`/`.maxDistanceKm` are optional constructor params (not `required`)
+  specifically so `ProfileSetupScreen._regenerateAvatar()` — which reconstructs a `PublicProfile`
+  by hand from the previous one plus a new avatar — doesn't need touching for every future field
+  added to this model; it does still explicitly carry both through, otherwise regenerating your
+  avatar would have silently wiped your city/distance preference.
 - Screens live under `lib/screens/<module>/`, one subfolder per backend module, and are adapted
   from the mockups rather than copied verbatim where the backend doesn't match: OTP entry replaces
   the mockup's KYC/ID-scan step (no KYC exists), discovery is a single-card feed rather than a

@@ -21,6 +21,8 @@ class ProfilesApi {
     String? lookingForGender,
     int? ageMin,
     int? ageMax,
+    String? city,
+    int? maxDistanceKm,
   }) async {
     final json = await _client.put(
       '/profiles/me/public',
@@ -35,6 +37,8 @@ class ProfilesApi {
         'looking_for_gender': lookingForGender,
         'age_min': ageMin,
         'age_max': ageMax,
+        'city': city,
+        'max_distance_km': maxDistanceKm,
       },
     );
     return PublicProfile.fromJson(json as Map<String, dynamic>);
@@ -43,6 +47,15 @@ class ProfilesApi {
   Future<AvatarSpec> regenerateAvatar() async {
     final json = await _client.post('/profiles/me/avatar/regenerate');
     return AvatarSpec.fromJson(json as Map<String, dynamic>);
+  }
+
+  /// Liste fermée de villes (P9.3) — voir services/geo.py côté backend. Peuple le sélecteur de
+  /// ville de `ProfileSetupScreen` : seuls ces noms résolvent en coordonnées pour le filtre de
+  /// distance, saisir autre chose serait accepté (juste un nom d'affichage) mais ignoré comme
+  /// filtre.
+  Future<List<String>> getCities() async {
+    final json = await _client.get('/profiles/cities');
+    return (json as List).cast<String>();
   }
 
   Future<List<PrivatePhoto>> getMyPrivatePhotos() async {
