@@ -880,6 +880,39 @@ techniques : cahier des charges sections A, B, C, D.
     l'exemple de format relégué en `/placeholder`, valeur tapée distincte des deux). `flutter
     analyze` propre, 106/106 tests Flutter (inchangé), `flutter build web` vérifié.
 
+- [x] **P18 — Quatrième passe accessibilité : régression corrigée dans le correctif P16
+  lui-même.** Cette fois, la question de départ était différente : "le correctif précédent a-t-il
+  vraiment tenu ses promesses ?", pas "quel nouvel écran vérifier ?". Résultat : les 3 lignes de
+  réglages de notification (`settings_screen.dart`, corrigées en P16 pour la lecture au lecteur
+  d'écran) étaient devenues **totalement inatteignables au clavier seul, sans lecteur d'écran**.
+  `excludeSemantics: true` — nécessaire pour éviter la double lecture du label — masquait aussi le
+  focus clavier natif du `Switch` sous-jacent, dont Flutter se sert normalement à la fois pour la
+  sémantique et pour la tabulation. Repéré en parcourant l'ordre de tabulation réel de l'app
+  (script Playwright dédié : Tab répété + lecture de `document.activeElement`) plutôt qu'en
+  supposant que le correctif sémantique de P16 suffisait à lui seul — ce qui a permis de
+  distinguer les contrôles réellement atteignables ("Système"/"Clair"/"Sombre",
+  "Exporter mes données"...) des 3 lignes totalement absentes de la séquence.
+  - **Correctif** : chaque ligne enveloppée dans un `Focus` explicite (`onKeyEvent` gérant
+    Entrée/Espace en appelant `onChanged(!value)`), en plus du `Semantics` existant — le premier
+    redonne un arrêt de tabulation réel et une activation clavier physique, le second reste
+    responsable de l'annonce et de l'action côté lecteur d'écran ; les deux coexistent sans se
+    marcher dessus. Vérifié à deux niveaux : un test de widget qui prend le focus par programme
+    (`Focus.of(...).requestFocus()`) et envoie un vrai événement clavier
+    (`tester.sendKeyEvent(LogicalKeyboardKey.space)`), *et* contre l'app réelle reconstruite — un
+    script qui tabule jusqu'à chaque ligne et appuie sur Espace confirme que les 3 préférences
+    (`braise_notif_match`/`_question`/`_messages`) basculent bien, sans lecteur d'écran, à la
+    seule tabulation.
+  - **Non résolu, mineur** : chaque ligne occupe désormais 2 arrêts de tabulation (le nouveau
+    `Focus` et le `Switch` sous-jacent, toujours présent dans l'arbre, gardent chacun leur propre
+    focusabilité) plutôt qu'un seul — les deux activent correctement le même réglage, donc pas
+    d'incohérence fonctionnelle, juste 3 tabulations de plus pour traverser l'écran. Laissé tel
+    quel : supprimer complètement la focusabilité propre du `Switch` sans risquer une nouvelle
+    régression aurait demandé plus de certitude sur le mécanisme exact que ce qui a pu être
+    vérifié dans le temps disponible.
+  - 1 nouveau test Flutter (focus + activation clavier des lignes de notification), 107/107 tests
+    Flutter au total, `flutter analyze` propre, `flutter build web` vérifié, correctif reconfirmé
+    contre l'app réelle après reconstruction du conteneur.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

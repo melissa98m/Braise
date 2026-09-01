@@ -838,6 +838,29 @@ structure, none of which round 1 or 2 had touched yet.
   and the city picker (`profile_setup_screen.dart`) is a button that always shows its current
   value persistently — never free text that vanishes, so the same anti-pattern doesn't apply.
 
+**Accessibility, round 4 (P18) — checking whether round 2's own fix actually held up.** Different
+question from the first three passes ("did P16's `_NotifRow` semantics fix introduce a new gap?"
+instead of "what screen hasn't been checked yet?"), found by literally walking the app's real
+keyboard Tab order (a small Playwright script pressing Tab repeatedly and logging
+`document.activeElement`) rather than assuming a semantics-level fix was also keyboard-complete.
+It wasn't: `excludeSemantics: true` on `_NotifRow`'s wrapping `Semantics` — needed so the screen
+reader doesn't double-read the label — also hid the underlying `Switch`'s own native keyboard
+focus, so a sighted keyboard-only user (no screen reader) could no longer Tab to any of the 3
+notification rows at all. Semantics and keyboard focus are separate systems in Flutter;
+`excludeSemantics` only touches the former, but `Switch` happened to source both from the same
+place, so hiding one silently took the other with it. Fixed by wrapping each row in an explicit
+`Focus` (`onKeyEvent` handling Enter/Space by calling `onChanged(!value)` directly) *alongside*
+the existing `Semantics`, restoring physical keyboard operability without touching what a screen
+reader hears. Verified two ways: a widget test that focuses the row via `Focus.of(...)
+.requestFocus()` and sends a real `LogicalKeyboardKey.space` event, and — because that only proves
+the framework wiring is correct, not that a real Tab key ever reaches this node — a live rebuild
+where a script tabs through Paramètres and confirms each of the 3 preferences actually flips.
+Left unresolved, minor: each row now costs 2 tab stops instead of 1 (the new `Focus` plus the
+`Switch`'s own, still present in the tree) — both toggle the same switch correctly, so no wrong
+behavior, just a slightly longer traversal. Suppressing the `Switch`'s own focusability outright
+felt like the kind of change that could just as easily reintroduce this exact bug a different way,
+without more certainty about the underlying mechanism than the time available allowed for.
+
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not
 ruff's default 88 — covers nearly all existing code without forcing a mass reformat of carefully

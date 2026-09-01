@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -343,36 +344,53 @@ class _NotifRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
-    return Semantics(
-      // Sans frontière propre à chaque ligne, les 3 réglages de notification se lisaient comme
-      // un seul bloc côté lecteur d'écran ("Nouveau match Un like réciproque Question du jour
-      // Rappel quotidien Messages Nouveaux messages reçus"), impossible de savoir quel
-      // interrupteur correspond à quoi en y naviguant — trouvé en inspectant l'arbre
-      // d'accessibilité réel, pas en relisant le code. `excludeSemantics` remplace la lecture des
-      // `Text`/`Switch` descendants (qui dupliquerait le label ci-dessous) par ce seul nœud ;
-      // `toggled`/`onTap` reportent explicitement l'état et l'action du `Switch` exclu, sinon un
-      // lecteur d'écran ne saurait plus si le réglage est activé ni comment le changer.
-      container: true,
-      label: '$label. $desc',
-      toggled: value,
-      onTap: () => onChanged(!value),
-      excludeSemantics: true,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: BraiseSpacing.lg, vertical: BraiseSpacing.sm),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: textTheme.bodyLarge),
-                  const SizedBox(height: 2),
-                  Text(desc, style: textTheme.labelSmall?.copyWith(color: tokens.inkFloor)),
-                ],
+    return Focus(
+      // `excludeSemantics` ci-dessous (nécessaire pour la sémantique, voir plus bas) supprime
+      // aussi le focus clavier natif du `Switch` sous-jacent : au clavier seul (sans lecteur
+      // d'écran), les 3 lignes devenaient totalement inatteignables par Tab — trouvé en
+      // parcourant l'ordre de tabulation réel de l'app, pas en supposant que le premier correctif
+      // suffisait. `Focus` redonne un arrêt de tabulation réel à la ligne, `onKeyEvent` reproduit
+      // l'activation Entrée/Espace qu'un vrai `Switch` gère normalement lui-même.
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.space)) {
+          onChanged(!value);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Semantics(
+        // Sans frontière propre à chaque ligne, les 3 réglages de notification se lisaient comme
+        // un seul bloc côté lecteur d'écran ("Nouveau match Un like réciproque Question du jour
+        // Rappel quotidien Messages Nouveaux messages reçus"), impossible de savoir quel
+        // interrupteur correspond à quoi en y naviguant — trouvé en inspectant l'arbre
+        // d'accessibilité réel, pas en relisant le code. `excludeSemantics` remplace la lecture
+        // des `Text`/`Switch` descendants (qui dupliquerait le label ci-dessous) par ce seul
+        // nœud ; `toggled`/`onTap` reportent explicitement l'état et l'action du `Switch` exclu,
+        // sinon un lecteur d'écran ne saurait plus si le réglage est activé ni comment le changer.
+        container: true,
+        label: '$label. $desc',
+        toggled: value,
+        onTap: () => onChanged(!value),
+        excludeSemantics: true,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: BraiseSpacing.lg, vertical: BraiseSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: textTheme.bodyLarge),
+                    const SizedBox(height: 2),
+                    Text(desc, style: textTheme.labelSmall?.copyWith(color: tokens.inkFloor)),
+                  ],
+                ),
               ),
-            ),
-            Switch(value: value, onChanged: onChanged),
-          ],
+              Switch(value: value, onChanged: onChanged),
+            ],
+          ),
         ),
       ),
     );

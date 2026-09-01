@@ -11,6 +11,7 @@ import 'package:braise_app/screens/settings/settings_screen.dart';
 import 'package:braise_app/state/app_services.dart';
 import 'package:braise_app/state/theme_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -146,6 +147,32 @@ void main() {
     // `hasTapAction: true` ci-dessus garantit qu'un lecteur d'écran peut activer la ligne — le
     // comportement réel du bascule (Switch -> préférence persistée) est déjà couvert par "toggling
     // a notification preference persists it" juste au-dessus, inchangé par ce correctif.
+  });
+
+  testWidgets('notification rows are reachable via keyboard Tab and toggle with Space', (
+    tester,
+  ) async {
+    // P17 a11y pass : `excludeSemantics` ci-dessus supprimait aussi le focus clavier natif du
+    // `Switch` sous-jacent — au clavier seul (sans lecteur d'écran), les 3 lignes devenaient
+    // introuvables par tabulation. Trouvé en parcourant l'ordre de tabulation réel de l'app, pas
+    // en supposant que le correctif sémantique précédent suffisait à lui seul.
+    await _useTallViewport(tester);
+    final client = MockClient((_) async => http.Response('not found', 404));
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    final messagesRow = find.bySemanticsLabel('Messages. Nouveaux messages reçus');
+    final focusNode = Focus.of(tester.element(messagesRow), scopeOk: true);
+    focusNode.requestFocus();
+    await tester.pumpAndSettle();
+    expect(focusNode.hasFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('braise_notif_messages'), isTrue);
   });
 
   testWidgets('turning a notification preference on requests browser permission', (
