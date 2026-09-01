@@ -127,7 +127,7 @@ ThemeData buildBraiseTheme(Brightness brightness) {
         // (box-shadow 0 10px 30px rgba(braise,.28)), jamais un simple bouton plat.
         elevation: 8,
         shadowColor: tokens.braiseFill.withValues(alpha: 0.55),
-      ),
+      ).copyWith(side: _focusRingSide(tokens)),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
@@ -136,9 +136,34 @@ ThemeData buildBraiseTheme(Brightness brightness) {
         side: BorderSide(color: tokens.borderHairline),
         textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600, fontSize: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BraiseRadii.card)),
-      ),
+      ).copyWith(side: _focusRingSide(tokens, fallback: BorderSide(color: tokens.borderHairline))),
     ),
-    // Anneau de focus violet 3px, jamais supprimé (docs/DESIGN_TOKENS.md, accessibilité).
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: tokens.braiseInk,
+      ).copyWith(side: _focusRingSide(tokens)),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom().copyWith(side: _focusRingSide(tokens)),
+    ),
+    // `focusColor` reste le survol de teinte par défaut de Flutter (utilisé par ex. sur InkWell) ;
+    // insuffisant seul pour les boutons (~24/255 de variation de couleur, imperceptible sur un
+    // fond saturé) — d'où l'anneau visible ci-dessus sur chaque type de bouton, jamais retiré
+    // (docs/DESIGN_TOKENS.md, accessibilité). Trouvé en mesurant un vrai écran focus/non-focus au
+    // pixel près, pas en relisant le thème.
     focusColor: tokens.focusRing,
   );
+}
+
+/// Anneau de focus clavier visible (3px, `tokens.focusRing`) sur un type de bouton donné — sans
+/// ça, Material ne fait qu'un survol de teinte quasi invisible (`ThemeData.focusColor`) au focus.
+/// `fallback` est la bordure du reste des états (ex. la bordure fine d'un `OutlinedButton`) ;
+/// `null` par défaut pour un bouton normalement sans bordure (Elevated/Text/Icon).
+WidgetStateProperty<BorderSide?> _focusRingSide(BraiseTokens tokens, {BorderSide? fallback}) {
+  return WidgetStateProperty.resolveWith((states) {
+    if (states.contains(WidgetState.focused)) {
+      return BorderSide(color: tokens.focusRing, width: 3);
+    }
+    return fallback;
+  });
 }

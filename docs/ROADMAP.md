@@ -782,6 +782,59 @@ techniques : cahier des charges sections A, B, C, D.
     notification via `matchesSemantics`), 106/106 tests Flutter au total, `flutter analyze` propre,
     `flutter build web` vérifié, chaque correctif reconfirmé contre l'app réelle après redéploiement.
 
+- [x] **P16 — Passe accessibilité/UX approfondie (demande explicite, hors cahier des charges).**
+  Suite directe de P15, sur des dimensions non couvertes la première fois (clavier, mouvement,
+  langue, métadonnées) plutôt qu'un nouveau passage sur les mêmes écrans. 4 problèmes trouvés,
+  tous corrigés et reconfirmés en direct :
+  1. **Aucune langue déclarée sur la page.** `web/index.html:2` avait `<html>` sans `lang` —
+     un lecteur d'écran peut choisir une prononciation anglaise par défaut pour du contenu
+     entièrement en français, un problème qui touche tout le texte de l'app, pas un écran en
+     particulier. `<html lang="fr">`.
+  2. **L'anneau de focus clavier existait dans le thème mais était quasiment invisible.**
+     `docs/DESIGN_TOKENS.md` définit un vrai anneau de focus (violet, 3px) et `braise_theme.dart`
+     le câblait déjà — mais seulement via `ThemeData.focusColor`, qui ne fait qu'un survol de
+     teinte. Mesuré au pixel près (diff d'images focus/non-focus) : ~24/255 de variation de
+     couleur au maximum sur "Créer un compte", imperceptible sur un fond orange saturé. Un
+     utilisateur clavier (sans souris/tactile) n'avait aucun moyen fiable de savoir sur quel
+     bouton il se trouvait, dans toute l'app. Nouvelle fonction `_focusRingSide` dans
+     `braise_theme.dart` : bordure de 3px `tokens.focusRing` sur l'état focus, appliquée aux 4
+     thèmes de bouton (`Elevated`/`Outlined`/`Text`/`Icon`) via `.copyWith(side: ...)` sur le
+     `ButtonStyle` existant plutôt que de reconstruire chaque style depuis zéro. Vérifié en
+     direct : anneau violet net et visible sur les deux CTA de l'écran d'accueil après tabulation.
+  3. **L'animation de swipe en Découverte ignorait "réduire les animations".** Contrairement à
+     `braise_page_route.dart` et au halo pulsant de `PaywallScreen`, qui respectent déjà
+     `MediaQuery.disableAnimations`, `_exitController` et l'`AnimatedSwitcher` de
+     `discovery_screen.dart` avaient des durées figées (280ms/260ms) — sur l'écran le plus utilisé
+     de l'app. Les deux durées passent à `Duration.zero` quand `disableAnimations` est actif
+     (calculé une fois en tête de `build()`, `_exitController.duration` réassigné à chaque frame —
+     un `AnimationController.duration` est mutable, pas besoin de reconstruire le controller).
+     Vérifié avec l'émulation `reducedMotion: 'reduce'` de Playwright : la carte suivante s'affiche
+     déjà totalement stable 150ms après le tap sur "Passer", sans image intermédiaire de
+     transition.
+  4. **Onglet du navigateur et métadonnées jamais personnalisés depuis le scaffold Flutter.**
+     `web/index.html` (`<title>braise_app</title>`, `meta description` = "A new Flutter
+     project.", `apple-mobile-web-app-title` = "braise_app") et `web/manifest.json` (`name`/
+     `short_name` = "braise_app", `theme_color`/`background_color` = bleu Flutter par défaut
+     `#0175C2`) portaient encore le texte et les couleurs du modèle de projet, jamais remplacés
+     pendant les 6 phases + travaux post-MVP précédents. Titre/nom passés à "Braise", description
+     reprise du texte réel de l'écran d'accueil, couleurs alignées sur les tokens existants
+     (`background_color` = `surface/root` sombre `#07090E`, `theme_color` = `braise/fill`
+     `#FF8C42`) — visible dans l'onglet du navigateur, les favoris, et le nom de l'icône si l'app
+     est ajoutée à l'écran d'accueil (PWA), pas seulement un point d'accessibilité.
+  - **Vérifié solide, aucun correctif nécessaire** : le reflow à zoom navigateur élevé (testé en
+    simulant un viewport deux fois plus étroit, WCAG 1.4.10 — le texte se réajuste proprement,
+    rien ne déborde), le thème clair (contraste et cohérence bons sur tous les écrans vérifiés),
+    l'annonce des `SnackBar` d'erreur et la restauration du focus après une boîte de dialogue
+    (garanties par le framework Flutter lui-même, pas un point faible de cette app), et l'ordre de
+    tabulation clavier sur l'écran d'accueil.
+  - Aucun nouveau test automatisé (les 4 points sont soit visuels — pas facilement assertable en
+    test de widget sans capturer des pixels —, soit déjà couverts par les tests d'écran
+    existants), mais chaque correctif reconfirmé un par un contre l'app réelle après
+    reconstruction du conteneur : `lang`/titre lus directement depuis le DOM, anneau de focus et
+    absence d'image de transition capturés par capture d'écran, `manifest.json` relu depuis le
+    serveur qui tourne. `flutter analyze` propre, 106/106 tests Flutter (inchangé), `flutter build
+    web` vérifié.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

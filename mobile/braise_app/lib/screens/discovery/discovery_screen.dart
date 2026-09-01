@@ -179,6 +179,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
+    // "Réduire les animations" est déjà respecté par braise_page_route.dart et le halo de
+    // PaywallScreen, mais pas ici — l'écran le plus utilisé de l'app continuait de faire glisser/
+    // pivoter la carte à chaque swipe pour qui a activé ce réglage système (trouble vestibulaire).
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    _exitController.duration = reduceMotion ? Duration.zero : const Duration(milliseconds: 280);
 
     return Scaffold(
       appBar: AppBar(
@@ -221,7 +226,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
                 children: [
                   Expanded(
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
+                      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
                       // AnimatedSwitcher clippe (hardEdge) sa pile interne par défaut : la carte

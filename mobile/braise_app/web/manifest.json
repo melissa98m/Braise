@@ -1,11 +1,11 @@
 {
-    "name": "braise_app",
-    "short_name": "braise_app",
+    "name": "Braise",
+    "short_name": "Braise",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#07090E",
+    "theme_color": "#FF8C42",
+    "description": "L'affinité avant le physique. Découvrez qui vous matche, pas seulement à quoi iel ressemble.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

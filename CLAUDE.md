@@ -784,6 +784,35 @@ Flutter's default semantics behavior can't be predicted from the widget tree alo
   looked stateless in the compact `ariaSnapshot()` — three plain `button`s, no selected marker —
   but the raw DOM showed it already exposes the active choice via `aria-current`. Left alone.
 
+**Accessibility, round 2 (P16)** — dimensions the first pass hadn't touched (keyboard, motion,
+language, metadata), found the same way: measuring the real running app, not reading the theme
+code and assuming it worked.
+- `docs/DESIGN_TOKENS.md`'s `focusRing` token was already wired into `braise_theme.dart`, but only
+  via `ThemeData.focusColor` — a subtle tint overlay, not a border. Pixel-diffing a focused vs.
+  unfocused screenshot showed a ~24/255 max color shift on "Créer un compte": present in code,
+  invisible in practice, on every button in the app. `_focusRingSide()` (`braise_theme.dart`)
+  layers a real 3px `focusRing` border onto the *existing* `ButtonStyle` via `.copyWith(side: ...)`
+  for all 4 button theme types (Elevated/Outlined/Text/Icon) — deliberately not a from-scratch
+  style rebuild, so nothing else about each button's look changes except the focus state.
+- `discovery_screen.dart`'s swipe animation (`_exitController`, the feed's `AnimatedSwitcher`) had
+  fixed-duration animations with no `disableAnimations` check, unlike `braise_page_route.dart` and
+  `PaywallScreen`'s pulsing diamond, which already respect it — on the single most-used screen in
+  the app. Both now resolve to `Duration.zero` under reduced motion; `AnimationController.duration`
+  is mutable, so `_exitController`'s gets reassigned once at the top of `build()` rather than
+  needing the controller rebuilt.
+- `web/index.html` had no `lang` attribute at all (screen readers can default to an English voice
+  for entirely-French content) and, along with `web/manifest.json`, still carried the unedited
+  Flutter scaffold defaults through every phase of this project: `<title>braise_app</title>`, a
+  meta description reading "A new Flutter project.", and the stock Flutter blue
+  (`#0175C2`) for `theme_color`/`background_color`. Fixed to `lang="fr"`, "Braise", the app's own
+  tagline, and the actual dark/braise tokens (`surface/root` dark, `braise/fill`) — visible in the
+  browser tab, bookmarks, and the icon name if someone adds the PWA to a home screen, not purely
+  an accessibility nicety.
+- Checked and already fine, no change made: reflow under a much narrower effective viewport (WCAG
+  1.4.10, simulating high browser zoom), the light theme across every screen checked, `SnackBar`
+  announcement and post-dialog focus restoration (both framework-level Flutter guarantees, not
+  something this app's code controls), and keyboard tab order on the welcome screen.
+
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not
 ruff's default 88 — covers nearly all existing code without forcing a mass reformat of carefully
