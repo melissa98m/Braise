@@ -98,7 +98,7 @@ class _BanAppealScreenState extends State<BanAppealScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.'))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(BraiseSpacing.xxl),
               child: Column(
@@ -128,6 +128,7 @@ class _BanAppealScreenState extends State<BanAppealScreen> {
                       controller: _messageController,
                       maxLines: 5,
                       decoration: const InputDecoration(
+                        labelText: 'Votre contestation',
                         hintText: 'Pourquoi pensez-vous que cette suspension n\'est pas justifiée ?',
                       ),
                     ),

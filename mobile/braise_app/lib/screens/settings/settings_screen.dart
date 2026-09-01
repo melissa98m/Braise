@@ -136,7 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Paramètres')),
       body: _loadingPrefs
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.'))
           : ListView(
               padding: const EdgeInsets.all(BraiseSpacing.xxl),
               children: [

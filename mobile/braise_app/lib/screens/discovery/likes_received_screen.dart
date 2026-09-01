@@ -124,7 +124,7 @@ class _LikesReceivedScreenState extends State<LikesReceivedScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Qui vous a braisé')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.'))
           : _error != null
           ? Center(
               child: Padding(

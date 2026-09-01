@@ -281,7 +281,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.')));
 
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
@@ -406,7 +406,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 Expanded(
                   child: TextField(
                     controller: _interestController,
-                    decoration: const InputDecoration(hintText: 'Ajouter un intérêt'),
+                    decoration: const InputDecoration(labelText: 'Ajouter un intérêt'),
                     onSubmitted: (_) => _addInterest(),
                   ),
                 ),

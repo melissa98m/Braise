@@ -32,12 +32,18 @@ class _ConceptIntroScreenState extends State<ConceptIntroScreen> {
       Navigator.of(context).pushAndRemoveUntil(braiseRoute(context, const RootShell()), (_) => false);
       return;
     }
-    _pageController.nextPage(duration: const Duration(milliseconds: 320), curve: Curves.easeOut);
+    final duration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 320);
+    _pageController.nextPage(duration: duration, curve: Curves.easeOut);
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
+    final dotDuration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
 
     return Scaffold(
       body: SafeArea(
@@ -57,7 +63,7 @@ class _ConceptIntroScreenState extends State<ConceptIntroScreen> {
                       child: Padding(
                         padding: EdgeInsets.only(right: i == _pageCount - 1 ? 0 : BraiseSpacing.sm),
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
+                          duration: dotDuration,
                           height: 4,
                           decoration: BoxDecoration(
                             color: i <= _page ? tokens.braiseInk : tokens.borderHairline,

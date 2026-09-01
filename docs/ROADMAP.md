@@ -835,6 +835,51 @@ techniques : cahier des charges sections A, B, C, D.
     serveur qui tourne. `flutter analyze` propre, 106/106 tests Flutter (inchangé), `flutter build
     web` vérifié.
 
+- [x] **P17 — Troisième passe accessibilité/UX (demande explicite, hors cahier des charges).**
+  Encore un cran plus loin que P16 : chargements, mouvement dans les écrans jamais couverts
+  jusqu'ici, et structure des formulaires. 3 points trouvés puis corrigés (un 4e, l'absence de
+  balise `<meta viewport>`, écarté après comparaison directe avec le template Flutter par défaut
+  de la version installée — il n'en a pas non plus, le canvas se dimensionne par JS, pas par le
+  mécanisme de zoom CSS classique) :
+  1. **Les 10 indicateurs de chargement de l'app étaient muets pour un lecteur d'écran.**
+     `CircularProgressIndicator` a un paramètre `semanticsLabel` prévu pour ça ; aucune des 10
+     occurrences (Découverte, Paramètres, Moi, Échanges, Braise+, "Qui vous a braisé", création de
+     profil, contestation de bannissement, déblocage de profil, `main.dart`) ne le renseignait.
+     `'Chargement en cours.'` ajouté partout via un remplacement global (le même
+     `const CircularProgressIndicator()` littéral apparaissait identique aux 10 endroits).
+  2. **"Réduire les animations" restait ignoré sur 7 animations locales de plus**, en plus du swipe
+     de Découverte corrigé en P16 : les étoiles de notation (`rating_screen.dart`, x2), les 2
+     transitions de l'écran OTP — barre de progression et changement d'étape (`otp_screen.dart`,
+     x3), le défilement entre les 3 pages "Le concept" et sa barre de progression
+     (`concept_intro_screen.dart`, x2), les barres de score de confiance qui montent en s'animant
+     (`profile_trust_screen.dart`), la révélation du profil débloqué (`unlock_screen.dart`), et le
+     défilement automatique vers le dernier message (`conversation_screen.dart`). Même motif
+     partout : une valeur `Duration.zero` calculée une fois via `MediaQuery.of(context)
+     .disableAnimations`, réutilisée pour chaque `Animated*`/`TweenAnimationBuilder` de l'écran —
+     `PageController.animateToPage`/`ScrollController.animateTo` acceptent nativement une durée
+     nulle (vérifié dans le code source du SDK avant d'appliquer le correctif, pas supposé), ils
+     sautent alors instantanément à la position cible plutôt que de rejeter l'appel.
+  3. **Les 9 champs de texte de l'app utilisaient un placeholder comme seul repère visuel, sans
+     label persistant.** Le motif classique : le repère disparaît dès la première frappe, donc
+     rien n'indique plus ce que contient le champ en y revenant. Numéro de téléphone et code OTP
+     (`otp_screen.dart`) séparés en un vrai label (« Numéro de téléphone », « Code reçu par SMS »)
+     et, pour le téléphone, un `hintText` qui redevient un simple exemple de format plutôt que le
+     label lui-même — au passage, `autofillHints` ajouté sur les deux (`telephoneNumber`,
+     `oneTimeCode`) pour l'auto-remplissage réel et le remplissage SMS automatique sur mobile.
+     Même traitement pour l'ajout d'intérêt (`profile_setup_screen.dart`), le texte de contestation
+     de bannissement (`ban_appeal_screen.dart`) et la description de signalement
+     (`report_screen.dart`). Délibérément laissés tels quels : le champ de saisie du chat
+     (`conversation_screen.dart`, « Écrire à {nom}… ») suit une convention universelle de
+     messagerie où aucune app connue n'affiche de label flottant, et le sélecteur de ville
+     (`profile_setup_screen.dart`) est un bouton qui affiche déjà la valeur choisie en permanence
+     (jamais un texte libre qui disparaît), pas le même problème.
+  - Aucun nouveau test automatisé (mêmes raisons qu'en P16 — changements visuels/déclaratifs,
+    faible risque de régression, framework-vérifiés), mais chaque correctif reconfirmé contre
+    l'app réelle après reconstruction du conteneur : label persistant du téléphone capturé en
+    capture d'écran + relu dans l'arbre d'accessibilité (nom accessible "Numéro de téléphone" avec
+    l'exemple de format relégué en `/placeholder`, valeur tapée distincte des deux). `flutter
+    analyze` propre, 106/106 tests Flutter (inchangé), `flutter build web` vérifié.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

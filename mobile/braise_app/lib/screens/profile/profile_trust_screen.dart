@@ -76,7 +76,7 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.')));
 
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
@@ -272,6 +272,9 @@ class _TrustBars extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final filled = (score / 20).round();
+    final duration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 300);
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -280,7 +283,7 @@ class _TrustBars extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 5),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
+              duration: duration,
               curve: Curves.easeOutCubic,
               width: 7,
               height: 16 + i * 6,

@@ -89,6 +89,9 @@ class _OtpScreenState extends State<OtpScreen> {
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
+    final animDuration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 250);
 
     return Scaffold(
       body: SafeArea(
@@ -104,7 +107,7 @@ class _OtpScreenState extends State<OtpScreen> {
                 children: [
                   Expanded(
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
+                      duration: animDuration,
                       height: 4,
                       decoration: BoxDecoration(
                         color: tokens.braiseInk,
@@ -115,7 +118,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   const SizedBox(width: BraiseSpacing.sm),
                   Expanded(
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
+                      duration: animDuration,
                       height: 4,
                       decoration: BoxDecoration(
                         color: _codeSent ? tokens.braiseInk : tokens.borderHairline,
@@ -146,10 +149,17 @@ class _OtpScreenState extends State<OtpScreen> {
                 controller: _phoneController,
                 enabled: !_codeSent,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(hintText: '+33 6 12 34 56 78'),
+                autofillHints: const [AutofillHints.telephoneNumber],
+                // `labelText` distinct du `hintText` (l'exemple de format) : sans lui, le repère
+                // visuel du champ disparaissait dès la première frappe — repéré en revoyant les
+                // 9 champs de texte de l'app, un seul motif partout, jamais un oubli isolé.
+                decoration: const InputDecoration(
+                  labelText: 'Numéro de téléphone',
+                  hintText: '+33 6 12 34 56 78',
+                ),
               ),
               AnimatedSize(
-                duration: const Duration(milliseconds: 250),
+                duration: animDuration,
                 curve: Curves.easeOutCubic,
                 alignment: Alignment.topCenter,
                 child: !_codeSent
@@ -161,7 +171,8 @@ class _OtpScreenState extends State<OtpScreen> {
                           TextField(
                             controller: _codeController,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(hintText: 'Code reçu par SMS'),
+                            autofillHints: const [AutofillHints.oneTimeCode],
+                            decoration: const InputDecoration(labelText: 'Code reçu par SMS'),
                           ),
                           if (_debugCode != null)
                             Container(

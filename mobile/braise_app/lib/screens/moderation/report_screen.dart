@@ -100,7 +100,10 @@ class _ReportScreenState extends State<ReportScreen> {
             TextField(
               controller: _descriptionController,
               maxLines: 4,
-              decoration: const InputDecoration(hintText: 'Décrivez les faits factuellement.'),
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Décrivez les faits factuellement.',
+              ),
             ),
             const SizedBox(height: BraiseSpacing.lg),
             Container(

@@ -813,6 +813,31 @@ code and assuming it worked.
   announcement and post-dialog focus restoration (both framework-level Flutter guarantees, not
   something this app's code controls), and keyboard tab order on the welcome screen.
 
+**Accessibility, round 3 (P17)** — loading states, the remaining animations, and form field
+structure, none of which round 1 or 2 had touched yet.
+- None of the app's 10 `CircularProgressIndicator` instances set `semanticsLabel` — a screen
+  reader gets total silence during every loading state, on every screen. All 10 were the exact
+  same `const CircularProgressIndicator()` literal, so this was one mechanical find-and-replace to
+  `semanticsLabel: 'Chargement en cours.'` rather than 10 separate edits.
+- 7 more animations across 6 files (`rating_screen.dart`, `otp_screen.dart`,
+  `concept_intro_screen.dart`, `profile_trust_screen.dart`, `unlock_screen.dart`,
+  `conversation_screen.dart`) had fixed durations with no `disableAnimations` check, beyond the
+  Discovery swipe already fixed in P16. Same fix shape everywhere: a `Duration.zero`-or-real-value
+  local computed once from `MediaQuery.of(context).disableAnimations`, reused across every
+  `Animated*`/`TweenAnimationBuilder` in that build. Confirmed in the SDK source before relying on
+  it: `PageController.animateToPage`/`ScrollController.animateTo` both accept a zero duration and
+  jump instantly rather than throwing — not assumed.
+- All 9 text fields in the app use `hintText` with no `labelText` — the classic
+  disappears-on-first-keystroke placeholder-as-label pattern, so nothing indicates what a filled
+  field contains if the user looks back at it. Split into a persistent `labelText` plus (where the
+  original hint was a format example rather than a description, e.g. the phone field) a real
+  `hintText` kept separately for that example — `autofillHints` added on the phone/OTP-code fields
+  as a natural companion fix (`telephoneNumber`/`oneTimeCode`), enabling real autofill and SMS
+  auto-read on mobile. Deliberately left alone: the chat composer (`conversation_screen.dart`,
+  "Écrire à {name}…") follows a universal messaging-app convention with no floating label anywhere,
+  and the city picker (`profile_setup_screen.dart`) is a button that always shows its current
+  value persistently — never free text that vanishes, so the same anti-pattern doesn't apply.
+
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not
 ruff's default 88 — covers nearly all existing code without forcing a mass reformat of carefully

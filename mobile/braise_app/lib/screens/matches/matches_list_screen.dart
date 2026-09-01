@@ -53,7 +53,7 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
       body: RefreshIndicator(
         onRefresh: _load,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.'))
             : _error != null
             ? Center(child: Text(_error!, style: TextStyle(color: tokens.erreur)))
             : _matches.isEmpty

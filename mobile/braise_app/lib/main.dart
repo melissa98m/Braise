@@ -87,7 +87,7 @@ class _AuthGateState extends State<_AuthGate> {
   Widget build(BuildContext context) {
     final status = context.watch<AuthController>().status;
     return switch (status) {
-      AuthStatus.unknown => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      AuthStatus.unknown => const Scaffold(body: Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.'))),
       // Écran d'accueil (CTA "Créer un compte"/"J'ai déjà un compte"), pas directement OtpScreen :
       // WelcomeScreen pousse vers OtpScreen via un vrai `Navigator.push`, donc après vérification
       // réussie le `pushReplacement` d'OtpScreen (voir otp_screen.dart) remplace cette route-là,

@@ -190,11 +190,14 @@ class _ScoreChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
+    final duration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 150);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(BraiseRadii.field),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: duration,
         width: 52,
         height: 52,
         alignment: Alignment.center,
@@ -207,7 +210,7 @@ class _ScoreChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(BraiseRadii.field),
         ),
         child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 150),
+          duration: duration,
           style: TextStyle(
             color: selected ? tokens.braiseFillText : tokens.inkSecondary,
             fontWeight: FontWeight.w700,

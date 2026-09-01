@@ -204,7 +204,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> with SingleTickerProv
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.'))
           : _error != null
           ? Center(
               child: Text(_error!, style: textTheme.bodyMedium?.copyWith(color: tokens.erreur)),

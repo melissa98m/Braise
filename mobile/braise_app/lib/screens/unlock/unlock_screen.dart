@@ -55,6 +55,9 @@ class _UnlockScreenState extends State<UnlockScreen> {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final revealDuration = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 500);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profil privé'), backgroundColor: Colors.transparent),
@@ -74,7 +77,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
           ),
         ),
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Chargement en cours.'))
             : _error != null
             ? Center(child: Text(_error!, style: TextStyle(color: tokens.erreur)))
             : SafeArea(
@@ -112,7 +115,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
                       else
                         TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0, end: 1),
-                          duration: const Duration(milliseconds: 500),
+                          duration: revealDuration,
                           curve: Curves.easeOutCubic,
                           builder: (context, t, child) => Opacity(
                             opacity: t,
