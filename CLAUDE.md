@@ -200,7 +200,12 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   first read (`DailyQuestion`, unique on match+user+day, `IntegrityError` on the race between two
   concurrent first `GET`s is caught and re-read, not treated as a bug). The correct answer is never
   in the `GET` response — only revealed in the `POST .../answer` result, after that day's attempt is
-  consumed. A correct answer increments `Match.flame_count` (shared, not per-user), matching "bonne
+  consumed. `DailyQuestionOut.prompt` (P14 — found via an actual click-through, not a code read: the
+  card rendered "QUESTION DU JOUR" straight into 4 unlabeled option buttons, with no sentence
+  anywhere saying what to guess, because the model never had a question-text field at all, only
+  `options`/`correct_answer`) is computed by `services.messaging._build_prompt` from the other
+  side's *current* display name — never persisted alongside the question, so editing a display name
+  doesn't freeze an already-answered day's prompt on a stale one. A correct answer increments `Match.flame_count` (shared, not per-user), matching "bonne
   réponse = +1 flamme pour vous deux" in the mockups; `Match.flame_count` already existed from
   Phase 2, this phase just started writing to it. Read status and typing (A.5 Module 3 listed both
   as MVP scope; deferred at the time) are now in: `Match.last_read_at_a`/`last_read_at_b` are a
@@ -357,7 +362,16 @@ loaded from the same origin the tool expects — silently fails (blank page, no 
 the user) when loaded from a different origin, which is exactly what happens for a local-network
 beta tester hitting the host's LAN IP instead of `localhost`. `MOBILE_MODE=serve` runs a real
 `flutter build web` and serves the static output with `python3 -m http.server` instead — no
-debug connection at all, works identically from any origin. Since `entrypoint.sh` is `COPY`'d
+debug connection at all, works identically from any origin. `entrypoint.sh` runs `flutter pub get`
+explicitly before either branch's build/run command (P14): both `flutter build web` and
+`flutter run` do their own implicit dependency resolution first, but that implicit step proved
+intermittently racy in this container specifically — since the pub cache is never persisted
+between container restarts (no named volume, just the `./mobile:/app` bind mount, see
+`docker-compose.yml`), every start is a full fresh download, and dart2js would sometimes begin
+compiling before every downloaded package had finished being written to disk ("file not found"
+on `provider`, `vector_math`, or others, different package each time — not a real missing
+dependency). An explicit, blocking `flutter pub get` beforehand removes the race; hasn't failed
+once since. Since `entrypoint.sh` is `COPY`'d
 into the image (not part of the `./mobile:/app` bind mount), changing `MOBILE_MODE` needs
 `docker compose build mobile` before recreating the container, a plain restart won't pick it up
 — see README, "Bêta-test entre proches" for the exact commands. The backend has
@@ -444,7 +458,15 @@ Flutter SDK is never installed on the host):
   reste le défaut"), but the user can switch to Clair/Système from Settings — persisted in
   `shared_preferences` (`braise_theme_mode`), read by `MaterialApp.themeMode` via a `Builder` so it
   can `context.watch` the controller (`main.dart`'s `MaterialApp` is a descendant of the
-  `MultiProvider`, not a sibling — that ordering matters here).
+  `MultiProvider`, not a sibling — that ordering matters here). `MaterialApp` also pins
+  `locale: const Locale('fr')` with `flutter_localizations`' delegates (P14) — this app has no
+  second language, so there was never a reason to inherit whatever locale the browser/OS happens
+  to report instead of guaranteeing French everywhere. Without it, `showDatePicker` (used for
+  birth date in `ProfileSetupScreen`) rendered its own chrome in English ("Select date", "OK")
+  inside an otherwise all-French app, and — the actually damaging part — its keyboard-entry mode
+  expected `MM/DD/YYYY`: typing a date the French way (`JJ/MM`) silently produced the wrong date
+  on a field that gates the 18+ check. Found by actually typing a birthdate during a UX pass, not
+  by reading the widget tree.
 - `lib/api/api_config.dart` (`ApiConfig.httpBaseUrl`/`.wsBaseUrl`) derives the API host from
   `Uri.base.host` (the page's own URL) at runtime rather than hardcoding `localhost` — needed for
   a friends-and-family beta on the local network (no VPS, see `docs/V2_FEATURES.md`): a tester's
@@ -573,12 +595,22 @@ Flutter SDK is never installed on the host):
   /auth/verify-otp` creates the account on first success, signs in on every one after — see
   `services/otp.py`), so faking a distinction client-side would be dishonest UI for a flow that's
   actually unified. `WelcomeScreen` is reached via a real `Navigator.push(braiseRoute(...))`, not
-  folded into `_AuthGate`'s own status switch — `OtpScreen`'s existing `pushReplacement` on
-  successful verify (see below) then replaces *that* pushed route with `RootShell`/
-  `ProfileSetupScreen`, leaving `WelcomeScreen` behind in history rather than the route
-  `_AuthGate` itself renders. That's a deliberate side effect, not an oversight: it means there's
-  no back-gesture path from inside the signed-in app back to the welcome/OTP screens, which is
-  the behavior you want once someone's actually signed in.
+  folded into `_AuthGate`'s own status switch — the intent was always "no back-gesture path from
+  inside the signed-in app back to the welcome/OTP screens", but the original implementation only
+  half-delivered it: `OtpScreen`'s `pushReplacement` on successful verify swaps *only* the pushed
+  OtpScreen route for the next screen, never touching the base `/` route underneath (which
+  `_AuthGate` already re-renders as `RootShell` reactively once signed in, without any navigation
+  call of its own) — so a *second*, redundant `RootShell` ended up stacked on top of the first,
+  and its AppBar grew a real, poppable back arrow (`Navigator.canPop()` was genuinely true) that
+  led nowhere useful: popping it just revealed the identical `RootShell` underneath. Found by
+  actually clicking it during a P14 UX pass, not by reading this comment. Fixed by switching the
+  two call sites that land on `RootShell` as a *terminal* destination — the already-published
+  branch in `otp_screen.dart` and the end of onboarding in `concept_intro_screen.dart` — from
+  `pushReplacement` to `Navigator.pushAndRemoveUntil(route, (_) => false)`, which clears the
+  entire stack instead of swapping one route. The non-terminal hop in between
+  (`ProfileSetupScreen` → `ConceptIntroScreen`, `profile_setup_screen.dart`) is left as a plain
+  `pushReplacement` — it was never the problem, only whichever route actually lands on
+  `RootShell` needs the stack wiped under it.
 - `screens/legal/legal_screen.dart` (CGU + politique de confidentialité, requested explicitly)
   renders `docs/legal/CGU.md`/`POLITIQUE_CONFIDENTIALITE.md` as hardcoded Dart section lists
   (`_cguSections`/`_privacySections`, a two-tab `DefaultTabController`) rather than loading the

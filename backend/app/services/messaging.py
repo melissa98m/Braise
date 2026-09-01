@@ -81,10 +81,23 @@ def _build_question(
     return correct, options
 
 
+def _build_prompt(other_display_name: str) -> str:
+    # Jamais stocké en base : dérivé à la volée du prénom actuel de l'autre côté, pour ne pas
+    # geler une question déjà répondue sur un ancien nom si le profil est modifié entretemps.
+    name = other_display_name or "cette personne"
+    return f"Lequel de ces centres d'intérêt appartient vraiment à {name} ?"
+
+
 def get_or_create_daily_question(db: Session, user: User, match_id: uuid.UUID) -> dict:
     match = get_match_or_404(db, user, match_id)
     other_id = other_user_id(match, user)
     today = date.today()
+
+    # Récupéré avant la branche "déjà existante" : le prompt (jamais persisté, voir
+    # _build_prompt) a besoin du nom de l'autre côté dans les deux cas, pas seulement à la
+    # création.
+    other_profile = db.get(PublicProfile, other_id)
+    prompt = _build_prompt(other_profile.display_name if other_profile else "")
 
     def _query():
         return (
@@ -100,12 +113,12 @@ def get_or_create_daily_question(db: Session, user: User, match_id: uuid.UUID) -
     existing = _query()
     if existing is not None:
         return {
+            "prompt": prompt,
             "options": existing.options,
             "answered": existing.answered,
             "is_correct": existing.is_correct,
         }
 
-    other_profile = db.get(PublicProfile, other_id)
     if other_profile is None or not other_profile.interests:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "Pas encore de question disponible pour ce match."
@@ -128,12 +141,13 @@ def get_or_create_daily_question(db: Session, user: User, match_id: uuid.UUID) -
         db.rollback()
         existing = _query()
         return {
+            "prompt": prompt,
             "options": existing.options,
             "answered": existing.answered,
             "is_correct": existing.is_correct,
         }
 
-    return {"options": options, "answered": False, "is_correct": None}
+    return {"prompt": prompt, "options": options, "answered": False, "is_correct": None}
 
 
 def answer_daily_question(db: Session, user: User, match_id: uuid.UUID, selected: str) -> dict:

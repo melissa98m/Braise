@@ -660,6 +660,69 @@ techniques : cahier des charges sections A, B, C, D.
     tests Flutter (`likes_received_screen_test.dart`), 103/103 tests Flutter au total,
     `flutter analyze` et `ruff check .` propres, `flutter build web` vérifié.
 
+- [x] **P14 — Revue UX en conditions réelles (demande explicite, hors cahier des charges).**
+  Parcours complet piloté par un vrai navigateur headless (Chrome via `playwright-core`, pas de
+  lecture de code) contre l'app qui tourne sur `localhost:5000` : inscription, remplissage de
+  profil, découverte, matchs existants (`+33600000099`, `seed_beta_tester.py`), question
+  quotidienne, « Qui vous a braisé », Braise+, Paramètres. 5 problèmes réels trouvés et corrigés :
+  1. **Question quotidienne sans énoncé.** `models/daily_question.py` n'avait jamais eu de champ
+     texte — seulement `options`/`correct_answer` — donc la carte affichait "QUESTION DU JOUR"
+     suivi de 4 boutons sans dire ce qu'il fallait deviner. `services/messaging._build_prompt`
+     dérive maintenant la question à la volée ("Lequel de ces centres d'intérêt appartient
+     vraiment à {prénom} ?") à partir du prénom actuel de l'autre côté — jamais persisté, pour ne
+     pas geler une question déjà répondue sur un ancien nom si le profil change entretemps.
+     `get_or_create_daily_question` récupère `other_profile` avant la branche "déjà existante",
+     puisque les deux cas ont besoin du prénom. Nouveau champ `prompt` sur `DailyQuestionOut`
+     (backend) et `DailyQuestion` (mobile), rendu dans `_DailyQuestionCard` juste avant les
+     options.
+  2. **Sélecteur de date de naissance non localisé.** `MaterialApp` n'avait aucun
+     `localizationsDelegates`/`supportedLocales` : le date picker Material s'affichait 100% en
+     anglais ("Select date", "Enter Date", "OK"/"Cancel") dans une app entièrement en français, et
+     surtout attendait un format de saisie clavier **MM/JJ/AAAA** (américain) — une date tapée en
+     réflexe français (JJ/MM) était silencieusement mal interprétée, sur un champ qui sert au
+     contrôle 18+. Ajout de `flutter_localizations` (paquet du SDK Flutter, pas de version à
+     épingler) et `locale: const Locale('fr')` fixé en dur dans `main.dart` — l'app n'a qu'une
+     langue, pas de raison de suivre la locale de l'appareil/du navigateur plutôt que de garantir
+     un comportement cohérent pour tout le monde. Vérifié en direct : le picker affiche désormais
+     "Sélectionner une date", jours L/M/M/J/V/S/D, et une saisie "05/12/1994" est bien interprétée
+     comme le 5 décembre (pas le 12 mai).
+  3. **Texte trompeur sur l'écran OTP.** "Sans vérification : découverte limitée." était un
+     `Text` statique non cliquable — aucun mode "sans vérification" n'existe dans le backend,
+     `verify-otp` est l'unique porte d'entrée (pas de compte invité). Supprimé plutôt
+     qu'implémenté : un mode invité serait une vraie décision produit, pas un correctif de bug.
+  4. **Bio vide affichée comme un rendu cassé.** `'« ${candidate.bio} »'` sur une bio vide donnait
+     juste "«  »" flanqué d'un grand espace vide — a toutes les apparences d'un bug de rendu
+     plutôt que d'un profil incomplet. Les 3 endroits qui affichent une bio (carte de découverte,
+     aperçu du suivant, carte "Qui vous a braisé") basculent maintenant sur un texte de substitution
+     ("Cette personne n'a pas encore écrit de bio." / "Pas encore de bio.") quand `bio.isEmpty`.
+  5. **Compteur FLAMMES plafonné sans jamais afficher le vrai total.**
+     `FlameDiamonds(filled: _totalFlames.clamp(0, 5), total: 5)` sur `ProfileTrustScreen` : au-delà
+     de 5 flammes cumulées sur tous les matchs, l'affichage "5/5 rempli" est identique quel que
+     soit le vrai total (7, 20, 200...), contrairement à "ÉCHANGES ACTIFS" juste à côté qui affiche
+     un vrai chiffre. Les diamants restent (motif décoratif de `docs/DESIGN_TOKENS.md`), mais le
+     vrai total (`_totalFlames`) s'affiche désormais en chiffres au-dessus.
+  - **Bonus trouvé en creusant la navigation** : une flèche "retour" fantôme apparaissait parfois
+    sur l'AppBar "Découvrir" juste après connexion, alors que c'est censé être l'écran racine.
+    Cause : `WelcomeScreen` pousse `OtpScreen` via `Navigator.push`, et la chaîne
+    `OtpScreen`/`ProfileSetupScreen`/`ConceptIntroScreen` qui suit utilisait `pushReplacement` —
+    qui ne remplace que la route immédiatement précédente, jamais la route racine (`_AuthGate`,
+    qui affiche déjà `RootShell` de façon réactive une fois connecté). Résultat : deux copies de
+    `RootShell` empilées, la flèche pop l'une pour révéler l'autre (identique visuellement, d'où
+    la confusion). Les deux points d'arrivée terminaux sur `RootShell` (retour d'un profil déjà
+    publié dans `otp_screen.dart`, fin de l'onboarding dans `concept_intro_screen.dart`) utilisent
+    désormais `pushAndRemoveUntil(..., (_) => false)` à la place, qui vide toute la pile.
+  - **Fiabilité du conteneur `mobile` découverte en marge de ce travail** : `entrypoint.sh`
+    appelait `flutter build web` directement, en comptant sur sa résolution de dépendances
+    implicite — intermittente dans ce conteneur (pub cache jamais persisté entre redémarrages,
+    voir `docker-compose.yml`), avec des échecs de compilation aléatoires ("fichier introuvable"
+    sur des paquets pourtant bien réels) à chaque redémarrage. Un `flutter pub get` explicite et
+    bloquant avant la commande de build élimine la course ; jamais échoué depuis en pratique.
+  - 1 nouveau test pytest (`test_daily_question_correct_answer_increments_shared_flame_count`
+    étendu, 90/90 backend au total), 1 nouveau test Flutter (bio vide sur `DiscoveryScreen`) + 1
+    assertion étendue (prompt de la question quotidienne), 104/104 tests Flutter au total,
+    `flutter analyze`/`ruff check .` propres, `flutter build web` vérifié, les 5 correctifs
+    confirmés un par un contre l'app réelle (captures + appels API directs).
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

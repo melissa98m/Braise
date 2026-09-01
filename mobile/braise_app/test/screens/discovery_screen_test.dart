@@ -35,11 +35,12 @@ Map<String, dynamic> _candidate({
   List<String> interests = const ['Cinéma'],
   bool isVerified = false,
   int? trustScore,
+  String bio = 'Toujours partante pour une rando.',
 }) => {
   'user_id': userId,
   'display_name': displayName,
   'age': 27,
-  'bio': 'Toujours partante pour une rando.',
+  'bio': bio,
   'interests': interests,
   'avatar': {'seed': userId, 'from_color': '#FF3366', 'to_color': '#3366FF', 'angle_deg': 30.0},
   'common_interests': interests,
@@ -95,6 +96,27 @@ void main() {
     expect(find.textContaining('CONFIANCE 88'), findsOneWidget);
     // Aperçu du suivant, moins présent (cf. _NextCandidatePreview) mais bien affiché.
     expect(find.text('Alex · 27'), findsOneWidget);
+  });
+
+  testWidgets('a candidate with no bio shows a placeholder instead of empty guillemets', (
+    tester,
+  ) async {
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path == '/discovery/feed') {
+        return _json([
+          _candidate(userId: 'u1', displayName: 'Camille', bio: ''),
+          _candidate(userId: 'u2', displayName: 'Alex', bio: ''),
+        ], 200);
+      }
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cette personne n\'a pas encore écrit de bio.'), findsOneWidget);
+    expect(find.text('Pas encore de bio.'), findsOneWidget);
+    expect(find.textContaining('«'), findsNothing);
   });
 
   testWidgets('empty feed shows the "nothing left to discover" message', (tester) async {

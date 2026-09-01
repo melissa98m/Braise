@@ -254,7 +254,10 @@ class _LikerCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: BraiseSpacing.md),
-          Text('« ${candidate.bio} »', style: textTheme.bodyMedium),
+          Text(
+            candidate.bio.isEmpty ? 'Pas encore de bio.' : '« ${candidate.bio} »',
+            style: textTheme.bodyMedium,
+          ),
           const SizedBox(height: BraiseSpacing.lg),
           Row(
             children: [

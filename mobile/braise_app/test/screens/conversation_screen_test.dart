@@ -217,7 +217,12 @@ void main() {
       }
       if (request.method == 'GET' &&
           request.url.path == '/messaging/matches/${_match.matchId}/daily-question') {
-        return _json({'options': ['Cinéma', 'Randonnée'], 'answered': false, 'is_correct': null}, 200);
+        return _json({
+          'prompt': 'Lequel de ces centres d\'intérêt appartient vraiment à Alix ?',
+          'options': ['Cinéma', 'Randonnée'],
+          'answered': false,
+          'is_correct': null,
+        }, 200);
       }
       if (request.method == 'POST' &&
           request.url.path == '/messaging/matches/${_match.matchId}/daily-question/answer') {
@@ -232,6 +237,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('QUESTION DU JOUR'), findsOneWidget);
+    expect(find.text('Lequel de ces centres d\'intérêt appartient vraiment à Alix ?'), findsOneWidget);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Cinéma'));
     await tester.pumpAndSettle();
 

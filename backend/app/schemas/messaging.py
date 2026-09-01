@@ -18,6 +18,9 @@ class MessageOut(BaseModel):
 
 
 class DailyQuestionOut(BaseModel):
+    # Jamais persisté (voir services/messaging._build_prompt) : dérivé à la volée du nom actuel
+    # de l'autre côté, à chaque lecture.
+    prompt: str
     options: list[str]
     answered: bool
     is_correct: bool | None

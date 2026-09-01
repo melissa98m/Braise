@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/moderation/ban_appeal_screen.dart';
@@ -35,6 +36,17 @@ class BraiseApp extends StatelessWidget {
           return MaterialApp(
             title: 'Braise',
             debugShowCheckedModeBanner: false,
+            // App entièrement en français, sans version localisée alternative : on fixe la
+            // locale plutôt que de suivre celle de l'appareil/du navigateur, pour que le
+            // sélecteur de date Material (texte + format de saisie JJ/MM/AAAA) reste cohérent
+            // avec le reste de l'app quel que soit le réglage régional du visiteur.
+            locale: const Locale('fr'),
+            supportedLocales: const [Locale('fr')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
             theme: buildBraiseTheme(Brightness.light),
             darkTheme: buildBraiseTheme(Brightness.dark),
             // Sombre reste le réglage par défaut à l'installation (docs/DESIGN_TOKENS.md) ;

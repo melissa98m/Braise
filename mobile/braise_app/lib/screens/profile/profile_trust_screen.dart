@@ -205,7 +205,21 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
                 Expanded(
                   child: _StatCard(
                     label: 'FLAMMES',
-                    child: FlameDiamonds(filled: _totalFlames.clamp(0, 5), total: 5),
+                    // Les diamants restent un motif décoratif plafonné à 5 (docs/DESIGN_TOKENS.md),
+                    // mais le vrai total est toujours affiché en chiffres au-dessus — sans lui,
+                    // au-delà de 5 flammes cumulées l'affichage "5/5 rempli" ne permet plus de
+                    // distinguer quelqu'un qui vient d'atteindre 5 de quelqu'un qui en a 50.
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$_totalFlames',
+                          style: textTheme.labelSmall?.copyWith(fontSize: 22, color: tokens.inkPrimary),
+                        ),
+                        const SizedBox(height: BraiseSpacing.xs),
+                        FlameDiamonds(filled: _totalFlames.clamp(0, 5), total: 5),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: BraiseSpacing.md),

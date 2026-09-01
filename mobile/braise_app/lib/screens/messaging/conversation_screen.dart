@@ -153,6 +153,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final result = await services.messagingApi.answerDailyQuestion(_match.matchId, selected);
     setState(() {
       _dailyQuestion = DailyQuestion(
+        prompt: _dailyQuestion!.prompt,
         options: _dailyQuestion!.options,
         answered: true,
         isCorrect: result.correct,
@@ -419,6 +420,7 @@ class _DailyQuestionCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(question.prompt, style: textTheme.bodyLarge),
                 for (final option in question.options)
                   Padding(
                     padding: const EdgeInsets.only(top: BraiseSpacing.sm),

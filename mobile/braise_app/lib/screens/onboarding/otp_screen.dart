@@ -62,11 +62,21 @@ class _OtpScreenState extends State<OtpScreen> {
       final services = context.read<AppServices>();
       final profile = await services.profilesApi.getMyPublicProfile();
       if (!mounted) return;
+      // pushAndRemoveUntil pour un profil déjà publié (retour) : WelcomeScreen a poussé cet
+      // écran par-dessus la route racine, qui affiche déjà RootShell de façon réactive une fois
+      // connecté (_AuthGate) — un simple pushReplacement laissait donc RootShell empilé deux
+      // fois, avec une flèche "retour" fantôme qui ne menait nulle part de nouveau. Pour la
+      // création de profil (isOnboarding), pushReplacement reste correct : ce n'est pas encore
+      // la destination finale.
+      final destination = profile.isPublished
+          ? const RootShell()
+          : const ProfileSetupScreen(isOnboarding: true);
+      if (profile.isPublished) {
+        Navigator.of(context).pushAndRemoveUntil(braiseRoute(context, destination), (_) => false);
+        return;
+      }
       Navigator.of(context).pushReplacement(
-        braiseRoute(
-          context,
-          profile.isPublished ? const RootShell() : const ProfileSetupScreen(isOnboarding: true),
-        ),
+        braiseRoute(context, destination),
       );
     } on ApiException catch (e) {
       setState(() => _error = e.message);
@@ -190,15 +200,6 @@ class _OtpScreenState extends State<OtpScreen> {
                     ? null
                     : (_codeSent ? _verifyOtp : _requestOtp),
                 child: Text(_codeSent ? 'Vérifier le code' : 'Recevoir mon code'),
-              ),
-              const SizedBox(height: BraiseSpacing.sm),
-              SizedBox(
-                width: double.infinity,
-                child: Text(
-                  'Sans vérification : découverte limitée.',
-                  textAlign: TextAlign.center,
-                  style: textTheme.labelSmall?.copyWith(color: tokens.inkSecondary),
-                ),
               ),
               const SizedBox(height: BraiseSpacing.xxl),
             ],

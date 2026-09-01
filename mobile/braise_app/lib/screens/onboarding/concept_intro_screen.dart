@@ -25,7 +25,11 @@ class _ConceptIntroScreenState extends State<ConceptIntroScreen> {
 
   void _next() {
     if (_page == _pageCount - 1) {
-      Navigator.of(context).pushReplacement(braiseRoute(context, const RootShell()));
+      // pushAndRemoveUntil, pas pushReplacement : la route racine (_AuthGate) affiche déjà
+      // RootShell de façon réactive une fois connecté, donc un simple pushReplacement laissait
+      // RootShell empilé une deuxième fois par-dessus — flèche "retour" fantôme qui ne menait
+      // qu'à un doublon du même écran. Même correctif que otp_screen.dart pour le cas retour.
+      Navigator.of(context).pushAndRemoveUntil(braiseRoute(context, const RootShell()), (_) => false);
       return;
     }
     _pageController.nextPage(duration: const Duration(milliseconds: 320), curve: Curves.easeOut);

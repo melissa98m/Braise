@@ -352,8 +352,10 @@ class _CandidateCard extends StatelessWidget {
           const SizedBox(height: BraiseSpacing.xl),
           Expanded(
             child: Text(
-              '« ${candidate.bio} »',
-              style: textTheme.bodyLarge,
+              candidate.bio.isEmpty ? 'Cette personne n\'a pas encore écrit de bio.' : '« ${candidate.bio} »',
+              style: candidate.bio.isEmpty
+                  ? textTheme.bodyLarge?.copyWith(color: tokens.inkSecondary)
+                  : textTheme.bodyLarge,
             ),
           ),
           const SizedBox(height: BraiseSpacing.lg),
@@ -414,7 +416,7 @@ class _NextCandidatePreview extends StatelessWidget {
                   Text('${candidate.displayName} · ${candidate.age}', style: textTheme.titleMedium),
                   const SizedBox(height: BraiseSpacing.xs),
                   Text(
-                    '« ${candidate.bio} »',
+                    candidate.bio.isEmpty ? 'Pas encore de bio.' : '« ${candidate.bio} »',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.bodyMedium,

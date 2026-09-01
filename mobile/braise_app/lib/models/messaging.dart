@@ -41,16 +41,23 @@ class ChatMessage {
 }
 
 class DailyQuestion {
-  const DailyQuestion({required this.options, required this.answered, required this.isCorrect});
+  const DailyQuestion({
+    required this.prompt,
+    required this.options,
+    required this.answered,
+    required this.isCorrect,
+  });
 
   factory DailyQuestion.fromJson(Map<String, dynamic> json) {
     return DailyQuestion(
+      prompt: json['prompt'] as String,
       options: (json['options'] as List).cast<String>(),
       answered: json['answered'] as bool,
       isCorrect: json['is_correct'] as bool?,
     );
   }
 
+  final String prompt;
   final List<String> options;
   final bool answered;
   final bool? isCorrect;

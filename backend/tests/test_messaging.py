@@ -39,6 +39,7 @@ def test_daily_question_correct_answer_increments_shared_flame_count():
     )
     assert question.status_code == 200
     body = question.json()
+    assert body["prompt"] == "Lequel de ces centres d'intérêt appartient vraiment à Match test ?"
     assert len(body["options"]) >= 2
     assert body["answered"] is False
 

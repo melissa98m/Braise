@@ -10,6 +10,15 @@ fi
 flutter config --enable-web
 cd /app/braise_app
 
+# `flutter build web`/`flutter run` font chacun une résolution de dépendances implicite avant de
+# compiler, mais dans ce conteneur (pub cache jamais persisté entre redémarrages, voir
+# docker-compose.yml) cette résolution implicite s'est avérée intermittente : plusieurs lancements
+# ont échoué avec des fichiers de package "introuvables" (provider, vector_math, ...) alors que le
+# téléchargement avait pourtant l'air complet — la compilation démarrait avant que tout soit
+# effectivement écrit sur disque. Un `flutter pub get` explicite et bloquant avant la commande de
+# build élimine cette course, et n'a jamais échoué en pratique (vécu en diagnostiquant ce bug).
+flutter pub get
+
 # MOBILE_MODE=serve (bêta-test réseau local, voir README) : `flutter run -d web-server` est un
 # serveur de *développement* — il ouvre une connexion WebSocket de debug vers l'outil Flutter pour
 # le hot reload, connexion qui échoue silencieusement quand la page est chargée depuis une autre
