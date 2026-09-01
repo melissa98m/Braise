@@ -130,18 +130,29 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
                     Wrap(
                       spacing: BraiseSpacing.sm,
                       children: [
+                        // `excludeSemantics` : `Chip` porte par défaut une sémantique de type
+                        // "checkbox" même sans onTap ni onDeleted, trompeur pour un lecteur
+                        // d'écran sur un badge de statut purement informatif.
                         if (profile.isVerified)
-                          Chip(
-                            avatar: SignSquareCore(color: tokens.foiInk, size: 14),
-                            label: const Text('VÉRIFIÉ'),
-                            backgroundColor: tokens.foiInk.withValues(alpha: 0.1),
-                            side: BorderSide(color: tokens.foiInk),
+                          Semantics(
+                            label: 'Profil vérifié',
+                            excludeSemantics: true,
+                            child: Chip(
+                              avatar: SignSquareCore(color: tokens.foiInk, size: 14),
+                              label: const Text('VÉRIFIÉ'),
+                              backgroundColor: tokens.foiInk.withValues(alpha: 0.1),
+                              side: BorderSide(color: tokens.foiInk),
+                            ),
                           ),
                         if (profile.isPremium)
-                          Chip(
-                            label: const Text('BRAISE+'),
-                            backgroundColor: tokens.alerte.withValues(alpha: 0.12),
-                            side: BorderSide(color: tokens.alerte),
+                          Semantics(
+                            label: 'Abonné Braise+',
+                            excludeSemantics: true,
+                            child: Chip(
+                              label: const Text('BRAISE+'),
+                              backgroundColor: tokens.alerte.withValues(alpha: 0.12),
+                              side: BorderSide(color: tokens.alerte),
+                            ),
                           ),
                       ],
                     ),
@@ -205,6 +216,7 @@ class _ProfileTrustScreenState extends State<ProfileTrustScreen> {
                 Expanded(
                   child: _StatCard(
                     label: 'FLAMMES',
+                    semanticValue: '$_totalFlames',
                     // Les diamants restent un motif décoratif plafonné à 5 (docs/DESIGN_TOKENS.md),
                     // mais le vrai total est toujours affiché en chiffres au-dessus — sans lui,
                     // au-delà de 5 flammes cumulées l'affichage "5/5 rempli" ne permet plus de
@@ -285,30 +297,45 @@ class _TrustBars extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, this.value, this.child});
+  // `semanticValue` couvre le cas `child` (widget libre, ex. les diamants FLAMMES) où il n'y a
+  // pas de `value` textuel simple à lire — sans lui, `container: true` ci-dessous forcerait quand
+  // même une frontière sémantique, mais avec un contenu vide/décoratif plutôt qu'un vrai chiffre.
+  const _StatCard({required this.label, this.value, this.child, this.semanticValue});
 
   final String label;
   final String? value;
   final Widget? child;
+  final String? semanticValue;
 
   @override
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(BraiseSpacing.lg),
-      decoration: BoxDecoration(
-        color: tokens.surface1,
-        border: Border.all(color: tokens.borderHairline),
-        borderRadius: BorderRadius.circular(BraiseRadii.card),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          child ?? Text(value!, style: textTheme.labelSmall?.copyWith(fontSize: 22, color: tokens.inkPrimary)),
-          const SizedBox(height: BraiseSpacing.sm),
-          Text(label, style: textTheme.labelSmall),
-        ],
+    return Semantics(
+      // `container: true` : sans frontière explicite, les deux `_StatCard` voisines (FLAMMES,
+      // ÉCHANGES ACTIFS) se lisaient comme une seule phrase ("7 FLAMMES 2 ÉCHANGES ACTIFS") côté
+      // lecteur d'écran — trouvé en inspectant l'arbre d'accessibilité réel de l'app, pas en
+      // relisant le code.
+      container: true,
+      label: '${semanticValue ?? value} $label',
+      // Sans ça, le label explicite ci-dessus s'ajouterait à la lecture des `Text` descendants
+      // au lieu de la remplacer — double annonce ("7 FLAMMES" puis "7" puis "FLAMMES").
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.all(BraiseSpacing.lg),
+        decoration: BoxDecoration(
+          color: tokens.surface1,
+          border: Border.all(color: tokens.borderHairline),
+          borderRadius: BorderRadius.circular(BraiseRadii.card),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            child ?? Text(value!, style: textTheme.labelSmall?.copyWith(fontSize: 22, color: tokens.inkPrimary)),
+            const SizedBox(height: BraiseSpacing.sm),
+            Text(label, style: textTheme.labelSmall),
+          ],
+        ),
       ),
     );
   }

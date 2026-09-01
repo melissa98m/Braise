@@ -343,22 +343,37 @@ class _NotifRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: BraiseSpacing.lg, vertical: BraiseSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: textTheme.bodyLarge),
-                const SizedBox(height: 2),
-                Text(desc, style: textTheme.labelSmall?.copyWith(color: tokens.inkFloor)),
-              ],
+    return Semantics(
+      // Sans frontière propre à chaque ligne, les 3 réglages de notification se lisaient comme
+      // un seul bloc côté lecteur d'écran ("Nouveau match Un like réciproque Question du jour
+      // Rappel quotidien Messages Nouveaux messages reçus"), impossible de savoir quel
+      // interrupteur correspond à quoi en y naviguant — trouvé en inspectant l'arbre
+      // d'accessibilité réel, pas en relisant le code. `excludeSemantics` remplace la lecture des
+      // `Text`/`Switch` descendants (qui dupliquerait le label ci-dessous) par ce seul nœud ;
+      // `toggled`/`onTap` reportent explicitement l'état et l'action du `Switch` exclu, sinon un
+      // lecteur d'écran ne saurait plus si le réglage est activé ni comment le changer.
+      container: true,
+      label: '$label. $desc',
+      toggled: value,
+      onTap: () => onChanged(!value),
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: BraiseSpacing.lg, vertical: BraiseSpacing.sm),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: textTheme.bodyLarge),
+                  const SizedBox(height: 2),
+                  Text(desc, style: textTheme.labelSmall?.copyWith(color: tokens.inkFloor)),
+                ],
+              ),
             ),
-          ),
-          Switch(value: value, onChanged: onChanged),
-        ],
+            Switch(value: value, onChanged: onChanged),
+          ],
+        ),
       ),
     );
   }

@@ -14,6 +14,8 @@ import '../../widgets/sign_shapes.dart';
 import '../messaging/conversation_screen.dart';
 import 'likes_received_screen.dart';
 
+String _commonInterestsLabel(int count) => '$count intérêt${count > 1 ? 's' : ''} en commun';
+
 /// Écran 03 — pas de swipe façon catalogue : une carte à la fois, hiérarchie phrase > intérêts
 /// > avatar (cahier des charges A.7 : refuse le tri purement visuel).
 class DiscoveryScreen extends StatefulWidget {
@@ -364,16 +366,29 @@ class _CandidateCard extends StatelessWidget {
             runSpacing: BraiseSpacing.sm,
             children: [
               if (candidate.commonInterests.isNotEmpty)
-                Chip(
-                  label: Text('${candidate.commonInterests.length} intérêts en commun'),
-                  backgroundColor: tokens.braiseTint,
-                  side: BorderSide(color: tokens.braiseInk),
+                // `Chip` porte par défaut une sémantique de type "checkbox" même sans onTap ni
+                // onDeleted — trompeur pour un lecteur d'écran sur un badge purement informatif
+                // (trouvé en inspectant l'arbre d'accessibilité réel, pas en relisant le code).
+                // `excludeSemantics` masque cette sémantique interne au profit d'un simple label
+                // porté par le `Semantics` englobant, sans toucher au rendu visuel.
+                Semantics(
+                  label: _commonInterestsLabel(candidate.commonInterests.length),
+                  excludeSemantics: true,
+                  child: Chip(
+                    label: Text(_commonInterestsLabel(candidate.commonInterests.length)),
+                    backgroundColor: tokens.braiseTint,
+                    side: BorderSide(color: tokens.braiseInk),
+                  ),
                 ),
               for (final interest in candidate.interests)
-                Chip(
-                  label: Text(interest),
-                  backgroundColor: tokens.surface2,
-                  side: BorderSide(color: tokens.borderHairline),
+                Semantics(
+                  label: interest,
+                  excludeSemantics: true,
+                  child: Chip(
+                    label: Text(interest),
+                    backgroundColor: tokens.surface2,
+                    side: BorderSide(color: tokens.borderHairline),
+                  ),
                 ),
             ],
           ),

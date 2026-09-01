@@ -143,6 +143,29 @@ void main() {
     expect(find.text('Randonnée'), findsNothing);
   });
 
+  testWidgets('the add-interest and add-photo buttons have accessible names', (tester) async {
+    // P14 a11y pass: both were bare icon buttons with no tooltip/Semantics label, so a screen
+    // reader announced just "button" — found by inspecting the live app's accessibility tree,
+    // not by reading the widget code.
+    final client = MockClient((request) async {
+      if (request.method == 'GET' && request.url.path == '/profiles/me/public') {
+        return _json(_publicProfile(interests: const []), 200);
+      }
+      if (request.method == 'GET' && request.url.path == '/profiles/me/private') {
+        return _json({'photos': []}, 200);
+      }
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byTooltip('Ajouter un intérêt'));
+    expect(find.byTooltip('Ajouter un intérêt'), findsOneWidget);
+    await tester.ensureVisible(find.bySemanticsLabel('Ajouter une photo'));
+    expect(find.bySemanticsLabel('Ajouter une photo'), findsOneWidget);
+  });
+
   testWidgets('using the bio prompt fills the bio field with the shown prompt', (tester) async {
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/profiles/me/public') {

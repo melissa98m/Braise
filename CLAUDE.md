@@ -748,6 +748,42 @@ back), sending a message (composer clears + a `message` frame goes out), the dai
 (render + answer + result), the typing indicator (appears on a `typing` event, clears after 3s of
 silence), and a `read` event flipping "Envoyé" to "Lu" on the sender's own last message.
 
+**Accessibility (P15)** — checked against the app's actual accessibility tree
+(`page.locator('body').ariaSnapshot()` via `playwright-core`, with raw `flt-semantics`/`aria-*`
+DOM inspection whenever the compact snapshot left doubt) rather than by reading widget code, since
+Flutter's default semantics behavior can't be predicted from the widget tree alone:
+- `main()` calls `SemanticsBinding.instance.ensureSemantics()` before `runApp` — never storing or
+  disposing the returned `SemanticsHandle` — because Flutter web otherwise never builds its
+  semantics tree until a manual gesture on a hidden `flt-semantics-placeholder` element activates
+  it; without this, a screen reader hears nothing but "Enable accessibility, button" on first load.
+- `Chip` carries checkbox-like semantics by default even with no `onTap`/`onDeleted` — every
+  purely-informational chip (common-interest counts, per-interest chips, the "VÉRIFIÉ"/"BRAISE+"
+  badges) wraps in `Semantics(excludeSemantics: true, label: ...)` to replace that with a neutral
+  label, leaving the visual rendering untouched.
+- Any custom composite row that needs its own scoped label *and* still exposes a real interactive
+  child's state (`_NotifRow`'s `Switch` in `settings_screen.dart`, the stat cards in
+  `profile_trust_screen.dart`) follows one pattern: `Semantics(container: true, label: ...,
+  excludeSemantics: true, ...)`, replicating whatever state the excluded child would have carried
+  (`toggled: value` for a switch) and, if the excluded child was tappable, an explicit `onTap` —
+  `excludeSemantics` hides the child's own semantics entirely, so without that the row becomes
+  unreachable/inert for assistive tech even though it still works fine for a mouse/touch user.
+  `_StatCard` gained a `semanticValue` parameter for exactly this: its `child:` slot (the FLAMMES
+  diamonds) has no plain-text `value` to fall back on. Confirmed via raw DOM that "0 FLAMMES" and
+  "0 ÉCHANGES ACTIFS" render as two distinct, bounded `flt-semantics` nodes even though
+  Playwright's condensed `ariaSnapshot()` view merges adjacent plain-text nodes back into the
+  surrounding text for brevity — that merge is a quirk of the summary renderer, not evidence the
+  fix didn't take.
+- Bare icon-only tap targets need an explicit name or a screen reader announces just "button":
+  `IconButton` via `tooltip`, a non-`IconButton` tappable (`InkWell`/`GestureDetector`) via
+  `Semantics(button: true, label: ...)`. The delete-photo `GestureDetector` in
+  `profile_setup_screen.dart` combined this with `HitTestBehavior.opaque` and a larger hit radius
+  (12 → 16) — its 24px original was well under the ~44px minimum recommended touch target for a
+  destructive action, though the fix stays modest to avoid overlapping the 96×120 photo tile it
+  sits on.
+- Not every apparent gap survives DOM-level verification: `SegmentedButton` (the theme selector)
+  looked stateless in the compact `ariaSnapshot()` — three plain `button`s, no selected marker —
+  but the raw DOM showed it already exposes the active choice via `aria-current`. Left alone.
+
 **Lint** (`backend/ruff.toml`, P5.3 — mobile has had `flutter_lints` since the start, the backend
 had nothing before this): `docker compose run --rm backend ruff check .`. `line-length = 110`, not
 ruff's default 88 — covers nearly all existing code without forcing a mass reformat of carefully

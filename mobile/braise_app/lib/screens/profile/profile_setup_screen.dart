@@ -411,7 +411,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   ),
                 ),
                 const SizedBox(width: BraiseSpacing.sm),
-                IconButton(onPressed: _addInterest, icon: const Icon(Icons.add)),
+                IconButton(
+                  onPressed: _addInterest,
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Ajouter un intérêt',
+                ),
               ],
             ),
             const SizedBox(height: BraiseSpacing.xxl),
@@ -511,30 +515,44 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         child: Image.network(photo.url, width: 96, height: 120, fit: BoxFit.cover),
                       ),
                       Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => _deletePhoto(photo.key),
-                          child: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: tokens.erreur,
-                            child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        top: 2,
+                        right: 2,
+                        child: Semantics(
+                          button: true,
+                          label: 'Supprimer cette photo',
+                          child: GestureDetector(
+                            onTap: () => _deletePhoto(photo.key),
+                            behavior: HitTestBehavior.opaque,
+                            // Rayon agrandi (12 -> 16) : la cible tactile d'origine (24px) était
+                            // bien en dessous du minimum recommandé de 44px pour une action de
+                            // suppression — trouvé en inspectant l'app réelle, pas en relisant le
+                            // code. Reste modeste par rapport au plein 44px pour ne pas empiéter
+                            // sur la vignette (96x120), mais une vraie amélioration tactile.
+                            child: CircleAvatar(
+                              radius: 16,
+                              backgroundColor: tokens.erreur,
+                              child: const Icon(Icons.close, size: 16, color: Colors.white),
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
                 if (_photos.length < 3)
-                  InkWell(
-                    onTap: _addPhoto,
-                    child: Container(
-                      width: 96,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: tokens.borderStrong, width: 1.75),
-                        borderRadius: BorderRadius.circular(BraiseRadii.media),
+                  Semantics(
+                    button: true,
+                    label: 'Ajouter une photo',
+                    child: InkWell(
+                      onTap: _addPhoto,
+                      child: Container(
+                        width: 96,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: tokens.borderStrong, width: 1.75),
+                          borderRadius: BorderRadius.circular(BraiseRadii.media),
+                        ),
+                        child: Icon(Icons.add_a_photo_outlined, color: tokens.inkSecondary),
                       ),
-                      child: Icon(Icons.add_a_photo_outlined, color: tokens.inkSecondary),
                     ),
                   ),
               ],

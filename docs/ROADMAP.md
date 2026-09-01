@@ -723,6 +723,65 @@ techniques : cahier des charges sections A, B, C, D.
     `flutter analyze`/`ruff check .` propres, `flutter build web` vérifié, les 5 correctifs
     confirmés un par un contre l'app réelle (captures + appels API directs).
 
+- [x] **P15 — Audit accessibilité (demande explicite, hors cahier des charges).** L'app n'a
+  jamais eu de passe accessibilité dédiée. Vérifié contre l'arbre d'accessibilité réel de l'app
+  qui tourne (`page.locator('body').ariaSnapshot()` via `playwright-core`, pas une lecture de
+  code), avec un contrôle en profondeur au niveau DOM brut (`flt-semantics`, attributs `aria-*`)
+  chaque fois que le rendu compact de Playwright laissait un doute. 6 problèmes réels trouvés et
+  corrigés :
+  1. **Flutter web restait muet au premier chargement.** Flutter web ne construit son arbre
+     sémantique qu'à la demande (première interaction, ou détection d'une techno d'assistance) —
+     sans rien pour contourner ça, une personne utilisant un lecteur d'écran n'entendait que le
+     bouton caché "Enable accessibility" au premier chargement, sans indice qu'autre chose existe.
+     `main()` appelle désormais `SemanticsBinding.instance.ensureSemantics()` avant `runApp` (le
+     `SemanticsHandle` renvoyé n'est jamais conservé ni disposé — le disposer redésactiverait
+     l'arbre) : vérifié en direct, le contenu complet de `WelcomeScreen` est maintenant exposé dès
+     le chargement, sans activation manuelle.
+  2. **Deux boutons "+" sans nom accessible.** `IconButton(onPressed: _addInterest, icon:
+     Icon(Icons.add))` (`profile_setup_screen.dart`) n'avait pas de `tooltip` — un lecteur d'écran
+     annonçait juste "button". Même défaut sur le `InkWell` d'ajout de photo. Tooltip/`Semantics`
+     ajoutés aux deux.
+  3. **Bouton de suppression de photo trop petit et invisible en lecture d'écran.** `GestureDetector`
+     nu de 24×24px (`CircleAvatar(radius: 12)`), bien en dessous du minimum recommandé de 44px pour
+     une action de suppression, sans aucune sémantique. Rayon porté à 16 (32px — reste modeste pour
+     ne pas empiéter sur la vignette 96×120, mais une vraie amélioration), `Semantics(button: true,
+     label: 'Supprimer cette photo')` ajouté, `HitTestBehavior.opaque` pour que toute la zone
+     élargie réagisse au tap.
+  4. **Badges décoratifs exposés comme des cases à cocher.** `Chip` porte par défaut une sémantique
+     de type "checkbox" même sans `onTap`/`onDeleted` — trompeur sur les chips purement informatifs
+     ("X intérêts en commun", intérêts d'un candidat en découverte, badge "VÉRIFIÉ"/"BRAISE+" sur
+     l'écran Moi). `Semantics(excludeSemantics: true, label: ...)` autour de chaque `Chip`
+     remplace cette sémantique interne par un simple label neutre, sans toucher au rendu visuel.
+  5. **Les 3 réglages de notification fusionnés en un seul bloc.** `_NotifRow`
+     (`settings_screen.dart`) n'avait aucune frontière sémantique : un lecteur d'écran annonçait
+     les 3 lignes comme un seul bloc ("Nouveau match Un like réciproque Question du jour Rappel
+     quotidien Messages Nouveaux messages reçus"), impossible de savoir quel interrupteur
+     correspond à quoi en y naviguant. `Semantics(container: true, label: '$label. $desc',
+     toggled: value, onTap: () => onChanged(!value), excludeSemantics: true)` autour de chaque
+     ligne : label et état séparés par ligne, `onTap` explicite car `excludeSemantics` masque
+     aussi le `Switch` sous-jacent (sans lui, plus aucun moyen d'activer le réglage par lecteur
+     d'écran).
+  6. **Stats FLAMMES/ÉCHANGES ACTIFS lues comme une seule phrase.** `_StatCard`
+     (`profile_trust_screen.dart`) n'avait pas de frontière entre les deux cartes voisines,
+     lues comme "7 FLAMMES 2 ÉCHANGES ACTIFS" d'un bloc. Même motif `Semantics(container: true,
+     label: ..., excludeSemantics: true)`, avec un nouveau paramètre `semanticValue` pour le cas
+     `child` (widget libre — les diamants FLAMMES n'ont pas de `value` textuel simple).
+     Confirmé au niveau DOM brut : deux nœuds `flt-semantics` bien distincts et bornés
+     ("0 FLAMMES", "0 ÉCHANGES ACTIFS"), même si le rendu compact de `ariaSnapshot()` les
+     réaffiche fusionnés dans le texte environnant par souci de concision — pas un signe d'échec
+     du correctif, juste une limite de ce format d'affichage condensé.
+  - **Fausse piste écartée après vérification** : le sélecteur de thème ("Système"/"Clair"/
+    "Sombre") semblait n'exposer aucun état sélectionné dans le rendu compact de `ariaSnapshot()`
+    — mais l'inspection du DOM brut a montré que `SegmentedButton` expose déjà correctement l'état
+    actif via `aria-current` (`false`/`false`/`true`). Aucun correctif nécessaire ; la piste
+    initiale était un faux positif du format de rendu condensé, pas un vrai defect.
+  - **Bonus UX** : faute d'accord "1 intérêts en commun" → "1 intérêt en commun" (accord
+    singulier/pluriel), sur les cartes de découverte et l'écran "Qui vous a braisé" — visible par
+    tout le monde, pas seulement en lecture d'écran.
+  - 2 nouveaux tests Flutter (accessible name des boutons "+" ; labels/état des 3 réglages de
+    notification via `matchesSemantics`), 106/106 tests Flutter au total, `flutter analyze` propre,
+    `flutter build web` vérifié, chaque correctif reconfirmé contre l'app réelle après redéploiement.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

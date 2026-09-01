@@ -107,6 +107,47 @@ void main() {
     expect(prefs.getBool('braise_notif_messages'), isTrue);
   });
 
+  testWidgets('notification rows expose distinct semantics and toggle via the row itself', (
+    tester,
+  ) async {
+    // P14 a11y pass: the 3 rows had no semantics boundary at all, so a screen reader announced
+    // all 3 labels/descriptions merged into one block, with no way to tell which switch was
+    // which — found by inspecting the live app's accessibility tree, not by reading the code.
+    await _useTallViewport(tester);
+    final client = MockClient((_) async => http.Response('not found', 404));
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+
+    final matchRow = find.bySemanticsLabel('Nouveau match. Un like réciproque');
+    expect(matchRow, findsOneWidget);
+    expect(find.bySemanticsLabel('Question du jour. Rappel quotidien'), findsOneWidget);
+    final messagesRow = find.bySemanticsLabel('Messages. Nouveaux messages reçus');
+    expect(messagesRow, findsOneWidget);
+
+    expect(
+      tester.getSemantics(matchRow),
+      matchesSemantics(
+        label: 'Nouveau match. Un like réciproque',
+        hasToggledState: true,
+        isToggled: true,
+        hasTapAction: true,
+      ),
+    );
+    expect(
+      tester.getSemantics(messagesRow),
+      matchesSemantics(
+        label: 'Messages. Nouveaux messages reçus',
+        hasToggledState: true,
+        isToggled: false,
+        hasTapAction: true,
+      ),
+    );
+    // `hasTapAction: true` ci-dessus garantit qu'un lecteur d'écran peut activer la ligne — le
+    // comportement réel du bascule (Switch -> préférence persistée) est déjà couvert par "toggling
+    // a notification preference persists it" juste au-dessus, inchangé par ce correctif.
+  });
+
   testWidgets('turning a notification preference on requests browser permission', (
     tester,
   ) async {

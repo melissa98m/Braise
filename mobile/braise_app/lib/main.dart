@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +12,14 @@ import 'state/theme_controller.dart';
 import 'theme/braise_theme.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Le `SemanticsHandle` renvoyé n'est jamais conservé ni disposé — Flutter web ne construit son
+  // arbre sémantique qu'à la demande (première interaction, ou détection d'une techno
+  // d'assistance) — sans cet appel, une personne utilisant un lecteur d'écran n'entend rien
+  // d'autre que le bouton caché "Enable accessibility" au premier chargement, sans aucun indice
+  // que l'app contient autre chose. Ne jamais appeler `.dispose()` dessus : ce serait redésactiver
+  // l'arbre (trouvé en inspectant l'arbre réel via Playwright, pas en lisant le code).
+  SemanticsBinding.instance.ensureSemantics();
   runApp(const BraiseApp());
 }
 

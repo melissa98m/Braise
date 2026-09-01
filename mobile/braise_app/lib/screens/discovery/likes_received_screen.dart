@@ -245,7 +245,9 @@ class _LikerCard extends StatelessWidget {
                     Text('${candidate.displayName} · ${candidate.age}', style: textTheme.titleMedium),
                     if (candidate.commonInterests.isNotEmpty)
                       Text(
-                        '${candidate.commonInterests.length} intérêts en commun',
+                        // Accord singulier/pluriel : "1 intérêt" pas "1 intérêts".
+                        '${candidate.commonInterests.length} intérêt'
+                        '${candidate.commonInterests.length > 1 ? 's' : ''} en commun',
                         style: textTheme.bodySmall?.copyWith(color: tokens.inkSecondary),
                       ),
                   ],
