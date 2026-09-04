@@ -231,7 +231,93 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   and delivery success) with the backend staying fully responsive throughout. `user_id` (a plain
   UUID) is threaded through the receive loop instead of the `User`/`Match` ORM objects from the
   auth check — those become invalid once their session closes, so each per-event session
-  re-fetches what it needs by id rather than reusing detached instances across sessions. (`models/rating.py`, `models/report.py`, `services/moderation.py`,
+  re-fetches what it needs by id rather than reusing detached instances across sessions.
+- **Personalized daily question via Ollama (optional, post-MVP)** (`services/question_llm.py`,
+  `docker-compose.yml`'s `ollama`/`ollama-init` services, `core/config.py`'s `ollama_*` settings):
+  the question text itself (never the correctness logic — see below) can now be phrased by a
+  local Ollama model instead of the fixed `_fallback_prompt` template, requested directly rather
+  than derived from the spec. Off by default everywhere, including CI (`OLLAMA_ENABLED=false`),
+  since the `ollama` container sits behind its own Compose profile (`ai`) and pulls a
+  multi-hundred-MB model on first start — `backend` has no `depends_on` on it, so the app runs
+  identically with or without that profile active. Deliberately does *not* touch which answer is
+  correct: `_build_question` (the `random.Random`-seeded pick of the real interest plus decoys
+  from `_DECOY_INTERESTS`) is untouched, because `answer_daily_question` ties a correct answer
+  directly to `Match.flame_count` and therefore to unlocking partner photos — letting an LLM
+  decide correctness would put a non-deterministic, unverifiable judgment on the product's core
+  monetization-adjacent gate. Ollama only writes the *sentence*, never the *answer key*, and
+  `question_llm.generate_personalized_prompt` doesn't even receive the correct interest, only the
+  other side's display name and bio, to keep that boundary structural rather than just a prompt
+  instruction. The bigger architectural change is where generation happens: `_build_prompt` used
+  to be recomputed on *every* `GET` (cheap with a static template, deliberately not persisted so a
+  display-name edit mid-day wouldn't freeze a stale name — see the original comment, still true
+  for the fallback path). An LLM call is not cheap, so `DailyQuestion` gained a `prompt` column
+  (migration `7674a5626f45`) written once by `_generate_prompt` at row-creation time only,
+  never recomputed on a reread — `get_or_create_daily_question`'s existing-row branch now reads
+  `existing.prompt` directly (falling back to the static template only for rows written before
+  this column existed, where it's still `NULL`). `question_llm.py` never raises: any failure
+  (disabled, unreachable, timeout past `OLLAMA_TIMEOUT_SECONDS = 3.0`, empty/oversized output, or
+  output with no "?" — a small 1B model doesn't reliably produce an actual question from
+  instructions alone) returns `None` and the caller falls back to the static template, so an
+  Ollama outage or slowness never breaks this endpoint. Priming the generation with a trailing
+  "Question :" (rather than relying on the system instructions alone) measurably raised the
+  hit-rate of genuinely interrogative output in manual testing — the `"?" in text` check is the
+  actual safety net, this priming just keeps the fallback rate low. Verified against the real
+  container, not just unit-level: model pulled (`llama3.2:1b`, 1.3 GB), a real two-user match
+  created through the live OTP → publish → swipe HTTP flow, a personalized question fetched
+  (~2.1s cold), reconfirmed cached on a second `GET` (~11ms, proving no repeat LLM call), answered
+  correctly, `flame_count` incremented exactly as before — then the flag and container were
+  returned to their default off/stopped state and the full pytest suite (90/90) plus `ruff check
+  .` reconfirmed green on that default path. `OLLAMA_ENABLED` was later turned on for real in this
+  environment's own (gitignored) `.env` at the user's explicit request — `.env.example`/CI still
+  default to `false`, so this is a per-environment choice, not a change to the shipped default.
+- **Daily question categories beyond interests** (`services/messaging.py`'s `_eligible_categories`/
+  `_build_question`, `services/question_llm.py`'s `_INSTRUCTIONS` dict): requested directly — the
+  quiz shouldn't only ever be about interests. Same non-negotiable boundary as above, just applied
+  to two more categories: whatever `correct_answer` ends up in `DailyQuestion` must always be a
+  real, already-stored value, never an LLM assertion. `_eligible_categories` builds the category
+  list per match from what's actually on the other side's `PublicProfile` — `"interest"` (existing
+  logic, unchanged), `"city"` (correct = `other_profile.city`, decoys = other names from
+  `services/geo.py`'s `CITIES`, the same closed French-city list P9.3 already built), `"bio"`
+  (correct = `other_profile.bio` verbatim, decoys = *other real users'* published bios, never
+  fabricated — same "real leftover values, just not this person's" principle as
+  `_DECOY_INTERESTS`). `question_llm.generate_personalized_prompt` gained a `category` parameter
+  selecting which of three instructions to use, so the generated sentence actually matches what
+  the options are about; when `category == "bio"` the person's own bio is deliberately withheld
+  from the LLM's context entirely (unlike the other two categories, which still pass it as
+  harmless flavor) since here the bio *is* the answer domain, not just color. `MIN_BIO_DECOYS = 3`
+  gates `"bio"` eligibility: `_decoy_bios` queries other published, non-empty, non-matching bios
+  (excluding both the asker's own and the target's), and if fewer than 3 distinct ones exist,
+  `"bio"` simply isn't offered that day rather than serving a quiz with too few options. A real bug
+  found by testing against the live app (not just unit-level): the first version of `_decoy_bios`
+  had no `.distinct()`, so when multiple published profiles happened to share identical bio text
+  (readily reproducible with realistic seed/test data), the same decoy string could appear more
+  than once in `options` — caught by literally reading a live-generated question that showed the
+  same sentence three times, fixed with `.distinct()` on the query, and pinned by
+  `test_daily_question_uses_bio_when_no_interests_or_city` asserting `len(set(options)) ==
+  len(options)`. `get_or_create_daily_question`'s 404 guard changed from "no interests" to "no
+  eligible category at all" — a profile with only a city or only a bio (and no interests) now
+  still gets a question, covered by
+  `test_daily_question_uses_city_when_no_interests_or_bio`/`_uses_bio_when_no_interests_or_city`.
+  `create_match`/`create_published_user` (`tests/helpers.py`) gained optional `bio`/`city`
+  params for this, non-breaking (existing calls keep their old defaults). Verified live against
+  several real matches with full profiles (bio + city + interests all set): all three categories
+  were observed firing across different matches on the same day (category is chosen deterministically
+  per `match_id`/`user_id`/day, so one match only ever sees one category on a given day). LLM
+  phrasing quality for the newer categories is visibly less reliable than for interests (one live
+  city-category generation drifted into mentioning a place not even among the options) — accepted
+  as the same known small-model limitation already documented above; the `"?"` check remains a
+  structural safety net, not a topical-accuracy guarantee, and the static
+  `_FALLBACK_PROMPT_TEMPLATES` entry per category is the actual quality floor. 92/92 backend tests,
+  `ruff check .` clean. Three gaps found on a cold re-read (asked directly — "is this logical and
+  complete?" — not while writing the code above) and fixed: `_DECOY_BIOS` (a static filler pool,
+  same shape as `_DECOY_INTERESTS`) now backstops `_eligible_categories`'s bio-decoy count, since
+  requiring real decoys alone made `"bio"` nearly unreachable early in the app's life before enough
+  other users had a published bio; `docs/DPIA.md`'s bio/interests row was corrected to name the
+  fact that a bio/city is now also shown verbatim as a quiz option to an *unmatched* third party
+  (already public via discovery, so not a new disclosure, but a distinct purpose the table didn't
+  list); and `DailyQuestion` gained a `category` column (migration `fd8392ab076d`, exposed on
+  `DailyQuestionOut`) since nothing previously recorded which category actually fired, making it
+  unverifiable after the fact. (`models/rating.py`, `models/report.py`, `services/moderation.py`,
   `services/moderation_ml.py`): a `Rating` is one score+comment per `(match_id, rater_id)` — the
   trust score is *never stored*, it's recomputed on every read from all `Rating` rows for a user
   (`compute_trust_score`), so there's no cached counter that can drift out of sync. A rating is

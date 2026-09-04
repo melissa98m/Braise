@@ -913,6 +913,93 @@ techniques : cahier des charges sections A, B, C, D.
     Flutter au total, `flutter analyze` propre, `flutter build web` vérifié, correctif reconfirmé
     contre l'app réelle après reconstruction du conteneur.
 
+- [x] **P19 — Question du jour personnalisée par un modèle Ollama local (optionnel).** Demandé
+  directement, hors cahier des charges : un modèle IA local (gratuit, dans Docker — cohérent avec
+  la contrainte "aucun service payant") pour formuler la question du jour de façon plus naturelle
+  que le gabarit statique fixe ("Lequel de ces centres d'intérêt appartient vraiment à {nom} ?").
+  Décision structurante avant tout code : `answer_daily_question` incrémente `Match.flame_count`
+  (donc le déblocage des photos) sur la base d'une `correct_answer` vérifiable — y introduire un
+  jugement LLM non déterministe aurait fragilisé le mécanisme central du produit. Le LLM n'écrit
+  donc que la phrase, jamais la bonne réponse : `_build_question` (le tirage par `random.Random`
+  de l'intérêt réel + des leurres) reste inchangé, et `services/question_llm.py` ne reçoit même
+  pas l'intérêt correct en entrée — seulement le prénom et la bio de l'autre côté.
+  Second choix structurant, pour la performance : le prompt était recalculé à chaque `GET` avec
+  l'ancien gabarit statique (gratuit, volontairement non persisté pour ne jamais figer un ancien
+  prénom). Un appel LLM à chaque ouverture d'écran aurait été inacceptable — `DailyQuestion` gagne
+  donc une colonne `prompt` (migration `7674a5626f45`), écrite une seule fois à la création de la
+  ligne, jamais recalculée sur une relecture.
+  `docker-compose.yml` : service `ollama` + `ollama-init` (télécharge le modèle une fois,
+  idempotent) derrière un profil `ai` optionnel, jamais démarré par défaut — `backend` n'a aucune
+  dépendance dessus, donc son absence ne change rien au comportement de l'app (repli silencieux
+  sur le gabarit). `OLLAMA_ENABLED=false` par défaut partout, y compris en CI et dans
+  `.env.prod.example`. `question_llm.generate_personalized_prompt` ne lève jamais : désactivé,
+  conteneur injoignable, dépassement de `OLLAMA_TIMEOUT_SECONDS` (3s), sortie vide/trop
+  longue/sans point d'interrogation (un modèle 1B ne suit pas toujours l'instruction "pose une
+  question") retombent tous sur le gabarit statique. Amorcer la génération par "Question :" en
+  suffixe du prompt (plutôt que de compter sur la seule instruction système) a nettement réduit ce
+  taux d'échec en test manuel — la vérification `"?" in text` reste le filet de sécurité réel.
+  Vérifié en conditions réelles, pas seulement en interne : modèle `llama3.2:1b` (1,3 Go) tiré,
+  deux comptes créés via le vrai flux OTP → publication → swipe, match réel créé, question du jour
+  récupérée via l'endpoint HTTP réel (~2,1s à froid, question authentique générée par le modèle,
+  bonne réponse noyée dans les leurres), relue une seconde fois (~11ms, confirmant l'absence de
+  second appel LLM), répondue correctement, `flame_count` incrémenté sans changement de
+  comportement. Remis dans l'état par défaut (flag et conteneur éteints) après vérification :
+  90/90 tests pytest, `ruff check .` propre sur ce chemin par défaut.
+
+- [x] **P20 — Question du jour : catégories ville et bio en plus des intérêts.** Demandé
+  directement après P19 : le quiz ne devait pas se limiter aux centres d'intérêt. Même règle de
+  sécurité non négociable qu'en P19, appliquée à deux catégories de plus — la bonne réponse reste
+  toujours une vraie donnée déjà stockée, jamais une affirmation du LLM. `_eligible_categories`
+  (`services/messaging.py`) construit la liste des catégories utilisables à partir du profil réel
+  de l'autre côté : "interest" (inchangé), "city" (bonne réponse = la vraie ville du profil,
+  leurres = d'autres villes de la liste fermée déjà posée en P9.3, `services/geo.py`), "bio"
+  (bonne réponse = la bio réelle, leurres = de vraies bios d'*autres* profils publiés — jamais
+  inventées, même principe que le pool `_DECOY_INTERESTS` existant). `question_llm.py` reçoit
+  désormais la catégorie pour choisir la bonne instruction de formulation, et ne reçoit plus la
+  bio de la personne quand la catégorie est justement "bio" (elle serait alors la réponse, pas
+  juste une couleur de contexte comme pour les deux autres catégories). `MIN_BIO_DECOYS = 3`
+  conditionne l'éligibilité de "bio" : si moins de 3 autres bios distinctes existent, cette
+  catégorie n'est simplement pas proposée ce jour-là. Le garde 404 change de "pas d'intérêts" à
+  "aucune catégorie éligible" : un profil avec seulement une ville ou seulement une bio (aucun
+  intérêt) obtient désormais quand même une question.
+  Un vrai bug trouvé en testant contre l'app réelle, pas en le cherchant délibérément :
+  `_decoy_bios` n'avait pas de `.distinct()`, donc quand plusieurs profils publiés partageaient le
+  même texte de bio, la même option pouvait apparaître plusieurs fois dans les choix proposés —
+  repéré en lisant une vraie question générée qui affichait trois fois la même phrase-leurre,
+  corrigé avec `.distinct()` sur la requête, et figé par un nouveau test qui vérifie
+  `len(set(options)) == len(options)`.
+  Vérifié en conditions réelles : plusieurs vrais matchs créés avec profils complets
+  (bio + ville + intérêts), les trois catégories observées apparaître sur des matchs différents le
+  même jour (la catégorie est choisie de façon déterministe par match/utilisateur/jour, donc un
+  seul match ne voit jamais qu'une catégorie par jour). La qualité de formulation du LLM sur les
+  nouvelles catégories s'est révélée visiblement moins fiable que sur les intérêts (une génération
+  réelle en catégorie "ville" a dérivé vers un lieu absent des options proposées) — accepté comme
+  la même limite déjà documentée des petits modèles : la vérification `"?"` reste un filet de
+  sécurité structurel, pas une garantie de pertinence, et le gabarit statique par catégorie
+  (`_FALLBACK_PROMPT_TEMPLATES`) reste le vrai plancher de qualité. `tests/helpers.py` :
+  `create_match`/`create_published_user` gagnent des paramètres `bio`/`city` optionnels, sans
+  rien casser des appels existants. 92/92 tests backend, `ruff check .` propre.
+
+  **Trois lacunes corrigées après relecture à froid** (demandée explicitement — "la fonctionnalité
+  est-elle logique et complète ?" — pas trouvées en la codant) :
+  1. *Démarrage à froid de la catégorie "bio".* `MIN_BIO_DECOYS` exigeait des leurres réels
+     (d'autres profils publiés) : quasiment inatteignable tôt dans la vie de l'app, avant qu'il y
+     ait assez d'utilisateurs. `_DECOY_BIOS` (10 bios génériques statiques, même principe que
+     `_DECOY_INTERESTS`) complète désormais le pool de vrais leurres, rendant "bio" éligible dès
+     qu'un profil a une bio, indépendamment de la taille de la base.
+  2. *Tableau du DPIA incomplet.* La ligne bio/intérêts ne mentionnait que la relecture par Ollama,
+     pas la réutilisation de la bio/ville d'un profil comme option de quiz montrée à un tiers non
+     apparié (déjà une donnée publique visible en découverte, donc pas une nouvelle fuite, mais une
+     finalité distincte que le tableau ne reflétait pas). Corrigé dans `docs/DPIA.md`.
+  3. *Catégorie jamais tracée.* `DailyQuestion` ne stockait que la réponse/les options/le prompt,
+     jamais la catégorie retenue — impossible de vérifier après coup si "bio" se déclenche
+     vraiment. Colonne `category` ajoutée (migration `fd8392ab076d`), écrite à la création comme le
+     reste, exposée dans `DailyQuestionOut`. Nullable pour les lignes antérieures, implicitement
+     "interest" dans ce cas (la seule catégorie qui existait avant P20).
+
+  92/92 tests backend (inchangé), `ruff check .` propre, vérifié en direct contre l'app réelle
+  (catégorie "bio" confirmée éligible et renvoyée dans la réponse HTTP).
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

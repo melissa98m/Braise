@@ -22,6 +22,18 @@ class DailyQuestion(Base):
     question_date = Column(Date, nullable=False)
     correct_answer = Column(String, nullable=False)
     options = Column(JSONB, nullable=False)
+    # Généré (Ollama) ou gabarit statique — décidé et figé une seule fois à la création de la
+    # ligne (voir services/messaging.py._generate_prompt), jamais recalculé sur une lecture :
+    # un appel LLM à chaque GET serait payé à chaque ouverture d'écran, pas une fois par jour.
+    # Nullable pour les lignes créées avant cette colonne — services/messaging.py retombe alors
+    # sur le gabarit statique reconstruit depuis le prénom actuel.
+    prompt = Column(String, nullable=True)
+    # "interest" / "city" / "bio" (services/messaging.py._eligible_categories) — pas consommé par
+    # la logique de correction (correct_answer/options suffisent), seulement pour pouvoir observer
+    # après coup quelles catégories se déclenchent réellement (debug, futur KPI). Nullable pour les
+    # lignes créées avant cette colonne, et pour celles créées avant l'introduction des catégories
+    # ville/bio (implicitement "interest" dans ce cas).
+    category = Column(String, nullable=True)
     answered = Column(Boolean, nullable=False, default=False)
     is_correct = Column(Boolean, nullable=True)
     created_at = Column(

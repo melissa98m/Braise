@@ -49,6 +49,15 @@ services:
     ports: !override
       - "127.0.0.1:8081:8080"
 
+  # Optionnel (profil "ai", voir docker-compose.yml/README.md) — jamais démarré à moins d'un
+  # `--profile ai` explicite, mais si activé sur ce VPS, son API d'inférence ne doit jamais être
+  # publique (pas d'authentification native) : même principe de repli sur 127.0.0.1/tunnel SSH que
+  # db/MinIO console/Adminer/Uptime Kuma ci-dessus.
+  ollama:
+    restart: unless-stopped
+    ports: !override
+      - "127.0.0.1:11434:11434"
+
   backup:
     restart: unless-stopped
 

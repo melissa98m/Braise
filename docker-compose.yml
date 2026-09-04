@@ -101,6 +101,38 @@ services:
     ports:
       - "8082:3001"
 
+  # Génération de la question du jour personnalisée (services/question_llm.py) — gratuit, local,
+  # 100% optionnel : profil "ai", jamais démarré par défaut (les poids du modèle pèsent plusieurs
+  # centaines de Mo à télécharger au premier démarrage, et le CI ne le lance jamais). Activer :
+  # `docker compose --profile ai up -d ollama ollama-init` puis OLLAMA_ENABLED=true dans .env.
+  # Sans ça, ou si le conteneur est indisponible/trop lent, services/question_llm.py retombe
+  # silencieusement sur le gabarit statique — backend n'a donc aucun depends_on vers ollama.
+  ollama:
+    profiles: ["ai"]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Télécharge le modèle une fois au démarrage (idempotent : `ollama pull` ne retélécharge rien
+  # si le modèle est déjà dans le volume ollama_data) plutôt que de laisser la toute première
+  # question du jour générée payer ce téléchargement dans le court timeout HTTP
+  # (OLLAMA_TIMEOUT_SECONDS, voir core/config.py).
+  ollama-init:
+    profiles: ["ai"]
+    image: ollama/ollama:latest
+    env_file: .env
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "OLLAMA_HOST=ollama:11434 ollama pull ${OLLAMA_MODEL:-llama3.2:1b}"]
+
   # Flutter (Phase 6) — pas lancé par défaut : `docker compose --profile mobile up mobile`
   mobile:
     profiles: ["mobile"]
@@ -122,3 +154,4 @@ volumes:
   minio_data:
   backup_data:
   uptime_kuma_data:
+  ollama_data:

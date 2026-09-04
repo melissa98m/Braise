@@ -19,7 +19,7 @@ Internet ──▶ Caddy (80/443, TLS auto) ──▶ backend:8000   (api.<domai
                                      └──▶ fichiers statiques Flutter web (app.<domaine>)
 
 db, MinIO console (9001), Adminer (8081), Uptime Kuma (8082) : jamais publics — 127.0.0.1
-uniquement, accès via tunnel SSH.
+uniquement, accès via tunnel SSH. Ollama (11434, optionnel — voir § 6) : même règle.
 ```
 
 ## 1. Provisionner le VPS
@@ -76,6 +76,10 @@ Points d'attention spécifiques à la prod (voir les commentaires dans `.env.pro
   annule toute vérification. Nécessite un vrai fournisseur SMS pour être utilisable avec de
   vrais utilisateurs (hors périmètre gratuit/local du MVP, voir le backlog KYC de
   `docs/ROADMAP.md`).
+- `ENABLE_DEBUG_SUBSCRIPTION_ENDPOINT=false` sans exception — sinon `POST
+  /subscriptions/debug-activate` reste joignable et accorde le Premium à n'importe quel compte
+  authentifié sans paiement. Nécessite une vraie intégration StoreKit/Play Billing (cahier des
+  charges D.8) pour être remplacé par un vrai flux d'achat.
 - `MINIO_PUBLIC_SECURE=true` — sépare désormais le schéma du client interne MinIO (reste `http`,
   trafic conteneur-à-conteneur en clair sur le réseau Docker privé) de celui du client public
   (doit suivre le vrai schéma externe, `https` derrière Caddy) : voir `backend/app/core/config.py`.
@@ -122,6 +126,12 @@ curl -I https://app.<domaine>/              # 200, certificat valide
   `docker-compose.prod.yml`). Ajouter un 4ᵉ moniteur HTTPS sur `https://api.<domaine>/health` en
   plus des 3 déjà documentés dans `README.md`.
 - **Adminer** : même règle, tunnel SSH uniquement (`ssh -L 8081:localhost:8081 braise@<ip>`).
+- **Ollama** (question du jour personnalisée, optionnel — voir `README.md`) : off par défaut
+  (`OLLAMA_ENABLED=false`), donc rien à faire pour un VPS qui ne l'active pas. Si activé
+  (`docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile ai up -d ollama
+  ollama-init`), `docker-compose.prod.yml` verrouille déjà son port sur `127.0.0.1` — vérifié par
+  `docker compose ... config`, pas supposé (voir `CLAUDE.md`). Prévoir la RAM/le CPU du modèle en
+  plus du reste de la stack avant de l'activer sur un VPS modeste.
 - **KPIs** (`backend/scripts/compute_kpis.py`, P4.1) : `docker compose -f docker-compose.yml -f
   docker-compose.prod.yml run --rm backend python scripts/compute_kpis.py` — fonctionne à
   l'identique, aucune adaptation nécessaire.

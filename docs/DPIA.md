@@ -26,7 +26,7 @@ les traitements côté serveur).
 | Donnée | Finalité | Base légale | Où (code) | Conservation |
 |---|---|---|---|---|
 | Téléphone + code OTP | Authentification, unicité de compte | Exécution du contrat (CGU) | `models/user.py`, `services/otp.py` | Jusqu'à suppression de compte (anonymisé ensuite) |
-| Bio, centres d'intérêt, avatar-sigil | Profil public, matching | Exécution du contrat | `models/profile.py` (`PublicProfile`) | Jusqu'à suppression de compte |
+| Bio, centres d'intérêt, avatar-sigil | Profil public, matching ; question du jour du quiz flammes — bio/ville/intérêts servent d'options réelles (bonne réponse comme leurres, voir `services/messaging.py::_eligible_categories`) proposées à l'*autre* participant d'un match, y compris un utilisateur non apparié quand sa bio est piochée comme leurre pour le quiz de quelqu'un d'autre (déjà visible de la même façon en découverte, même audience) ; prénom + bio (jamais quand la bio est elle-même le sujet du quiz) également relus par le modèle Ollama local pour personnaliser la formulation (optionnel, off par défaut — voir ci-dessous) | Exécution du contrat | `models/profile.py` (`PublicProfile`), `services/messaging.py`, `services/question_llm.py` | Jusqu'à suppression de compte |
 | Date de naissance | Calcul de l'âge affiché, contrôle 18+ | Exécution du contrat / obligation légale (protection des mineurs, A.9) | `models/profile.py`, schéma `PublicProfileOut` (n'expose jamais la date brute, seulement l'âge calculé) | Jusqu'à suppression de compte |
 | Genre déclaré + préférences de découverte (genre recherché, tranche d'âge) | Filtres de base du feed de découverte (A.5) | Exécution du contrat, consentement (champs facultatifs) | `models/profile.py` (`PublicProfile.gender`/`looking_for_gender`/`age_min`/`age_max`) | Jusqu'à suppression de compte |
 | Photos privées | Déblocage du profil physique après flammes | Exécution du contrat | `models/profile.py` (`PrivateProfile.photo_keys`), fichiers dans MinIO | Jusqu'à suppression de compte |
@@ -39,6 +39,11 @@ Aucune donnée n'est transmise à un tiers commercial : pas de SMS provider rée
 de service de modération externe (cahier des charges D.11 — tout est auto-hébergé/interne dès le
 MVP, voir aussi `CLAUDE.md` section « Stubs »). Le seul flux sortant en V2 sera la commission de
 paiement des stores Apple/Google (D.8), qui ne transite par aucune donnée personnelle sensible.
+Le modèle Ollama (question du jour personnalisée, optionnel — voir `CLAUDE.md` section
+messagerie) reste dans cette même catégorie « aucun tiers » : conteneur auto-hébergé sur le réseau
+Docker interne (`ollama:11434`, jamais exposé publiquement), aucune donnée ne quitte
+l'infrastructure. Il ne lit que le prénom et la bio (déjà des données de profil public), jamais
+l'identité complète, le téléphone ou les messages.
 
 ## 3. Principes fondamentaux
 

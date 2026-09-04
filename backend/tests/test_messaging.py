@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.daily_question import DailyQuestion
-from tests.helpers import auth_headers, auth_token, create_match, unique_phone
+from tests.helpers import auth_headers, auth_token, create_match, create_published_user, unique_phone
 
 client = TestClient(app)
 
@@ -39,7 +39,12 @@ def test_daily_question_correct_answer_increments_shared_flame_count():
     )
     assert question.status_code == 200
     body = question.json()
-    assert body["prompt"] == "Lequel de ces centres d'intérêt appartient vraiment à Match test ?"
+    # Le texte exact dépend de OLLAMA_ENABLED (gabarit statique si désactivé/indisponible,
+    # formulation générée à température non nulle sinon — voir services/question_llm.py) : seule
+    # la forme (une vraie question) est garantie, jamais le texte mot pour mot — une assertion sur
+    # le contenu exact rendrait ce test dépendant du conteneur ollama et de sa sortie non
+    # déterministe.
+    assert body["prompt"].strip().endswith("?")
     assert len(body["options"]) >= 2
     assert body["answered"] is False
 
@@ -120,6 +125,50 @@ def test_daily_question_missing_when_target_has_no_interests():
         f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"]
     )
     assert response.status_code == 404
+
+
+def test_daily_question_uses_city_when_no_interests_or_bio():
+    # Pas d'intérêts, pas de bio : seule la ville rend la question disponible (voir
+    # services/messaging._eligible_categories) — la bonne réponse est bien la vraie ville du
+    # profil, jamais une affirmation inventée.
+    match = create_match(client, interests_a=[], interests_b=[], city_b="Lyon")
+    response = client.get(
+        f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"]
+    )
+    assert response.status_code == 200
+    body = response.json()
+    correct = _peek_correct_answer(match["match_id"], match["id_a"])
+    assert correct == "Lyon"
+    assert correct in body["options"]
+    assert len(set(body["options"])) == len(body["options"])
+
+
+def test_daily_question_uses_bio_when_no_interests_or_city():
+    # MIN_BIO_DECOYS (services/messaging.py) exige au moins 3 autres bios réelles publiées et
+    # distinctes pour que la catégorie "bio" soit éligible — créées ici explicitement plutôt que
+    # de compter sur des données laissées par d'autres tests.
+    for i in range(4):
+        create_published_user(
+            client, f"Leurre{i}", bio=f"Une bio bien distincte et jamais réutilisée #{i}."
+        )
+
+    match = create_match(
+        client,
+        interests_a=[],
+        interests_b=[],
+        bio_b="La vraie bio, unique à ce test, de Match test B.",
+    )
+    response = client.get(
+        f"/messaging/matches/{match['match_id']}/daily-question", headers=match["headers_a"]
+    )
+    assert response.status_code == 200
+    body = response.json()
+    correct = _peek_correct_answer(match["match_id"], match["id_a"])
+    assert correct == "La vraie bio, unique à ce test, de Match test B."
+    assert correct in body["options"]
+    # Jamais l'option d'un décor dupliquée (bug réel trouvé et corrigé : _decoy_bios sans
+    # .distinct() pouvait renvoyer la même bio plusieurs fois si plusieurs profils la partageaient).
+    assert len(set(body["options"])) == len(body["options"])
 
 
 def test_daily_question_requires_match_participant():

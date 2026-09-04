@@ -98,6 +98,32 @@ Pour revenir au mode développement normal (hot reload) ensuite : repasser `MOBI
 retirer la ligne) dans `.env`, puis `docker compose build mobile && docker compose --profile
 mobile up -d --force-recreate mobile`.
 
+## Question du jour personnalisée (Ollama, optionnel)
+
+La question du jour (`GET /messaging/matches/{id}/daily-question`) porte sur une catégorie tirée
+au hasard chaque jour parmi celles disponibles sur le profil de l'autre — centre d'intérêt, ville
+ou bio (voir `services/messaging.py::_eligible_categories`) — avec, dans chaque cas, un gabarit
+statique par défaut ("Lequel de ces centres d'intérêt appartient vraiment à {nom} ?", "Laquelle de
+ces villes...", "Laquelle de ces bios..."). Un modèle [Ollama](https://ollama.com) local (gratuit,
+dans Docker) peut reformuler cette phrase de façon plus naturelle — il ne décide jamais de la
+bonne réponse, toujours une vraie donnée déjà stockée du profil, jamais une affirmation du modèle
+(voir `CLAUDE.md`, section messagerie, pour le détail des garde-fous).
+
+```bash
+docker compose --profile ai up -d ollama ollama-init   # démarre le modèle + le télécharge (~1,3 Go, une fois)
+```
+
+Puis dans `.env` :
+
+```bash
+OLLAMA_ENABLED=true
+```
+
+et redémarrer le backend (`docker compose up -d backend`). Off par défaut partout (dev, CI, prod) :
+sans le conteneur démarré ou avec `OLLAMA_ENABLED=false`, le gabarit statique reste utilisé — et
+en cas de panne/lenteur d'Ollama une fois activé, le repli sur le gabarit est automatique et
+silencieux (jamais d'erreur visible côté utilisateur).
+
 ## Sauvegardes & supervision (durcissement opérationnel, cahier des charges B.3/D.7/D.12)
 
 Sauvegardes automatisées (dump Postgres + miroir des photos MinIO) et **testées par restauration
@@ -178,6 +204,6 @@ ci-dessus (backend : migrations + `ruff check .` + `pytest -q` ; mobile : `flutt
 
 ## Stack (figée, cahier des charges section D.11)
 
-Flutter · FastAPI · PostgreSQL · WebSockets custom · MinIO · scikit-learn maison. Aucun service
-payant tant que le MVP n'est pas validé en local (OTP, paiement et push sont stubés — voir
-`docs/ROADMAP.md`).
+Flutter · FastAPI · PostgreSQL · WebSockets custom · MinIO · scikit-learn maison · Ollama
+(optionnel, question du jour). Aucun service payant tant que le MVP n'est pas validé en local
+(OTP, paiement et push sont stubés — voir `docs/ROADMAP.md`).

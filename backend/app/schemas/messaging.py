@@ -18,12 +18,16 @@ class MessageOut(BaseModel):
 
 
 class DailyQuestionOut(BaseModel):
-    # Jamais persisté (voir services/messaging._build_prompt) : dérivé à la volée du nom actuel
-    # de l'autre côté, à chaque lecture.
+    # Figé à la création de la question (voir services/messaging._generate_prompt), jamais
+    # régénéré sur une relecture — un appel LLM à chaque GET serait payé à chaque ouverture
+    # d'écran, pas une fois par jour.
     prompt: str
     options: list[str]
     answered: bool
     is_correct: bool | None
+    # "interest" / "city" / "bio" — None sur les lignes créées avant l'ajout de cette colonne
+    # (implicitement "interest" dans ce cas, la seule catégorie qui existait alors).
+    category: str | None = None
 
 
 class DailyQuestionAnswerIn(BaseModel):

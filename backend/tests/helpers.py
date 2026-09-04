@@ -30,6 +30,7 @@ def create_published_user(
     age_max: int | None = None,
     city: str | None = None,
     max_distance_km: int | None = None,
+    bio: str = "",
 ) -> tuple[dict, str]:
     headers = auth_headers(client, unique_phone())
     me = client.get("/auth/me", headers=headers).json()
@@ -39,7 +40,7 @@ def create_published_user(
         json={
             "display_name": display_name,
             "birth_date": birth_date,
-            "bio": "",
+            "bio": bio,
             "interests": interests or [],
             "is_published": True,
             "gender": gender,
@@ -57,6 +58,10 @@ def create_match(
     client,
     interests_a: list[str] | None = None,
     interests_b: list[str] | None = None,
+    bio_a: str = "",
+    bio_b: str = "",
+    city_a: str | None = None,
+    city_b: str | None = None,
 ) -> dict:
     token_a = auth_token(client, unique_phone())
     token_b = auth_token(client, unique_phone())
@@ -66,16 +71,20 @@ def create_match(
     id_a = client.get("/auth/me", headers=headers_a).json()["id"]
     id_b = client.get("/auth/me", headers=headers_b).json()["id"]
 
-    for headers, interests in ((headers_a, interests_a), (headers_b, interests_b)):
+    for headers, interests, bio, city in (
+        (headers_a, interests_a, bio_a, city_a),
+        (headers_b, interests_b, bio_b, city_b),
+    ):
         client.put(
             "/profiles/me/public",
             headers=headers,
             json={
                 "display_name": "Match test",
                 "birth_date": "1996-01-01",
-                "bio": "",
+                "bio": bio,
                 "interests": interests or [],
                 "is_published": True,
+                "city": city,
             },
         )
 
