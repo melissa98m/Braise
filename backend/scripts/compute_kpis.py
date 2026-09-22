@@ -225,7 +225,7 @@ def main() -> None:
 
         print("\n--- Monétisation ---")
         premium, verified2 = monetization_conversion_rate(db)
-        print(f"Taux de conversion vers Braise+ : {_pct(premium, verified2)} — objectif 3-8 %")
+        print(f"Taux de conversion vers Bresonne+ : {_pct(premium, verified2)} — objectif 3-8 %")
 
         print("\n--- Produit ---")
         unlocked, total_matches = product_unlock_rate(db)

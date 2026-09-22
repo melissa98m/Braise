@@ -34,6 +34,17 @@ def resolve_city(name: str | None) -> tuple[float, float] | None:
     return CITIES.get(name)
 
 
+def nearest_city(lat: float, lon: float) -> str | None:
+    """Résout des coordonnées GPS brutes (géolocalisation navigateur, gratuite — voir
+    `GET /profiles/cities/nearest`) vers la ville la plus proche de la liste fermée, sans passer
+    par un service de géocodage payant : un simple min() par distance à vol d'oiseau sur les ~50
+    entrées de `CITIES`, largement suffisant à cette échelle. `None` seulement si `CITIES` est
+    vide, ce qui n'arrive jamais en pratique (jeu de données statique embarqué)."""
+    if not CITIES:
+        return None
+    return min(CITIES, key=lambda name: haversine_km((lat, lon), CITIES[name]))
+
+
 def haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
     """Distance à vol d'oiseau entre deux points (latitude, longitude en degrés décimaux)."""
     lat1, lon1 = a

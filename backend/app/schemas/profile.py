@@ -25,7 +25,9 @@ class PublicProfileIn(BaseModel):
     # Filtres de découverte de base (cahier des charges A.5). Tous optionnels : ne rien renseigner
     # = pas de filtre, comme avant l'existence de ces champs (voir services/discovery.get_feed).
     gender: Gender | None = None
-    looking_for_gender: Gender | None = None
+    # Multi-sélection : "je recherche des hommes et des femmes" doit être exprimable, pas juste un
+    # choix unique — null (ou une liste vide) garde le même sens "aucun filtre" qu'avant.
+    looking_for_gender: list[Gender] | None = None
     age_min: int | None = Field(default=None, ge=MIN_FEED_AGE, le=MAX_FEED_AGE)
     age_max: int | None = Field(default=None, ge=MIN_FEED_AGE, le=MAX_FEED_AGE)
     # Distance (P9.3) : `city` doit être une ville de la liste fermée exposée par
@@ -41,7 +43,7 @@ class PublicProfileIn(BaseModel):
         today = date.today()
         age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
         if age < 18:
-            raise ValueError("Il faut avoir 18 ans ou plus pour utiliser Braise.")
+            raise ValueError("Il faut avoir 18 ans ou plus pour utiliser Bresonne.")
         return value
 
     @field_validator("interests")
@@ -50,6 +52,13 @@ class PublicProfileIn(BaseModel):
         if len(value) > 10:
             raise ValueError("10 centres d'intérêt maximum.")
         return value
+
+    @field_validator("looking_for_gender")
+    @classmethod
+    def dedupe_looking_for_gender(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        return list(dict.fromkeys(value))
 
     @model_validator(mode="after")
     def age_range_is_coherent(self) -> "PublicProfileIn":
@@ -72,7 +81,7 @@ class PublicProfileOut(BaseModel):
     # ce booléen, même règle de minimisation que le reste de ce schéma.
     is_verified: bool
     gender: Gender | None
-    looking_for_gender: Gender | None
+    looking_for_gender: list[Gender] | None
     age_min: int | None
     age_max: int | None
     city: str | None
@@ -82,6 +91,21 @@ class PublicProfileOut(BaseModel):
 class PrivatePhotoOut(BaseModel):
     key: str
     url: str
+
+
+class PartnerProfileOut(BaseModel):
+    # Sous-ensemble de PublicProfileOut : ce qu'un match voit de l'autre depuis la conversation
+    # (même shape que DiscoveryCandidateOut, cahier des charges A.3/A.4.4) — jamais les
+    # préférences de filtrage (gender/looking_for_gender/age_min/age_max/city/max_distance_km),
+    # qui n'ont de sens que pour son propre profil.
+    display_name: str
+    age: int
+    bio: str
+    interests: list[str]
+    avatar: AvatarSpec
+    is_verified: bool
+    trust_score: int | None
+    trust_label: str | None
 
 
 class PrivateProfileOut(BaseModel):

@@ -186,7 +186,7 @@ def test_report_requires_match_participant():
     response = client.post(
         f"/moderation/matches/{match['match_id']}/report",
         headers=outsider_headers,
-        json={"reason": "autre"},
+        json={"reason": "autre", "comment": "Signalement de test."},
     )
     assert response.status_code == 404
 

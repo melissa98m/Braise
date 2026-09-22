@@ -79,7 +79,7 @@ services:
       - caddy_config:/config
       # Build statique Flutter web (`flutter build web`, voir docs/DEPLOYMENT.md) — pas le
       # conteneur `mobile` de dev, jamais démarré en prod.
-      - ./mobile/braise_app/build/web:/srv/braise-web:ro
+      - ./mobile/bresonne_app/build/web:/srv/bresonne-web:ro
     depends_on:
       - backend
       - minio

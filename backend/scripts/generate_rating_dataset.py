@@ -2,7 +2,7 @@
 de rancune de services/moderation_ml.py.
 
 Un noyau écrit à la main (CORE_*) est étendu par combinaison de tournures + contextes propres à
-Braise (déblocage du profil, flammes, question du jour). Trois familles de clauses, pas deux :
+Bresonne (déblocage du profil, flammes, question du jour). Trois familles de clauses, pas deux :
 - AUTHENTIC_CLAUSES : positif.
 - AUTHENTIC_NEGATIVE_CLAUSES : négatif mais légitime (pas de rancune) — indispensable pour que le
   modèle apprenne "déception liée au physique = rancune" plutôt que "ton négatif = rancune" (sans

@@ -1,4 +1,4 @@
-# AIPD / DPIA — Braise
+# AIPD / DPIA — Bresonne
 
 Analyse d'impact relative à la protection des données, engagée dès la phase de cadrage comme
 l'exige le cahier des charges (section A.9 et dépendance critique B.3), avant l'ouverture de toute
@@ -8,7 +8,7 @@ d'hébergeur).
 
 ## 1. Contexte et champ d'application
 
-Braise traite des données susceptibles d'être qualifiées de sensibles au sens large : photos de
+Bresonne traite des données susceptibles d'être qualifiées de sensibles au sens large : photos de
 profil privé, contenu de conversations privées, numéro de téléphone (identifiant d'authentification
 via OTP), commentaires de notation et de signalement. Aucune donnée biométrique n'est traitée à ce
 stade (le KYC MVP est un OTP téléphone/email — cahier des charges D.6 ; le KYC renforcé par pièce
@@ -28,7 +28,9 @@ les traitements côté serveur).
 | Téléphone + code OTP | Authentification, unicité de compte | Exécution du contrat (CGU) | `models/user.py`, `services/otp.py` | Jusqu'à suppression de compte (anonymisé ensuite) |
 | Bio, centres d'intérêt, avatar-sigil | Profil public, matching ; question du jour du quiz flammes — bio/ville/intérêts servent d'options réelles (bonne réponse comme leurres, voir `services/messaging.py::_eligible_categories`) proposées à l'*autre* participant d'un match, y compris un utilisateur non apparié quand sa bio est piochée comme leurre pour le quiz de quelqu'un d'autre (déjà visible de la même façon en découverte, même audience) ; prénom + bio (jamais quand la bio est elle-même le sujet du quiz) également relus par le modèle Ollama local pour personnaliser la formulation (optionnel, off par défaut — voir ci-dessous) | Exécution du contrat | `models/profile.py` (`PublicProfile`), `services/messaging.py`, `services/question_llm.py` | Jusqu'à suppression de compte |
 | Date de naissance | Calcul de l'âge affiché, contrôle 18+ | Exécution du contrat / obligation légale (protection des mineurs, A.9) | `models/profile.py`, schéma `PublicProfileOut` (n'expose jamais la date brute, seulement l'âge calculé) | Jusqu'à suppression de compte |
-| Genre déclaré + préférences de découverte (genre recherché, tranche d'âge) | Filtres de base du feed de découverte (A.5) | Exécution du contrat, consentement (champs facultatifs) | `models/profile.py` (`PublicProfile.gender`/`looking_for_gender`/`age_min`/`age_max`) | Jusqu'à suppression de compte |
+| Genre déclaré + préférences de découverte (genre recherché, tranche d'âge) — la combinaison genre/genre recherché est traitée comme une donnée sensible au sens RGPD art. 9 (elle révèle l'orientation) | Filtres de base du feed de découverte (A.5) | Consentement explicite et dédié, recueilli à l'inscription via `ConsentScreen` (case 4, séparée des CGU) avant tout accès à `PUT /profiles/me/public` — voir `services/consent.py` | `models/user.py` (`User.consent_sensitive_data_at`), `models/profile.py` (`PublicProfile.gender`/`looking_for_gender`), `services/consent.py` | Jusqu'à suppression de compte |
+| Date de naissance min. 18 ans (confirmation déclarative à l'inscription) + CGU + politique de confidentialité (acceptation) | Preuve de consentement/majorité opposable en cas de contrôle | Obligation légale / consentement | `models/user.py` (`User.consent_age_at`/`consent_cgu_at`/`consent_privacy_at`) | Jusqu'à suppression de compte |
+| Position GPS ponctuelle (géolocalisation navigateur, sur action explicite « Utiliser ma position ») | Résolution vers la ville la plus proche d'une liste fermée (P9.3), jamais stockée telle quelle | Consentement (permission navigateur, expliquée avant la demande système) | `services/geo.nearest_city`, `GET /profiles/cities/nearest` — coordonnées reçues, jamais journalisées ni persistées, seul le nom de ville résultant l'est (`PublicProfile.city`/`city_lat`/`city_lon`) | Non conservée (position elle-même) ; ville résultante jusqu'à suppression de compte |
 | Photos privées | Déblocage du profil physique après flammes | Exécution du contrat | `models/profile.py` (`PrivateProfile.photo_keys`), fichiers dans MinIO | Jusqu'à suppression de compte |
 | Messages | Messagerie du match | Exécution du contrat | `models/message.py` | Jusqu'à suppression de compte (contenu de l'auteur supprimé anonymisé, pas le fil pour l'autre participant) |
 | Notes + commentaires | Score de confiance, modération | Intérêt légitime (sécurité de la plateforme) | `models/rating.py`, `services/moderation.py` | Conservés (nécessaires à l'historique de confiance d'un tiers) |
@@ -54,7 +56,15 @@ l'identité complète, le téléphone ou les messages.
 - **Consentement / information.** CGU + politique de confidentialité rédigées et affichées dans
   l'app (voir action 3, § 5 plus bas) ; l'écran d'onboarding pédagogique (`ConceptIntroScreen`,
   plan P1) reste le bon endroit pour la pédagogie du concept, distincte du consentement RGPD
-  posé par les CGU.
+  posé par les CGU. Recueilli concrètement via `ConsentScreen` (juste après l'OTP, avant tout
+  accès au reste de l'app — y compris pour un compte déjà existant qui datait d'avant cette
+  fonctionnalité) : 4 cases distinctes et non pré-cochées (majorité, CGU, politique de
+  confidentialité, traitement de la donnée sensible orientation/genre — cette dernière isolée
+  visuellement des 3 autres, jamais un consentement global). Chaque consentement est horodaté
+  côté serveur (`User.consent_*_at`, voir `services/consent.py`) plutôt que seulement retenu côté
+  client, pour rester opposable en cas de contrôle CNIL ; `PUT /profiles/me/public` (donc
+  gender/looking_for_gender, la donnée sensible elle-même) reste 403 tant que les 4 ne sont pas
+  réunis.
 - **Sécurité par construction.**
   - Chiffrement au repos des photos privées (SSE-S3 via `MINIO_KMS_SECRET_KEY`, clé locale — voir
     `services/storage.py`), vérifiable avec `mc stat` (`Encryption: SSE-S3`).
@@ -100,11 +110,20 @@ l'identité complète, le téléphone ou les messages.
    (rclone/rsync vers un second emplacement physique, D.7).
 3. ~~Rédiger et publier les CGU / la politique de confidentialité côté produit~~ — fait :
    `docs/legal/CGU.md` et `docs/legal/POLITIQUE_CONFIDENTIALITE.md`, affichées dans l'app
-   (`screens/legal/legal_screen.dart`, liées depuis `WelcomeScreen` et Paramètres). **Reste à
-   faire** : les deux sont explicitement marquées "version bêta, pas encore relue par un
-   juriste" — à faire relire avant toute ouverture au-delà d'un cercle restreint de
-   bêta-testeur·se·s, et à compléter avec le nom/l'entité réel·le de l'éditeur (actuellement un
-   placeholder `[Éditeur]`).
+   (`screens/legal/legal_screen.dart`, liées depuis `WelcomeScreen` et Paramètres).
+   ~~Compléter avec le nom/l'entité réel·le de l'éditeur~~ — fait également : les 4 documents
+   `docs/legal/` (CGU, politique de confidentialité, et les deux nouveaux —
+   `MENTIONS_LEGALES.md`, `REGLES_COMMUNAUTE.md`, ce dernier miroir de l'app côté conditions
+   d'usage plutôt que côté RGPD) nomment désormais Loris Gonzales et Melissa Mangione comme
+   éditeurs, avec leurs adresses réelles et le contact `bresonne@hotmail.com` — plus de
+   placeholder `[Éditeur]`. Le produit y est renommé « Bresonne » (nom de marque retenu) ; le
+   renommage complet du code (package Dart, bundle ids Android/iOS, `Braise+` → `Bresonne+`,
+   titre web, ressources infra) a depuis été fait dans tout le repo, y compris ce document —
+   seul le vocabulaire thématique braise/flamme (verbe "braiser", tokens `braise/*`, classes
+   Dart `Braise*` internes) reste inchangé à dessein, voir `CLAUDE.md` § Project.
+   **Reste à faire** : les 4 documents sont toujours explicitement marqués "version bêta, pas
+   encore relus par un juriste" — à faire relire avant toute ouverture au-delà d'un cercle
+   restreint de bêta-testeur·se·s.
 4. Réentraîner `moderation_ml.py` dès que la bêta produit un premier volume réel de commentaires.
 5. Générer un vrai `JWT_SECRET` et un vrai `MINIO_KMS_SECRET_KEY` avant tout déploiement hors
    poste de dev — les valeurs actuelles dans `.env` sont explicitement des valeurs de dev.

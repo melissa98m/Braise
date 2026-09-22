@@ -1,4 +1,4 @@
-# Braise — Design tokens (dark & light)
+# Bresonne — Design tokens (dark & light)
 
 Source : *Braise - Tokens dark + light.dc.html* et *Braise - Direction UI.dc.html* fournis par
 Melissa. Référence unique pour le futur thème Flutter (Phase 6) — un seul nom de token par rôle,

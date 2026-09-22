@@ -1,5 +1,9 @@
 # Braise — Roadmap d'exécution
 
+> Le produit s'appelle désormais **Bresonne** (renommé en septembre 2026, voir `CLAUDE.md` §
+> Project) — ce journal garde volontairement « Braise » partout ci-dessous, nom réel du produit
+> au moment où chaque phase a été faite ; ce n'est pas une coquille à corriger.
+
 Toutes les phases tournent en local, gratuitement, sous Docker Compose. Aucun service payant
 (SMS, Apple/Google, Firebase, cloud) n'est requis avant que le MVP ne soit validé en local.
 Référence stack : cahier des charges, section D.11.

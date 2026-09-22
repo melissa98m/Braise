@@ -15,11 +15,11 @@ __pycache__/
 backend/scripts/data/
 
 # Flutter / Dart
-mobile/braise_app/.dart_tool/
-mobile/braise_app/.flutter-plugins
-mobile/braise_app/.flutter-plugins-dependencies
-mobile/braise_app/build/
-mobile/braise_app/.packages
+mobile/bresonne_app/.dart_tool/
+mobile/bresonne_app/.flutter-plugins
+mobile/bresonne_app/.flutter-plugins-dependencies
+mobile/bresonne_app/build/
+mobile/bresonne_app/.packages
 
 # Éditeurs
 .vscode/

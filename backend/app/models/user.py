@@ -33,3 +33,16 @@ class User(Base):
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+    # Consentement RGPD à l'inscription (recommandation CNIL pour les apps de rencontre) : 4
+    # horodatages distincts plutôt qu'un seul booléen "consentement donné", pour pouvoir prouver
+    # quoi a été consenti et quand en cas de contrôle — un booléen unique ne le permettrait pas.
+    # `consent_sensitive_data_at` est délibérément séparé des 3 autres (voir
+    # services/consent.py) : c'est le seul qui porte sur une donnée sensible au sens RGPD art. 9
+    # (orientation sexuelle, révélée par la combinaison gender/looking_for_gender — voir
+    # schemas/profile.py), donc le seul qui doit rester "libre, spécifique, éclairé et univoque"
+    # via une case dédiée, jamais groupée avec l'acceptation des CGU. Tous nullable : un compte
+    # créé avant l'existence de cette fonctionnalité n'a simplement encore rien consenti.
+    consent_age_at = Column(DateTime(timezone=True), nullable=True)
+    consent_cgu_at = Column(DateTime(timezone=True), nullable=True)
+    consent_privacy_at = Column(DateTime(timezone=True), nullable=True)
+    consent_sensitive_data_at = Column(DateTime(timezone=True), nullable=True)

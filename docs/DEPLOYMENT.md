@@ -37,10 +37,10 @@ Ce script (idempotent, relisible avant de le lancer) :
 - met le système à jour et active les mises à jour de sécurité automatiques ;
 - installe Docker Engine + le plugin Compose (script officiel Docker) ;
 - configure `ufw` pour n'exposer que SSH/80/443 ;
-- crée un utilisateur `braise` non-root, membre du groupe `docker`.
+- crée un utilisateur `bresonne` non-root, membre du groupe `docker`.
 
 **Avant de fermer la session root** : copier une clé SSH publique dans
-`/home/braise/.ssh/authorized_keys` et vérifier que la connexion par clé fonctionne. Ne jamais
+`/home/bresonne/.ssh/authorized_keys` et vérifier que la connexion par clé fonctionne. Ne jamais
 désactiver l'accès root par mot de passe avant d'avoir confirmé cet accès de secours.
 
 ## 2. DNS
@@ -93,10 +93,10 @@ Le conteneur `mobile` du `docker-compose.yml` de base est un outil de **dev** (`
 `flutter run`, hot-reload) — jamais démarré en prod. Construire un artefact statique à la place :
 
 ```bash
-docker compose run --rm --entrypoint bash mobile -c "cd /app/braise_app && flutter build web --release"
+docker compose run --rm --entrypoint bash mobile -c "cd /app/bresonne_app && flutter build web --release"
 ```
 
-Le résultat (`mobile/braise_app/build/web/`) est monté en lecture seule dans le conteneur Caddy
+Le résultat (`mobile/bresonne_app/build/web/`) est monté en lecture seule dans le conteneur Caddy
 (voir `docker-compose.prod.yml`) — rien de plus à faire, `docker compose up` le sert directement.
 
 ## 5. Démarrer
@@ -122,10 +122,10 @@ curl -I https://app.<domaine>/              # 200, certificat valide
   contre une panne du serveur lui-même. Non fait ici : nécessite de choisir/payer ce second
   stockage, décision produit, pas une valeur par défaut à imposer.
 - **Supervision** (Uptime Kuma, déjà en place) : accès via tunnel SSH uniquement en prod
-  (`ssh -L 8082:localhost:8082 braise@<ip>`), jamais exposé publiquement (voir
+  (`ssh -L 8082:localhost:8082 bresonne@<ip>`), jamais exposé publiquement (voir
   `docker-compose.prod.yml`). Ajouter un 4ᵉ moniteur HTTPS sur `https://api.<domaine>/health` en
   plus des 3 déjà documentés dans `README.md`.
-- **Adminer** : même règle, tunnel SSH uniquement (`ssh -L 8081:localhost:8081 braise@<ip>`).
+- **Adminer** : même règle, tunnel SSH uniquement (`ssh -L 8081:localhost:8081 bresonne@<ip>`).
 - **Ollama** (question du jour personnalisée, optionnel — voir `README.md`) : off par défaut
   (`OLLAMA_ENABLED=false`), donc rien à faire pour un VPS qui ne l'active pas. Si activé
   (`docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile ai up -d ollama

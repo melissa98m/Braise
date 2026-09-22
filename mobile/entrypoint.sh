@@ -3,12 +3,12 @@ set -e
 
 # Phase 6 : scaffold Flutter au premier lancement (le dossier arrive vide du repo),
 # puis sert la cible web — gratuit, local, aucun émulateur Android/iOS requis.
-if [ ! -f /app/braise_app/pubspec.yaml ]; then
-  flutter create --project-name braise_app --org com.braise /app/braise_app
+if [ ! -f /app/bresonne_app/pubspec.yaml ]; then
+  flutter create --project-name bresonne_app --org com.bresonne /app/bresonne_app
 fi
 
 flutter config --enable-web
-cd /app/braise_app
+cd /app/bresonne_app
 
 # `flutter build web`/`flutter run` font chacun une résolution de dépendances implicite avant de
 # compiler, mais dans ce conteneur (pub cache jamais persisté entre redémarrages, voir

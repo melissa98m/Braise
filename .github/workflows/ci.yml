@@ -45,9 +45,9 @@ jobs:
       - name: Analyse statique (flutter analyze)
         run: >
           docker compose run --rm --entrypoint bash mobile
-          -c "cd /app/braise_app && flutter analyze"
+          -c "cd /app/bresonne_app && flutter analyze"
 
       - name: Tests (flutter test)
         run: >
           docker compose run --rm --entrypoint bash mobile
-          -c "cd /app/braise_app && flutter test"
+          -c "cd /app/bresonne_app && flutter test"

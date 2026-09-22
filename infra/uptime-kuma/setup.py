@@ -10,11 +10,11 @@ compte admin existe déjà.
 Usage :
     docker compose up -d uptime-kuma
     python3 -m venv /tmp/kuma-venv && /tmp/kuma-venv/bin/pip install uptime-kuma-api
-    UPTIME_KUMA_USERNAME=braise UPTIME_KUMA_PASSWORD=<mot de passe fort> \
+    UPTIME_KUMA_USERNAME=bresonne UPTIME_KUMA_PASSWORD=<mot de passe fort> \
         /tmp/kuma-venv/bin/python infra/uptime-kuma/setup.py
 
     # Pour configurer aussi l'alerte webhook (Discord/Slack/générique) au même moment :
-    UPTIME_KUMA_USERNAME=braise UPTIME_KUMA_PASSWORD=<...> \
+    UPTIME_KUMA_USERNAME=bresonne UPTIME_KUMA_PASSWORD=<...> \
         UPTIME_KUMA_WEBHOOK_URL=https://discord.com/api/webhooks/... \
         UPTIME_KUMA_WEBHOOK_KIND=discord \
         /tmp/kuma-venv/bin/python infra/uptime-kuma/setup.py
@@ -99,7 +99,7 @@ def main() -> None:
                         applyExisting=True,
                         type=NotificationType.DISCORD,
                         discordWebhookUrl=WEBHOOK_URL,
-                        discordUsername="Braise — supervision",
+                        discordUsername="Bresonne — supervision",
                     )
                 elif WEBHOOK_KIND == "slack":
                     api.add_notification(

@@ -6,8 +6,16 @@ from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import OTPRequest, OTPRequestResponse, OTPVerify, TokenResponse
+from app.schemas.auth import (
+    ConsentIn,
+    ConsentOut,
+    OTPRequest,
+    OTPRequestResponse,
+    OTPVerify,
+    TokenResponse,
+)
 from app.services import account as account_service
+from app.services import consent as consent_service
 from app.services import otp as otp_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -34,7 +42,28 @@ def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
 
 @router.get("/me")
 def read_me(user: User = Depends(get_current_user)):
-    return {"id": str(user.id), "phone": user.phone, "is_verified": user.is_verified}
+    return {
+        "id": str(user.id),
+        "phone": user.phone,
+        "is_verified": user.is_verified,
+        "consents_given": consent_service.consents_complete(user),
+    }
+
+
+@router.post("/consent", response_model=ConsentOut)
+def submit_consent(
+    payload: ConsentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    user = consent_service.record_consent(db, user, payload)
+    return ConsentOut(
+        consents_given=consent_service.consents_complete(user),
+        consent_age_at=user.consent_age_at.isoformat() if user.consent_age_at else None,
+        consent_cgu_at=user.consent_cgu_at.isoformat() if user.consent_cgu_at else None,
+        consent_privacy_at=user.consent_privacy_at.isoformat() if user.consent_privacy_at else None,
+        consent_sensitive_data_at=(
+            user.consent_sensitive_data_at.isoformat() if user.consent_sensitive_data_at else None
+        ),
+    )
 
 
 @router.get("/me/export")

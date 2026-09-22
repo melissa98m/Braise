@@ -138,7 +138,7 @@ def create_rating(db: Session, user: User, match_id: uuid.UUID, score: int, comm
 
 
 def create_report(
-    db: Session, user: User, match_id: uuid.UUID, reason: str, comment: str | None
+    db: Session, user: User, match_id: uuid.UUID, reason: str, comment: str
 ) -> Report:
     match = get_match_or_404(db, user, match_id)
     reported_id = other_user_id(match, user)

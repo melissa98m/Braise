@@ -257,7 +257,7 @@ def test_feed_candidates_report_trust_score():
 def test_feed_filters_by_looking_for_gender():
     suffix = uuid.uuid4().hex[:6]
     me_headers, _ = create_published_user(
-        client, "Filtre genre", interests=[_tag("cinéma", suffix)], looking_for_gender="femme"
+        client, "Filtre genre", interests=[_tag("cinéma", suffix)], looking_for_gender=["femme"]
     )
     _, homme_id = create_published_user(
         client, "Un homme", interests=[_tag("cinéma", suffix)], gender="homme"
@@ -275,6 +275,30 @@ def test_feed_filters_by_looking_for_gender():
     # Un profil qui n'a pas renseigné son genre ne peut pas être vérifié comme correspondant au
     # filtre actif : il est exclu, pas inclus par défaut.
     assert sans_genre_id not in feed_ids
+
+
+def test_feed_filters_by_looking_for_gender_multi_select():
+    suffix = uuid.uuid4().hex[:6]
+    me_headers, _ = create_published_user(
+        client,
+        "Filtre genre multiple",
+        interests=[_tag("musique", suffix)],
+        looking_for_gender=["homme", "non_binaire"],
+    )
+    _, homme_id = create_published_user(
+        client, "Un homme ter", interests=[_tag("musique", suffix)], gender="homme"
+    )
+    _, non_binaire_id = create_published_user(
+        client, "Une personne non binaire", interests=[_tag("musique", suffix)], gender="non_binaire"
+    )
+    _, femme_id = create_published_user(
+        client, "Une femme bis", interests=[_tag("musique", suffix)], gender="femme"
+    )
+
+    feed_ids = {c["user_id"] for c in client.get("/discovery/feed", headers=me_headers).json()}
+    assert homme_id in feed_ids
+    assert non_binaire_id in feed_ids
+    assert femme_id not in feed_ids
 
 
 def test_feed_without_gender_preference_shows_everyone():
@@ -391,6 +415,22 @@ def test_list_cities_returns_known_french_cities():
     assert "Paris" in cities
     assert "Lyon" in cities
     assert cities == sorted(cities)
+
+
+def test_nearest_city_resolves_gps_coordinates_to_closest_known_city():
+    headers = auth_headers(client, unique_phone())
+    # Coordonnées de Paris (Notre-Dame, à quelques centaines de mètres près) : doit résoudre à
+    # "Paris" plutôt qu'à n'importe quelle autre ville de la liste fermée.
+    response = client.get(
+        "/profiles/cities/nearest", params={"lat": 48.8530, "lon": 2.3499}, headers=headers
+    )
+    assert response.status_code == 200
+    assert response.json() == "Paris"
+
+
+def test_nearest_city_requires_auth():
+    response = client.get("/profiles/cities/nearest", params={"lat": 48.85, "lon": 2.35})
+    assert response.status_code == 401
 
 
 def test_distance_filter_excludes_a_candidate_beyond_the_radius():

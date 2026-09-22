@@ -5,14 +5,31 @@ from datetime import datetime, timedelta, timezone
 def unique_phone() -> str:
     # Les tests tournent contre le vrai Postgres de dev (pas de base jetable) : un numéro
     # unique par appel évite les collisions avec les données laissées par un run précédent.
-    return "+336" + uuid.uuid4().hex[:8]
+    # Chiffres uniquement (jamais les lettres a-f d'un hex brut) : schemas.auth.OTPRequest/
+    # OTPVerify valident maintenant le format du numéro, un numéro de test doit rester réaliste.
+    return "+336" + f"{uuid.uuid4().int % 10**8:08d}"
 
 
 def auth_token(client, phone: str) -> str:
     request = client.post("/auth/request-otp", json={"phone": phone})
     code = request.json()["debug_code"]
     verify = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
-    return verify.json()["access_token"]
+    token = verify.json()["access_token"]
+    # Le vrai parcours mobile passe par l'écran de consentement juste après l'OTP, avant tout
+    # accès au profil (voir services/consent.py, POST /auth/consent gate PUT /profiles/me/public)
+    # — reproduit ici une seule fois pour que tous les helpers qui publient un profil n'aient pas
+    # à s'en soucier individuellement.
+    client.post(
+        "/auth/consent",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "age_confirmed": True,
+            "cgu_accepted": True,
+            "privacy_acknowledged": True,
+            "sensitive_data_consented": True,
+        },
+    )
+    return token
 
 
 def auth_headers(client, phone: str) -> dict:
@@ -25,7 +42,7 @@ def create_published_user(
     interests: list[str] | None = None,
     birth_date: str = "1996-01-01",
     gender: str | None = None,
-    looking_for_gender: str | None = None,
+    looking_for_gender: list[str] | None = None,
     age_min: int | None = None,
     age_max: int | None = None,
     city: str | None = None,

@@ -34,7 +34,9 @@ WS_BASE_URL = "ws://backend:8000"
 
 
 async def _signup_and_publish(client: httpx.AsyncClient, display_name: str) -> tuple[str, str]:
-    phone = "+336" + uuid.uuid4().hex[:8]
+    # Chiffres uniquement (jamais un hex brut, qui contient a-f) : schemas.auth.OTPRequest valide
+    # maintenant le format du numéro.
+    phone = "+336" + f"{uuid.uuid4().int % 10**8:08d}"
     otp = await client.post(f"{BASE_URL}/auth/request-otp", json={"phone": phone})
     otp.raise_for_status()
     code = otp.json()["debug_code"]

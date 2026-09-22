@@ -20,7 +20,12 @@ class PublicProfile(Base):
     # genre recherché"). Tous nullable : un profil qui ne les renseigne pas n'est filtré par rien,
     # exactement le comportement d'avant ces colonnes (voir services/discovery.get_feed).
     gender = Column(String(20), nullable=True)
-    looking_for_gender = Column(String(20), nullable=True, index=True)
+    # Multi-sélection ("homme", "femme" et/ou "non_binaire" à la fois) : une liste JSONB comme
+    # `interests`, plutôt qu'une seule valeur — null garde le même sens qu'avant ("aucun filtre"),
+    # une liste vide est traitée pareil (voir services/discovery.get_feed). Plus d'index B-tree :
+    # une égalité simple sur une seule valeur n'a plus de sens ici, le filtre passe par IN(...) sur
+    # PublicProfile.gender à la place (toujours indexable, lui, s'il le fallait un jour).
+    looking_for_gender = Column(JSONB, nullable=True)
     age_min = Column(Integer, nullable=True)
     age_max = Column(Integer, nullable=True)
     # Distance (P9.3) : pas de géocodage payant ni de capture GPS — `city` est le nom choisi dans

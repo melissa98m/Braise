@@ -75,8 +75,8 @@ def get_feed(db: Session, user: User, limit: int) -> list[dict]:
     # comme le score de compatibilité, l'âge n'étant pas une colonne stockée (voir compute_age) —
     # même choix de conception que le reste de ce module : pas de requête SQL sur date de
     # naissance pour un filtre qui reste, de toute façon, borné par MAX_CANDIDATE_POOL.
-    if my_profile is not None and my_profile.looking_for_gender is not None:
-        query = query.filter(PublicProfile.gender == my_profile.looking_for_gender)
+    if my_profile is not None and my_profile.looking_for_gender:
+        query = query.filter(PublicProfile.gender.in_(my_profile.looking_for_gender))
 
     candidates = query.order_by(PublicProfile.updated_at.desc()).limit(MAX_CANDIDATE_POOL).all()
 
@@ -122,7 +122,7 @@ def get_likes_received(db: Session, user: User) -> dict:
     hors périmètre explicite, ajouté à la demande) : les profils qui m'ont déjà liké et que je
     n'ai pas encore swipés moi-même (dans un sens ou l'autre — une fois swipé, `already_swiped`
     les exclut déjà partout ailleurs, pas de raison de les garder ici). Le compte est toujours
-    renvoyé (gratuit) ; le détail des profils est réservé à Braise+ — c'est la vraie raison de
+    renvoyé (gratuit) ; le détail des profils est réservé à Bresonne+ — c'est la vraie raison de
     vouloir l'abonnement au-delà de la limite de matchs (`can_create_new_match`)."""
     my_profile = db.get(PublicProfile, user.id)
     my_interests = my_profile.interests if my_profile else []
@@ -164,7 +164,7 @@ def record_swipe(
     if decision == SwipeDecision.LIKE and not can_create_new_match(db, user):
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            "Limite de matchs gratuits atteinte. Passez à Braise+ pour continuer à liker.",
+            "Limite de matchs gratuits atteinte. Passez à Bresonne+ pour continuer à liker.",
         )
 
     # Un profil inexistant et un profil non publié renvoient la même erreur générique :

@@ -13,12 +13,12 @@ TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$DB_DIR" "$PHOTOS_DIR"
 
 echo "[$TIMESTAMP] Dump Postgres ($POSTGRES_DB)..."
-DUMP_PATH="$DB_DIR/braise_${TIMESTAMP}.dump"
+DUMP_PATH="$DB_DIR/bresonne_${TIMESTAMP}.dump"
 PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c -f "$DUMP_PATH"
 echo "[$TIMESTAMP] Dump écrit : $DUMP_PATH ($(du -h "$DUMP_PATH" | cut -f1))"
 
 echo "[$TIMESTAMP] Purge des dumps de plus de ${RETENTION_DAYS} jours..."
-find "$DB_DIR" -name 'braise_*.dump' -mtime +"$RETENTION_DAYS" -print -delete
+find "$DB_DIR" -name 'bresonne_*.dump' -mtime +"$RETENTION_DAYS" -print -delete
 
 echo "[$TIMESTAMP] Réplication des photos MinIO ($MINIO_BUCKET)..."
 mc alias set backupsrc "http://${MINIO_ENDPOINT}" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -8,12 +8,13 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.profile import (
     AvatarSpec,
+    PartnerProfileOut,
     PrivateProfileOut,
     PublicProfileIn,
     PublicProfileOut,
 )
 from app.services import profiles as profiles_service
-from app.services.geo import CITIES
+from app.services.geo import CITIES, nearest_city
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -24,6 +25,22 @@ def list_cities():
     # d'authentification, contrairement au reste de ce routeur — sert à peupler le sélecteur de
     # ville mobile (P9.3) avec exactement les noms que `city` peut résoudre en coordonnées.
     return sorted(CITIES)
+
+
+@router.get("/cities/nearest", response_model=str)
+def get_nearest_city(
+    lat: float = Query(ge=-90, le=90),
+    lon: float = Query(ge=-180, le=180),
+    user: User = Depends(get_current_user),
+):
+    # Authentifié (contrairement à /cities) : reçoit une vraie position GPS ponctuelle
+    # transmise par le client (voir mobile/lib/location/), pas juste une donnée de référence
+    # statique — pas de raison de l'exposer sans compte. Gratuit : aucun service de géocodage
+    # tiers, juste un min() sur la liste fermée déjà embarquée (services/geo.nearest_city).
+    city = nearest_city(lat, lon)
+    if city is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aucune ville de référence disponible.")
+    return city
 
 
 @router.get("/me/public", response_model=PublicProfileOut)
@@ -86,3 +103,12 @@ def get_partner_photos(
     db: Session = Depends(get_db),
 ):
     return profiles_service.get_partner_photos(db, user, match_id)
+
+
+@router.get("/matches/{match_id}/partner-profile", response_model=PartnerProfileOut)
+def get_partner_profile(
+    match_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return profiles_service.get_partner_profile(db, user, match_id)

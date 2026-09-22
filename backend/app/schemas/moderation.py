@@ -40,7 +40,10 @@ class TrustScoreOut(BaseModel):
 
 class ReportIn(BaseModel):
     reason: ReportReasonLiteral
-    comment: str | None = Field(default=None, max_length=1000)
+    # Obligatoire (jamais None/vide) : la revue humaine systématique (cahier des charges C.1)
+    # doit toujours avoir de quoi juger un signalement — c'était déjà la règle côté client
+    # (ReportScreen), jamais vérifiée côté serveur avant ce champ requis.
+    comment: str = Field(min_length=1, max_length=1000)
 
 
 class ReportOut(BaseModel):

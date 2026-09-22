@@ -20,10 +20,10 @@
 
 # App web Flutter — build statique (`flutter build web`), pas le conteneur `mobile` de dev
 # (celui-ci lance `flutter create`/`flutter run`, jamais utilisé en prod). Voir docs/DEPLOYMENT.md
-# pour la commande de build ; le résultat doit être déposé dans ./mobile/braise_app/build/web sur
+# pour la commande de build ; le résultat doit être déposé dans ./mobile/bresonne_app/build/web sur
 # l'hôte avant `docker compose up`, monté en lecture seule (voir docker-compose.prod.yml).
 {$APP_DOMAIN} {
-	root * /srv/braise-web
+	root * /srv/bresonne-web
 	file_server
 	try_files {path} /index.html
 }

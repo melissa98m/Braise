@@ -1,4 +1,4 @@
-# Braise
+# Bresonne
 
 Application de rencontre où l'affinité précède le physique. Cahier des charges complet et
 maquettes fournis séparément ; voir `docs/ROADMAP.md` pour le plan d'exécution phase par phase,
@@ -150,11 +150,11 @@ reproductible.
 
 ```bash
 python3 -m venv /tmp/kuma-venv && /tmp/kuma-venv/bin/pip install -r infra/uptime-kuma/requirements.txt
-UPTIME_KUMA_USERNAME=braise UPTIME_KUMA_PASSWORD=<choisis un mot de passe fort> \
+UPTIME_KUMA_USERNAME=bresonne UPTIME_KUMA_PASSWORD=<choisis un mot de passe fort> \
   /tmp/kuma-venv/bin/python infra/uptime-kuma/setup.py
 
 # Pour ajouter aussi l'alerte webhook (Discord/Slack/générique) :
-UPTIME_KUMA_USERNAME=braise UPTIME_KUMA_PASSWORD=<...> \
+UPTIME_KUMA_USERNAME=bresonne UPTIME_KUMA_PASSWORD=<...> \
   UPTIME_KUMA_WEBHOOK_URL=<url du webhook> UPTIME_KUMA_WEBHOOK_KIND=discord \
   /tmp/kuma-venv/bin/python infra/uptime-kuma/setup.py
 ```

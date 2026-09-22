@@ -6,8 +6,8 @@
 #   docker compose run --rm backup /scripts/test_restore.sh
 set -euo pipefail
 
-SCRATCH_DB="braise_restore_test"
-SCRATCH_BUCKET="braise-photos-restore-test"
+SCRATCH_DB="bresonne_restore_test"
+SCRATCH_BUCKET="bresonne-photos-restore-test"
 
 cleanup() {
   PGPASSWORD="$POSTGRES_PASSWORD" dropdb -h db -U "$POSTGRES_USER" --if-exists "$SCRATCH_DB" >/dev/null 2>&1 || true

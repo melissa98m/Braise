@@ -14,7 +14,7 @@
 #   sudo bash infra/deploy/provision.sh
 set -euo pipefail
 
-DEPLOY_USER="${DEPLOY_USER:-braise}"
+DEPLOY_USER="${DEPLOY_USER:-bresonne}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Ce script doit tourner en root (ou via sudo)." >&2

@@ -8,10 +8,12 @@ from app.models.photo_access_log import PhotoAccessLog
 from app.models.profile import PrivateProfile, PublicProfile
 from app.models.user import User
 from app.schemas.profile import PublicProfileIn
+from app.services import consent as consent_service
 from app.services import storage
 from app.services.avatar import avatar_spec_from_seed, generate_avatar_seed
 from app.services.geo import resolve_city
 from app.services.matches import get_match_or_404, other_user_id
+from app.services.moderation import compute_trust_score
 from app.services.subscriptions import is_premium
 
 ALLOWED_IMAGE_TYPES = {
@@ -47,6 +49,15 @@ def get_or_create_public_profile(db: Session, user: User) -> PublicProfile:
 
 
 def upsert_public_profile(db: Session, user: User, data: PublicProfileIn) -> PublicProfile:
+    # gender/looking_for_gender ci-dessous sont la donnée sensible (leur combinaison révèle
+    # l'orientation sexuelle) que POST /auth/consent existe spécifiquement pour couvrir — un
+    # client qui appellerait cet endpoint sans être passé par l'écran de consentement (bug mobile
+    # ou appel API direct) ne doit pas pouvoir la renseigner quand même.
+    if not consent_service.consents_complete(user):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Consentement requis avant de compléter votre profil.",
+        )
     profile = get_or_create_public_profile(db, user)
     profile.display_name = data.display_name
     profile.birth_date = data.birth_date
@@ -168,3 +179,25 @@ def get_partner_photos(db: Session, user: User, match_id: uuid.UUID) -> dict:
     db.commit()
 
     return {"photos": [{"key": key, "url": storage.presigned_get_url(key)} for key in photos]}
+
+
+def get_partner_profile(db: Session, user: User, match_id: uuid.UUID) -> dict:
+    """Le pendant public de get_partner_photos : pas de gate sur unlocked_at, contrairement aux
+    photos privées — display_name/bio/interests/verified sont déjà visibles avant le match
+    (feed de découverte), les montrer une fois matché n'ouvre aucune divulgation nouvelle."""
+    match = get_match_or_404(db, user, match_id)
+    partner_id = other_user_id(match, user)
+    partner_user = db.get(User, partner_id)
+    partner_profile = db.get(PublicProfile, partner_id)
+    trust = compute_trust_score(db, partner_id)
+
+    return {
+        "display_name": partner_profile.display_name,
+        "age": compute_age(partner_profile.birth_date),
+        "bio": partner_profile.bio,
+        "interests": partner_profile.interests,
+        "avatar": avatar_spec_from_seed(partner_profile.avatar_seed),
+        "is_verified": partner_user.is_verified,
+        "trust_score": trust["score"],
+        "trust_label": trust["label"],
+    }

@@ -1,4 +1,4 @@
-import random
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from jose import jwt
@@ -9,7 +9,11 @@ settings = get_settings()
 
 
 def generate_otp_code() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    # secrets.randbelow (pas random.randint) : le code OTP est le seul secret qui protège la
+    # prise de contrôle d'un compte (services/otp.py), donc il lui faut un générateur
+    # cryptographiquement sûr — random.random utilise Mersenne Twister, prévisible si son état
+    # interne est un jour reconstruit à partir d'assez de sorties observées.
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def create_access_token(subject: str) -> str:

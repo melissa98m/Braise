@@ -4,7 +4,7 @@
 #
 # Usage : restore.sh [base_cible] [bucket_cible]
 #   - base_cible   : par défaut $POSTGRES_DB (la base réelle — restauration en place, destructif).
-#                    Passer un autre nom (ex. braise_restore_test) pour restaurer à côté sans
+#                    Passer un autre nom (ex. bresonne_restore_test) pour restaurer à côté sans
 #                    toucher aux données courantes, ce que fait test_restore.sh.
 #   - bucket_cible : si fourni, restaure aussi les photos dans ce bucket (créé si absent).
 #                    Omis par défaut car restaurer par-dessus le bucket réel doit être un choix
@@ -18,7 +18,7 @@ PHOTOS_DIR="$BACKUP_DIR/photos"
 TARGET_DB="${1:-$POSTGRES_DB}"
 TARGET_BUCKET="${2:-}"
 
-DUMP_FILE="$(ls -t "$DB_DIR"/braise_*.dump 2>/dev/null | head -n1)"
+DUMP_FILE="$(ls -t "$DB_DIR"/bresonne_*.dump 2>/dev/null | head -n1)"
 if [ -z "$DUMP_FILE" ]; then
   echo "Aucun dump trouvé dans $DB_DIR — lance d'abord backup.sh." >&2
   exit 1

@@ -4,12 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Braise is a dating app whose product spec lives outside this repo (a 59-page cahier des charges +
-4 design-mockup documents provided in chat, not committed as files). The core product idea:
-affinity/personality is revealed before physical photos, gated by a "flames" gamification loop.
-`docs/ROADMAP.md` is the phase-by-phase build plan derived from that spec; `docs/DESIGN_TOKENS.md`
-is the dark/light color and typography system extracted from the mockups, to be used verbatim once
-the Flutter UI (Phase 6) starts.
+Bresonne (« Avec qui résonnes-tu ? », renamed from the working title "Braise" in September 2026 —
+package names, bundle/application ids, infra resource names and user-facing strings all now say
+"Bresonne"; `docs/ROADMAP.md`'s phase-by-phase history below still says "Braise" throughout since
+that's what the product was actually called during phases 0-6, not a typo to fix) is a dating app
+whose product spec lives outside this repo (a 59-page cahier des charges + 4 design-mockup
+documents provided in chat, not committed as files). The core product idea: affinity/personality is
+revealed before physical photos, gated by a "flames" gamification loop — the ember/flame vocabulary
+this implies (the "braiser" verb for the like gesture, the `braise/*` design tokens, internal
+`Braise*` Dart class names) is deliberately untouched by the rename: it's thematic, not the brand
+name, see `docs/DESIGN_TOKENS.md`. `docs/ROADMAP.md` is the phase-by-phase build plan derived from
+that spec; `docs/DESIGN_TOKENS.md` is the dark/light color and typography system extracted from the
+mockups, to be used verbatim once the Flutter UI (Phase 6) starts.
 
 **Hard constraint for this project**: everything must run in Docker, and only free/local services
 are used until the MVP is validated — no real SMS provider, no Apple/Google store accounts, no
@@ -438,7 +444,7 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   `notifications/` below for what P9.1 added instead, which is a different, more limited thing).
 
 **Infra** (`docker-compose.yml` + `infra/`): Postgres, MinIO (+ a one-shot `minio-init` container
-that runs `infra/minio/init.sh` to create the `braise-photos` bucket via `mc`), the FastAPI
+that runs `infra/minio/init.sh` to create the `bresonne-photos` bucket via `mc`), the FastAPI
 `backend`, `adminer` for DB inspection, and a `mobile` service behind the `mobile` Compose profile
 (not started by default — its `entrypoint.sh` runs `flutter create` on first launch since the
 Flutter SDK is never installed on the host, only inside that container). `entrypoint.sh` branches
@@ -465,7 +471,7 @@ into the image (not part of the `./mobile:/app` bind mount), changing `MOBILE_MO
 var, default `http://localhost:5000`) so the Flutter web app can call it cross-origin. `backend`
 depends on `minio-init: condition: service_completed_successfully`, not just `minio:
 service_healthy` (P6.2) — without it, `docker compose run backend ...`/`up backend` could start
-before the `braise-photos` bucket actually exists (`minio` reports healthy once it can answer
+before the `bresonne-photos` bucket actually exists (`minio` reports healthy once it can answer
 requests, independently of whether `minio-init` has finished creating the bucket yet), a race
 that's usually invisible locally (`minio-init` is fast) but real in CI where nothing has "warmed
 up" yet.
@@ -486,11 +492,11 @@ actually addressed): a `backup` Compose service (own `Dockerfile`, based on `pos
 so `pg_dump`/`pg_restore` are always version-matched with the `db` service, plus the `mc` binary)
 runs `backup.sh` on a loop (`BACKUP_INTERVAL_SECONDS`, default daily) — `pg_dump -F c` to
 `backup_data:/backups/db` with retention (`BACKUP_RETENTION_DAYS`), and `mc mirror --remove` of the
-`braise-photos` bucket to `/backups/photos` (mirror, not accumulate — deleted photos don't pile up
+`bresonne-photos` bucket to `/backups/photos` (mirror, not accumulate — deleted photos don't pile up
 forever). `restore.sh <target_db> [target_bucket]` restores the latest dump into any target
 database/bucket, deliberately never defaulting to overwriting the live one silently.
 `test_restore.sh` is the actual proof this works, not an assumption: backup → restore into
-throwaway `braise_restore_test` / `braise-photos-restore-test` → compare row/object counts against
+throwaway `bresonne_restore_test` / `bresonne-photos-restore-test` → compare row/object counts against
 the source → drop both. Run it with `docker compose run --rm backup /scripts/test_restore.sh`.
 `entrypoint.sh` is the container's `ENTRYPOINT`; it `exec "$@"` when `docker compose run backup
 <cmd>` passes an explicit command (needed for `test_restore.sh`/`backup.sh` to run once instead of
@@ -527,15 +533,15 @@ non-obvious Compose merge behaviors this file depends on, confirmed by testing (
 default (an override of `ports: []` leaves the base list untouched), so clearing one needs the
 explicit `!reset []` tag, and *replacing* a non-empty base list needs `!override [...]` instead
 — `!reset` with non-empty content silently drops it. `infra/deploy/provision.sh` bootstraps a
-bare Ubuntu VPS (Docker install, `ufw`, a non-root `braise` deploy user) — reviewed but not run
+bare Ubuntu VPS (Docker install, `ufw`, a non-root `bresonne` deploy user) — reviewed but not run
 against a real VPS from this environment (none available), so treat it as reviewed-not-verified
 until it's actually exercised once.
 
-**Mobile** (`mobile/braise_app/`, Flutter web, all commands run in the `mobile` container — the
+**Mobile** (`mobile/bresonne_app/`, Flutter web, all commands run in the `mobile` container — the
 Flutter SDK is never installed on the host):
 - Every container-side Flutter command (`flutter create`, `flutter pub get`, `flutter run`, ...)
   writes files as root, since the `ghcr.io/cirruslabs/flutter:stable` image runs as root. Run
-  `docker compose run --rm --entrypoint bash mobile -c "chown -R 1000:1000 /app/braise_app"`
+  `docker compose run --rm --entrypoint bash mobile -c "chown -R 1000:1000 /app/bresonne_app"`
   afterwards or the host user can't edit those files.
 - `lib/theme/braise_tokens.dart` (`BraiseTokens.dark`/`.light`, `BraiseSpacing`, `BraiseRadii`) and
   `lib/theme/braise_theme.dart` (`buildBraiseTheme(Brightness)`) port `docs/DESIGN_TOKENS.md` 1:1 —
@@ -843,7 +849,7 @@ Flutter's default semantics behavior can't be predicted from the widget tree alo
   semantics tree until a manual gesture on a hidden `flt-semantics-placeholder` element activates
   it; without this, a screen reader hears nothing but "Enable accessibility, button" on first load.
 - `Chip` carries checkbox-like semantics by default even with no `onTap`/`onDeleted` — every
-  purely-informational chip (common-interest counts, per-interest chips, the "VÉRIFIÉ"/"BRAISE+"
+  purely-informational chip (common-interest counts, per-interest chips, the "VÉRIFIÉ"/"BRESONNE+"
   badges) wraps in `Semantics(excludeSemantics: true, label: ...)` to replace that with a neutral
   label, leaving the visual rendering untouched.
 - Any custom composite row that needs its own scoped label *and* still exposes a real interactive
@@ -890,7 +896,8 @@ code and assuming it worked.
   for entirely-French content) and, along with `web/manifest.json`, still carried the unedited
   Flutter scaffold defaults through every phase of this project: `<title>braise_app</title>`, a
   meta description reading "A new Flutter project.", and the stock Flutter blue
-  (`#0175C2`) for `theme_color`/`background_color`. Fixed to `lang="fr"`, "Braise", the app's own
+  (`#0175C2`) for `theme_color`/`background_color`. Fixed to `lang="fr"`, "Braise" (now "Bresonne"
+  since the September 2026 rename, see "Project" above), the app's own
   tagline, and the actual dark/braise tokens (`surface/root` dark, `braise/fill`) — visible in the
   browser tab, bookmarks, and the icon name if someone adds the PWA to a home screen, not purely
   an accessibility nicety.

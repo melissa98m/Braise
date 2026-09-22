@@ -46,6 +46,22 @@ def export_my_data(db: Session, user: User) -> dict:
             "phone": user.phone,
             "is_verified": user.is_verified,
             "created_at": user.created_at.isoformat(),
+            "consents": {
+                "age_confirmed_at": (
+                    user.consent_age_at.isoformat() if user.consent_age_at else None
+                ),
+                "cgu_accepted_at": (
+                    user.consent_cgu_at.isoformat() if user.consent_cgu_at else None
+                ),
+                "privacy_acknowledged_at": (
+                    user.consent_privacy_at.isoformat() if user.consent_privacy_at else None
+                ),
+                "sensitive_data_consented_at": (
+                    user.consent_sensitive_data_at.isoformat()
+                    if user.consent_sensitive_data_at
+                    else None
+                ),
+            },
         },
         "public_profile": (
             {
