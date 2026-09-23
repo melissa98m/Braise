@@ -61,8 +61,14 @@ _pipeline.fit(_texts, _labels)
 _rancor_index = list(_pipeline.classes_).index(RANCOR_LABEL)
 
 
-def predict_is_rancor(comment: str) -> bool:
+def rancor_probability(comment: str) -> float:
+    """Score brut, jamais seuillé — sert la revue humaine (services/admin_moderation.py) qui a
+    besoin de voir *combien* le classifieur est confiant, pas juste le booléen que
+    predict_is_rancor expose au reste de l'app."""
     if not comment.strip():
-        return False
-    proba = _pipeline.predict_proba([comment])[0][_rancor_index]
-    return proba >= RANCOR_PROBABILITY_THRESHOLD
+        return 0.0
+    return float(_pipeline.predict_proba([comment])[0][_rancor_index])
+
+
+def predict_is_rancor(comment: str) -> bool:
+    return rancor_probability(comment) >= RANCOR_PROBABILITY_THRESHOLD

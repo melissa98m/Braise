@@ -26,3 +26,9 @@ class Rating(Base):
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+    # Interface de revue de modération humaine (V2) : découplé de `suspected_rancor` lui-même,
+    # qui doit rester mutable (une revue peut lever le signalement) — ces deux colonnes ne
+    # capturent que le fait qu'un humain a tranché, jamais le sens de la décision, qui vit dans
+    # `moderation_actions` (models/moderation_action.py) pour garder une seule source d'audit.
+    moderation_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    moderation_reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

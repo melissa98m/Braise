@@ -1004,14 +1004,73 @@ techniques : cahier des charges sections A, B, C, D.
   92/92 tests backend (inchangé), `ruff check .` propre, vérifié en direct contre l'app réelle
   (catégorie "bio" confirmée éligible et renvoyée dans la réponse HTTP).
 
+- [x] **P21 — Interface de revue de modération humaine.** Premier point du backlog V2
+  (`docs/V2_FEATURES.md` §2) à graduer : cahier des charges C.1/C.2 plaçait explicitement le tri
+  automatique et l'interface de revue humaine en V2, le MVP consultant `Report`/`BanAppeal`/les
+  notes `suspected_rancor` directement via Adminer faute de toute notion de rôle staff. Ce palier
+  introduit ce rôle et remplace Adminer par un vrai outil pour ces trois files spécifiquement
+  (Adminer reste l'outil pour tout le reste, sans UI dédiée).
+  `User.is_staff` (bool, `False` par défaut, migration `e7bbb5321976`) — un seul niveau de droits
+  élevés à distinguer, donc pas de table de rôles séparée. `api/deps.get_current_staff_user`
+  suit exactement le patron de `get_current_user_even_if_banned` : passe par `user_from_token`
+  (un compte staff banni perd quand même l'accès) puis 403 si `not is_staff`. Pas de flux
+  applicatif pour accorder ce rôle (délibéré, comme pour le reste de la gestion des rôles) :
+  Adminer, ou `backend/scripts/grant_staff.py <phone>` en raccourci.
+  Trois files, chacune avec de vraies décisions qui changent l'état plutôt qu'un simple archivage :
+  `POST /admin/reports/{id}/resolve` (fondé/non fondé, avec un bannissement optionnel — pas
+  automatique — du compte signalé), `POST /admin/ban-appeals/{id}/resolve` (maintenu/annulé,
+  annulé lève immédiatement `is_banned`), `POST /admin/flagged-ratings/{id}/review` (confirmé/levé
+  sur les notes `suspected_rancor` — lever réintègre la note dans le calcul du score de confiance
+  via `compute_trust_score`, sans rien à recalculer ni mettre en cache). `Rating` gagne
+  `moderation_reviewed_at`/`_by`, découplés de `suspected_rancor` lui-même (qui doit rester
+  mutable) pour distinguer "triée par un humain" de "toujours considérée comme rancunière".
+  Chaque décision, sur les trois files, écrit une ligne dans la nouvelle table
+  `moderation_actions` (staff, cible, décision, note) — journal d'audit append-only, généralisant
+  ce que `docs/V2_FEATURES.md` §2 demandait pour les notes seules, et futur jeu d'entraînement réel
+  pour `moderation_ml.py` une fois qu'il y aura du volume. Chaque endpoint de résolution revérifie
+  que l'élément est encore `pending` avant d'écrire (409 sinon) — protection contre la course entre
+  deux membres du personnel, même esprit que le `SAVEPOINT` de création de match.
+  `services/moderation_ml.py` gagne `rancor_probability()` (score brut, extrait de la logique déjà
+  interne à `predict_is_rancor`) pour que la fiche de détail affiche *pourquoi* une note a été
+  signalée, pas seulement qu'elle l'est.
+  Tableau de bord : HTML/CSS/JS statique sans dépendance ni étape de build
+  (`backend/app/static/admin/`), servi par le conteneur `backend` lui-même sur `/staff` (`/admin`
+  reste le préfixe de l'API — pas de collision) via `StaticFiles` dans `main.py`, cohérent avec la
+  contrainte "tout tourne en Docker, aucun outillage superflu" et avec la suggestion de
+  `docs/V2_FEATURES.md` §2 ("une page web à part, pas Flutter"). Connexion par le vrai flux OTP
+  téléphone existant, jeton en `sessionStorage` (pas `localStorage` : fenêtre d'exposition plus
+  courte pour un identifiant privilégié, au prix de reconnexions plus fréquentes). CSP stricte
+  (`default-src 'self'`, aucune police/script tiers) posée à la fois en `<meta>` et, pour
+  `frame-ancestors` (silencieusement ignoré via `<meta>`), via un vrai en-tête HTTP
+  (`main.py`'s `staff_dashboard_security_headers`). Toute donnée utilisateur est rendue via
+  `textContent`, jamais `innerHTML`. Trois onglets (Signalements / Contestations / Notes
+  signalées) avec badge de comptage (`GET /admin/queue-counts`), liste → détail → formulaire de
+  décision (motif obligatoire) → confirmation dans un `<dialog>` natif (piégeage de focus et
+  fermeture Échap gérés par le navigateur) avant tout envoi. Accessibilité : HTML sémantique
+  (`<table>`, `<button>`, `<label for>` — jamais un placeholder en guise de label, la leçon P17),
+  anneau de focus visible (token `focus/ring`, jamais supprimé — la régression que P16 avait
+  corrigée côté Flutter), région `aria-live` pour les résultats asynchrones, `lang="fr"`,
+  navigation clavier complète des onglets (flèches gauche/droite, patron ARIA tabs standard).
+  Vérifié de bout en bout contre l'app réelle, pas seulement les tests : un compte élevé en staff
+  via `grant_staff.py`, connexion par navigateur réel (Playwright), signalement réel créé →
+  résolu "non fondé" via l'interface (validation du motif obligatoire testée, dialogue de
+  confirmation, toast de succès, retour à la liste) ; en HTTP direct, signalement fondé + banni →
+  compte banni perd l'accès → contestation déposée → annulée par le staff → accès restauré,
+  confirmant que les décisions de l'interface produisent les mêmes effets que le bannissement
+  automatique existant. 115/115 tests backend (`tests/test_admin_moderation.py`, 15 nouveaux —
+  contrôle d'accès, chaque décision par file, conflit sur double résolution, décompte des files),
+  `ruff check .` propre.
+  `docs/V2_FEATURES.md` §2 et `docs/DPIA.md` mis à jour pour refléter ce qui a été livré.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :
 `docs/V2_FEATURES.md`. Ce qui suit ici n'est qu'un résumé du premier point (KYC), historiquement
-le seul détaillé dans ce fichier avant que `docs/V2_FEATURES.md` ne couvre tout le reste (revue
-de modération humaine, scaling messagerie multi-instance, graduation des stubs OTP/paiement/push
-vers de vrais services, réentraînement du modèle de modération, builds mobiles natives,
-géolocalisation réelle, et les actions de conformité DPIA restantes).
+le seul détaillé dans ce fichier avant que `docs/V2_FEATURES.md` ne couvre tout le reste (scaling
+messagerie multi-instance, graduation des stubs OTP/paiement/push vers de vrais services,
+réentraînement du modèle de modération, builds mobiles natives, géolocalisation réelle, et les
+actions de conformité DPIA restantes — la revue de modération humaine, qui figurait aussi dans
+cette liste, est livrée depuis P21 ci-dessus).
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
   identifié comme hors périmètre MVP dans `docs/DPIA.md` (section 1 : "le KYC renforcé par pièce

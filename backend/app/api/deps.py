@@ -63,3 +63,16 @@ def get_current_user_even_if_banned(
     GET /moderation/ban-appeal/mine : c'est le seul point d'accès qu'un compte banni doit
     pouvoir atteindre."""
     return _resolve_user(token, db)
+
+
+def get_current_staff_user(
+    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User:
+    """Réservé à api/v1/admin.py — ne pas réutiliser ailleurs. Passe par user_from_token (pas
+    _resolve_user) : un compte staff banni perd quand même l'accès, is_banned reste prioritaire
+    sur is_staff. is_staff n'est jamais fait confiance côté client, toujours re-dérivé de la base
+    via le JWT, comme is_banned."""
+    user = user_from_token(token, db)
+    if not user.is_staff:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès réservé au personnel.")
+    return user

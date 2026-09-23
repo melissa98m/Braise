@@ -27,6 +27,11 @@ class User(Base):
     # existantes (voir la migration 2228d479fbdd).
     is_banned = Column(Boolean, default=False, nullable=False, server_default=text("false"))
     banned_at = Column(DateTime(timezone=True), nullable=True)
+    # Interface de revue de modération humaine (cahier des charges C.1/C.2, V2) : un seul niveau
+    # de droits élevés à distinguer pour l'instant, donc un booléen sur User plutôt qu'une table
+    # de rôles séparée — revisiter seulement si un vrai besoin de rôles multiples apparaît, même
+    # logique que le choix "un seul JWT longue durée" en core/config.py.
+    is_staff = Column(Boolean, default=False, nullable=False, server_default=text("false"))
     # Droit à l'oubli (cahier des charges A.9) : suppression = anonymisation, pas un hard-delete
     # cascadé — les Match/Message/Rating d'un tiers restent intacts (voir services/account.py).
     deleted_at = Column(DateTime(timezone=True), nullable=True)

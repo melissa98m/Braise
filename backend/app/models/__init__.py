@@ -9,3 +9,4 @@ from app.models.report import Report  # noqa: F401
 from app.models.ban_appeal import BanAppeal  # noqa: F401
 from app.models.subscription import Subscription  # noqa: F401
 from app.models.photo_access_log import PhotoAccessLog  # noqa: F401
+from app.models.moderation_action import ModerationAction  # noqa: F401

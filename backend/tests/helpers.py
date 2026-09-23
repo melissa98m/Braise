@@ -209,6 +209,45 @@ def force_otp_requested_at(phone: str, seconds_ago: float) -> None:
         db.close()
 
 
+def find_rating_id(match_id: str, rater_id: str) -> str:
+    # La file admin des notes signalées (GET /admin/flagged-ratings) est ordonnée/paginée et
+    # tourne contre le vrai Postgres de dev (pas de base jetable) : des runs précédents peuvent
+    # y avoir laissé des dizaines d'entrées en attente, ce qui rend peu fiable de "retrouver" une
+    # note fraîchement créée par sa position ou même par un texte marqueur dans un gros lot. Le
+    # couple (match_id, rater_id) est unique (contrainte uq_rating_once_per_match) : un accès
+    # direct est le moyen le plus sûr de retrouver *exactement* la bonne ligne en test.
+    from app.db.session import SessionLocal
+    from app.models.rating import Rating
+
+    db = SessionLocal()
+    try:
+        rating = (
+            db.query(Rating)
+            .filter(Rating.match_id == uuid.UUID(match_id), Rating.rater_id == uuid.UUID(rater_id))
+            .one()
+        )
+        return str(rating.id)
+    finally:
+        db.close()
+
+
+def make_staff(user_id: str) -> None:
+    # Pas de flux applicatif pour accorder is_staff (délibéré, voir docs/V2_FEATURES.md §2 : pas
+    # d'UI de gestion des rôles tant qu'il n'y a qu'un seul niveau de droits élevés) — même
+    # principe que force_match_unlocked : poser l'état directement plutôt que simuler un parcours
+    # qui n'existe pas.
+    from app.db.session import SessionLocal
+    from app.models.user import User
+
+    db = SessionLocal()
+    try:
+        user = db.get(User, uuid.UUID(user_id))
+        user.is_staff = True
+        db.commit()
+    finally:
+        db.close()
+
+
 def force_match_unlocked(match_id: str, hours_ago: float = 1) -> None:
     # Atteindre unlock_threshold flammes par le vrai flux (une question/jour/utilisateur) prendrait
     # plusieurs jours réels : on pose directement l'état "match débloqué depuis X" en base plutôt

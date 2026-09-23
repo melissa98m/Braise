@@ -1,0 +1,224 @@
+/* Tokens repris de docs/DESIGN_TOKENS.md (palette sombre, le défaut du produit) — un outil interne
+   n'a pas besoin d'un sélecteur clair/sombre, mais reste visuellement cohérent avec le reste de
+   l'app plutôt que d'inventer une palette à part. Contrastes déjà vérifiés AA dans ce document. */
+:root {
+  --surface-root: #07090e;
+  --surface-1: #0f1420;
+  --surface-2: #1d2434;
+  --border-hairline: #2c3448;
+  --border-strong: #3a4459;
+  --ink-primary: #f4f1ea;
+  --ink-secondary: #aab3c8;
+  --ink-floor: #7c879e;
+  --braise-ink: #ff8c42;
+  --braise-fill: #ff8c42;
+  --voile-ink: #9e8cff;
+  --foi-ink: #57d9b0;
+  --foi-fill: #57d9b0;
+  --alerte: #ffc761;
+  --erreur: #ff7b7b;
+  --focus-ring: #9e8cff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface-root);
+  color: var(--ink-primary);
+  font: 500 17px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+h1, h2 { font-weight: 800; }
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--braise-fill);
+  color: #160b03;
+  padding: 8px 16px;
+  z-index: 100;
+}
+.skip-link:focus { left: 8px; top: 8px; }
+
+/* Anneau de focus visible partout, jamais supprimé (P16 : un focus invisible en pratique est un
+   focus qui n'existe pas). */
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1.75px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+button.primary {
+  background: var(--braise-fill);
+  color: #160b03;
+  border-color: var(--braise-fill);
+  font-weight: 700;
+}
+button.danger {
+  background: var(--erreur);
+  color: #2b0a0a;
+  border-color: var(--erreur);
+  font-weight: 700;
+}
+button:disabled { opacity: .55; cursor: not-allowed; }
+
+input, textarea {
+  font: inherit;
+  width: 100%;
+  background: var(--surface-2);
+  color: var(--ink-primary);
+  border: 1.75px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+
+label { display: block; margin: 12px 0 4px; font-weight: 700; }
+
+.view { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+.login-card {
+  max-width: 420px;
+  margin: 10vh auto;
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: 16px;
+  padding: 24px;
+}
+.subtitle { color: var(--ink-secondary); }
+.hint { color: var(--ink-secondary); font: 500 14px/1.4 ui-monospace, "IBM Plex Mono", monospace; }
+.error { color: var(--erreur); font-weight: 700; }
+
+.toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 200;
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: 12px;
+  padding: 12px 16px;
+  max-width: 360px;
+}
+.toast:empty { display: none; }
+.toast[data-kind="error"] { border-color: var(--erreur); color: var(--erreur); }
+.toast[data-kind="success"] { border-color: var(--foi-ink); color: var(--foi-ink); }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+.topbar h1 { font-size: 20px; margin: 0; }
+.topbar-right { display: flex; align-items: center; gap: 12px; color: var(--ink-secondary); }
+
+.tablist {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--border-hairline);
+}
+.tablist button[role="tab"] {
+  border-radius: 12px 12px 0 0;
+  border-bottom: none;
+  background: transparent;
+}
+.tablist button[aria-selected="true"] {
+  background: var(--surface-1);
+  border-color: var(--border-hairline);
+  color: var(--braise-ink);
+}
+.badge {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--braise-fill);
+  color: #160b03;
+  font: 700 13px/1.4 ui-monospace, "IBM Plex Mono", monospace;
+  text-align: center;
+}
+.badge[data-zero="true"] { background: var(--surface-2); color: var(--ink-floor); }
+
+.tabpanel { padding: 24px 0; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-hairline); }
+th { color: var(--ink-secondary); font-size: 14px; text-transform: uppercase; letter-spacing: .04em; }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr:focus-within { background: var(--surface-1); }
+
+.empty-state, .loading-state, .error-state {
+  padding: 48px 12px;
+  text-align: center;
+  color: var(--ink-secondary);
+}
+.error-state { color: var(--erreur); }
+.error-state button { margin-top: 12px; }
+
+.detail-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: 16px;
+  padding: 20px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+.user-summary {
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 12px;
+}
+.user-summary h3 { margin: 0 0 8px; font-size: 15px; }
+.user-summary dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; font-size: 15px; }
+.user-summary dt { color: var(--ink-secondary); }
+dd { margin: 0; }
+
+.comment-block {
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 12px;
+  white-space: pre-wrap;
+  margin: 16px 0;
+}
+
+fieldset { border: 1.75px solid var(--border-strong); border-radius: 12px; margin: 16px 0; }
+legend { padding: 0 8px; font-weight: 700; }
+.radio-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.radio-row input { width: auto; min-height: auto; }
+
+.action-row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+
+dialog {
+  border: 1px solid var(--border-hairline);
+  border-radius: 16px;
+  background: var(--surface-1);
+  color: var(--ink-primary);
+  max-width: 420px;
+  padding: 20px;
+}
+dialog::backdrop { background: rgba(7, 9, 14, .7); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; }
+
+@media (max-width: 640px) {
+  .detail-grid { grid-template-columns: 1fr; }
+  .tablist { flex-direction: column; }
+}

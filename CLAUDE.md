@@ -346,17 +346,69 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   rather than counted against it — human review decides, the model doesn't punish directly.
   Auto-ban (`User.is_banned`) only fires past `MIN_RATINGS_FOR_AUTO_BAN = 3` — a deliberate
   floor so one or two bad-faith ratings can't zero out a brand-new user (cahier des charges A.9).
-  Reports (`Report`) always start `status="pending"`: there's no automatic founded/unfounded
-  triage or reviewer UI yet (cahier des charges C.1 explicitly scopes that to V2) — inspect them
-  via Adminer for now, not a moderation endpoint that doesn't exist. `GET /moderation/me/trust-score`
+  Reports (`Report`) always start `status="pending"`; still no *automatic* founded/unfounded
+  triage (cahier des charges C.1 only ever asked for systematic human review, never ML
+  auto-triage of reports specifically), but the human-review interface itself is no longer
+  Adminer — see the staff moderation paragraph below. `GET /moderation/me/trust-score`
   only ever returns the caller's own score (derived from the JWT) — it used to be
   `GET /moderation/users/{user_id}/trust-score`, a straight IDOR (any authenticated user could
   read anyone else's `rating_count`/`flagged_count` by guessing a UUID; the app itself never
   called it with anything but the caller's own id). `BanAppeal` (`models/ban_appeal.py`) is the
   human-contestation path A.9 requires for an auto-ban: same shape as `Report` (starts `pending`,
-  reviewed via Adminer, no auto-triage), reachable through `get_current_user_even_if_banned` (see
-  `api/deps.py` above) since a banned user is 403'd everywhere else. One pending appeal per user
-  at a time; filing requires `user.is_banned` (400 otherwise — nothing to contest).
+  now reviewed through the same staff interface, still no auto-triage), reachable through
+  `get_current_user_even_if_banned` (see `api/deps.py` above) since a banned user is 403'd
+  everywhere else. One pending appeal per user at a time; filing requires `user.is_banned` (400
+  otherwise — nothing to contest).
+- **Human moderation review interface (`models/moderation_action.py`, `api/deps.get_current_staff_user`,
+  `services/admin_moderation.py`, `api/v1/admin.py`, `backend/app/static/admin/`)**: cahier des
+  charges C.1/C.2 scoped the review *interface* to V2 (see `docs/V2_FEATURES.md` §2, now marked
+  done) — through Phase 5 `Report`/`BanAppeal`/`suspected_rancor` ratings were all triaged by hand
+  via Adminer, because this project had no staff/admin role anywhere. `User.is_staff` (bool,
+  default `False`) is that role — a single elevated privilege level, so a plain column rather than
+  a roles table, same reasoning as everywhere else this project avoids building for a hypothetical
+  future need. `get_current_staff_user` follows `get_current_user_even_if_banned`'s exact shape:
+  goes through `user_from_token` (a banned staff account still loses access) then 403s
+  `"Accès réservé au personnel."` when `not is_staff`. No self-service way to grant it — Adminer,
+  or `backend/scripts/grant_staff.py <phone>` as a shortcut, matching this project's existing
+  "no role-management UI while there's only one privilege level" stance. Three queues, each with
+  real decisions that change state rather than just archiving: `POST /admin/reports/{id}/resolve`
+  (`founded`/`unfounded`, with an opt-in `ban_reported` — not automatic on every founded report),
+  `POST /admin/ban-appeals/{id}/resolve` (`upheld`/`overturned`, overturned immediately clears
+  `is_banned`), `POST /admin/flagged-ratings/{id}/review` (`confirmed`/`cleared` on
+  `suspected_rancor` ratings — clearing rejoins the trust-score average via the existing
+  `compute_trust_score`, nothing new to recompute or cache). `Rating` gained
+  `moderation_reviewed_at`/`_by`, deliberately decoupled from `suspected_rancor` itself (which
+  must stay mutable): lets the pending-queue query (`moderation_reviewed_at.is_(None)`) distinguish
+  "triaged by a human" from "still considered a rancor flag" even when a review confirms rather
+  than clears it. Every decision across all three queues writes one row to the new
+  `moderation_actions` table (staff, target type/id, decision, note) — an append-only audit trail,
+  generalizing what `docs/V2_FEATURES.md` §2 originally asked for ratings alone, and the future
+  training-data seed for `moderation_ml.py` once there's real volume. Every resolve/review endpoint
+  re-checks the item is still pending before writing (409 otherwise) — race protection between two
+  staff members resolving the same item, same spirit as the match-creation `SAVEPOINT`.
+  `moderation_ml.py` gained `rancor_probability()` (the raw score `predict_is_rancor` already
+  computed internally, now exposed) so the flagged-rating detail view can show *why* something was
+  flagged, not just that it was. The dashboard itself is plain static HTML/CSS/vanilla JS
+  (`backend/app/static/admin/index.html`/`style.css`/`app.js`, no build step, no new dependency),
+  served by the `backend` container itself on `/staff` (`app.mount` in `main.py` — `/admin` stays
+  the API prefix, no collision) rather than as a Flutter screen, matching `docs/V2_FEATURES.md`
+  §2's own suggestion ("a separate web page, faster to iterate for low-traffic internal use") and
+  this project's "everything in Docker, no extra tooling" constraint; since it's same-origin,
+  nothing was added to `CORS_ORIGINS`. Logs in through the same phone+OTP flow as the mobile app,
+  token kept in `sessionStorage` rather than `localStorage` (shorter exposure window for a
+  privileged credential, at the cost of more frequent re-login — a deliberate tradeoff, not an
+  oversight). CSP is strict (`default-src 'self'`, no third-party scripts/fonts) and set both via
+  a `<meta>` tag and, for `frame-ancestors` specifically (silently ignored when only delivered via
+  `<meta>`), a real HTTP header from `main.py`'s `staff_dashboard_security_headers` middleware.
+  User-authored text is always rendered via `textContent`, never `innerHTML`. Verified against the
+  real app end to end, not just the test suite: a seeded account raised to staff
+  (`grant_staff.py`), a real browser session (Playwright) logging in, resolving a real report
+  through the UI (empty-note validation, the native `<dialog>` confirmation step, success toast,
+  return to the list), and — over direct HTTP — a founded+banned report actually 403ing the banned
+  user's `/auth/me`, then an appeal filed and overturned actually restoring access, confirming
+  staff decisions produce the same effects as the pre-existing automatic ban path, not just a
+  status label. 115/115 backend tests (`tests/test_admin_moderation.py`, 15 new), `ruff check .`
+  clean.
 - **Monetization & security** (`models/subscription.py`, `models/photo_access_log.py`,
   `services/subscriptions.py`, `services/account.py`): `Subscription` is one current-state row per
   user (no history table — single tier per cahier des charges C.1), `is_premium` computed from

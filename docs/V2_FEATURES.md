@@ -46,33 +46,20 @@ Docker, gratuit/local" tant que le produit n'est pas validé :
 5. Mobile : nouvel écran (`screens/kyc/`) déclenché depuis Paramètres, pas depuis l'onboarding —
    ne jamais bloquer la première utilisation sur un KYC qui prend des jours à traiter.
 
-## 2. Interface de revue de modération humaine *(Spec V2)*
+## 2. Interface de revue de modération humaine *(Spec V2 — livré, voir `docs/ROADMAP.md` P21)*
 
-**Pourquoi ce n'est pas fait** : cahier des charges C.1/C.2 place explicitement le tri
-automatique et l'interface de revue humaine en V2. Le MVP consulte `Report`/`BanAppeal`/les notes
-signalées `suspected_rancor` directement via Adminer (`CLAUDE.md`, sections Confiance &
-modération) — cohérent avec le fait que ce projet n'a aucune notion de rôle staff/admin.
+Construit tel que sketché ci-dessous, avec deux ajouts que ce sketch n'anticipait pas : un journal
+d'audit append-only (`moderation_actions`) généralisé aux trois files plutôt que réservé aux notes
+(point 4 ci-dessous), et des décisions qui changent réellement l'état (un signalement fondé peut
+bannir, une contestation annulée débannit immédiatement, une note levée réintègre le score de
+confiance) plutôt que de simples changements de statut sans effet. Détail complet dans
+`CLAUDE.md` (section Trust & moderation) et `docs/ROADMAP.md` (P21).
 
-**Ce que ça demande** : la vraie décision de design ici n'est pas technique mais organisationnelle
-— introduire un rôle staff signifie un nouveau modèle de contrôle d'accès qui n'existe nulle part
-ailleurs dans ce projet (`api/deps.py` n'a que "utilisateur authentifié" et "utilisateur banni").
-
-**Comment l'implémenter** :
-1. `User.is_staff` (bool, `False` par défaut) — le moyen le plus simple, pas de table de rôles
-   séparée tant qu'il n'y a qu'un seul niveau de droits élevés à distinguer.
-2. `api/deps.py` : `get_current_staff_user` (même pattern que `get_current_user`/
-   `get_current_user_even_if_banned`), 403 si `not user.is_staff`.
-3. Nouveau routeur `api/v1/admin.py` : `GET /admin/reports` (filtrable par `status`),
-   `POST /admin/reports/{id}/resolve` (motif + décision), idem pour `BanAppeal`, et une vue en
-   lecture sur les notes `suspected_rancor=True` avec le score du classifieur
-   (`moderation_ml.predict_is_rancor`) pour que le staff voie *pourquoi* une note a été signalée,
-   pas juste qu'elle l'a été.
-4. Chaque décision de review devient un signal d'entraînement potentiel — journaliser
-   `(rating_id, décision_staff)` dès le départ, ce jeu de données réel remplacera un jour le jeu
-   d'entraînement écrit à la main de `moderation_ml.py` (voir point 6 plus bas).
-5. Mobile/web : un dashboard staff séparé plutôt qu'une section cachée dans l'app grand public —
-   probablement une page web à part (pas Flutter), plus rapide à faire évoluer pour un usage
-   interne à faible trafic.
+**Ce qui restait déjà correct dans ce sketch et a été suivi tel quel** : `User.is_staff` en
+booléen simple (pas de table de rôles), `get_current_staff_user` sur le patron de
+`get_current_user_even_if_banned`, un routeur `api/v1/admin.py` dédié, et une page web à part
+plutôt qu'un écran Flutter (`backend/app/static/admin/`, servie sur `/staff` par le backend
+lui-même, sans build ni dépendance).
 
 ## 3. Messagerie temps réel à l'échelle (multi-instance) *(Spec V2 / scaling)*
 
@@ -251,8 +238,9 @@ bêta externe :
 2. Puis les stubs qui bloquent une vraie bêta (§4 OTP SMS en premier — sans ça, aucun utilisateur
    externe ne peut même s'inscrire ; §7 le réentraînement suit naturellement une fois qu'il y a du
    volume réel).
-3. Le reste (KYC, modération humaine, paiement réel, push réel, scaling multi-instance, builds
-   natives) dépend directement de la traction produit observée pendant cette bêta — les
-   construire avant d'avoir ce signal serait le genre de travail spéculatif que ce projet a
-   justement évité jusqu'ici (voir la contrainte "gratuit/local jusqu'à validation",
-   `CLAUDE.md`).
+3. Le reste (KYC, paiement réel, push réel, scaling multi-instance, builds natives) dépend
+   directement de la traction produit observée pendant cette bêta — les construire avant d'avoir
+   ce signal serait le genre de travail spéculatif que ce projet a justement évité jusqu'ici (voir
+   la contrainte "gratuit/local jusqu'à validation", `CLAUDE.md`). Exception : la modération
+   humaine (§2) a été livrée en avance sur ce séquencement, demandée directement plutôt que
+   déclenchée par un signal de traction.

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- CSP volontairement stricte : cette page ne charge jamais de script/style tiers, aucune
+       police web externe non plus (contrairement à l'app Flutter, qui accepte déjà la dépendance
+       google_fonts) — un outil interne à faible trafic n'a pas besoin de la même fidélité de
+       marque, et ça garde ce point d'entrée sans aucune dépendance réseau externe au chargement.
+       frame-ancestors est délibérément absent d'ici : cette directive est silencieusement
+       ignorée dans une CSP livrée par <meta> et n'a d'effet que via un vrai en-tête HTTP — voir
+       le middleware staff_dashboard_security_headers dans main.py, qui la porte réellement. La
+       répéter ici ne ferait qu'ajouter un avertissement console trompeur sans rien changer. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'" />
+  <title>Bresonne — Modération</title>
+  <meta name="description" content="Revue de modération humaine : signalements, contestations de bannissement, notes signalées." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Aller au contenu</a>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ===================== Connexion ===================== -->
+  <main id="login-view" class="view">
+    <div class="login-card">
+      <h1>Bresonne — Modération</h1>
+      <p class="subtitle">Réservé au personnel. Connexion par numéro de téléphone + code, comme
+        dans l'application.</p>
+
+      <form id="phone-form" novalidate>
+        <label for="phone-input">Numéro de téléphone</label>
+        <input id="phone-input" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+               placeholder="+33612345678" required />
+        <button type="submit" id="phone-submit">Recevoir un code</button>
+      </form>
+
+      <form id="code-form" novalidate hidden>
+        <label for="code-input">Code reçu</label>
+        <input id="code-input" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" required />
+        <p id="debug-code" class="hint" hidden></p>
+        <button type="submit" id="code-submit">Se connecter</button>
+      </form>
+
+      <p id="login-error" class="error" role="alert" hidden></p>
+    </div>
+  </main>
+
+  <!-- ===================== Tableau de bord ===================== -->
+  <div id="dashboard-view" class="view" hidden>
+    <header class="topbar">
+      <h1>Bresonne — Modération</h1>
+      <div class="topbar-right">
+        <span id="staff-identity"></span>
+        <button id="logout-button" type="button">Se déconnecter</button>
+      </div>
+    </header>
+
+    <nav class="tablist" role="tablist" aria-label="Files de modération">
+      <button role="tab" id="tab-reports" aria-controls="panel-reports" aria-selected="true"
+              tabindex="0" data-queue="reports">
+        Signalements <span class="badge" id="count-reports">0</span>
+      </button>
+      <button role="tab" id="tab-ban_appeals" aria-controls="panel-ban_appeals" aria-selected="false"
+              tabindex="-1" data-queue="ban_appeals">
+        Contestations de bannissement <span class="badge" id="count-ban_appeals">0</span>
+      </button>
+      <button role="tab" id="tab-flagged_ratings" aria-controls="panel-flagged_ratings" aria-selected="false"
+              tabindex="-1" data-queue="flagged_ratings">
+        Notes signalées <span class="badge" id="count-flagged_ratings">0</span>
+      </button>
+    </nav>
+
+    <main id="main">
+      <section id="panel-reports" class="tabpanel" role="tabpanel" aria-labelledby="tab-reports" tabindex="0"></section>
+      <section id="panel-ban_appeals" class="tabpanel" role="tabpanel" aria-labelledby="tab-ban_appeals" tabindex="0" hidden></section>
+      <section id="panel-flagged_ratings" class="tabpanel" role="tabpanel" aria-labelledby="tab-flagged_ratings" tabindex="0" hidden></section>
+    </main>
+  </div>
+
+  <!-- ===================== Confirmation de décision ===================== -->
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h2 id="confirm-title">Confirmer la décision</h2>
+      <p id="confirm-body"></p>
+      <div class="dialog-actions">
+        <button type="button" id="confirm-cancel">Annuler</button>
+        <button type="button" id="confirm-accept" class="primary">Confirmer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
