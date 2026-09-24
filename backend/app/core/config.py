@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # gabarit statique plutôt que de laisser un Ollama lent dégrader ce endpoint.
     ollama_timeout_seconds: float = 3.0
 
+    # Pub/sub partagé entre instances backend pour la messagerie WebSocket (cahier des charges
+    # D.4, docs/V2_FEATURES.md §3) — sans ça, deux utilisateurs connectés à deux instances
+    # différentes ne se voient plus. Gratuit/local (redis:7-alpine, docker-compose.yml), aucune
+    # donnée n'y est durablement stockée (voir docs/DPIA.md) : seul le relais pub/sub est utilisé.
+    redis_url: str = "redis://redis:6379/0"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

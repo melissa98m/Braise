@@ -1062,15 +1062,96 @@ techniques : cahier des charges sections A, B, C, D.
   `ruff check .` propre.
   `docs/V2_FEATURES.md` §2 et `docs/DPIA.md` mis à jour pour refléter ce qui a été livré.
 
+- [x] **P22 — Messagerie temps réel multi-instance (Redis pub/sub).** Deuxième point du backlog
+  V2 (`docs/V2_FEATURES.md` §3) livré en avance sur son propre déclencheur documenté ("seulement
+  une fois plusieurs instances réellement en service") — demandé directement, même schéma que
+  P21. `ws/connection_manager.py`'s `ConnectionManager` était un `dict[match_id, set[WebSocket]]`
+  en mémoire, correct pour un seul process backend mais aveugle entre deux instances (cahier des
+  charges D.4). Nouveau service `redis:7-alpine` (`docker-compose.yml`, aucun port publié — jamais
+  joignable hors du réseau compose), `backend` en dépend au démarrage (`condition:
+  service_healthy`), au même titre que `db`/`minio`.
+  Choix retenu après question directe (Redis vs PostgreSQL LISTEN/NOTIFY vs Centrifugo) : Redis
+  pub/sub, un canal par match (`bresonne:chat:{match_id}`) — Redis fait le tri, une connexion ne
+  reçoit jamais le trafic d'un autre match, pas de filtrage côté client sur un canal global.
+  Conception non triviale, revue deux fois après des bugs réels trouvés en testant contre l'app,
+  pas en écrivant le code : la première version gardait un unique client Redis + une unique tâche
+  d'écoute partagés pour tout le process (comme le registre en mémoire qu'elle remplaçait) — cassé
+  silencieusement dès que deux connexions WebSocket s'exécutent sur des event loops différents, ce
+  qui arrive en pratique sous `TestClient.websocket_connect()` (utilisé par toute la suite de
+  tests existante sans `with TestClient(app) as client:`, la forme qui partagerait un seul
+  portail/event loop) : chaque connexion y ouvre son propre thread + event loop, et un objet
+  redis-py créé sur l'un puis réutilisé depuis l'autre plante ou reste bloqué en silence. Diagnostiqué
+  via `py-spy dump` sur le process de test bloqué (toutes les tâches idle en `select()`, aucun
+  deadlock — juste un message jamais livré), pas en lisant le code. Corrigé en scopant un client +
+  un abonnement Redis à *chaque connexion WebSocket*, jamais partagés au-delà — même principe que
+  `SessionLocal()` par opération déjà établi dans `chat_ws` (P4.3), appliqué ici à Redis pour la
+  même raison. Un second bug, plus subtil, a survécu à cette première correction et n'apparaissait
+  qu'une fois sur plusieurs dizaines de lancements complets de la suite (jamais en lançant
+  `test_messaging.py` seul) : `connect()` appelait `websocket.accept()` *avant* de terminer
+  l'abonnement Redis, laissant une fenêtre où le pair côté test pouvait publier un message avant
+  que cette connexion-ci n'ait fini de s'abonner — Redis ne livre jamais rétroactivement à un
+  abonné pas encore enregistré. Reproduit à nouveau via `py-spy dump` (bloqué exactement sur
+  `test_websocket_typing_broadcasts_to_other_participant`, le seul test à n'avoir aucun échange de
+  "mise en route" avant le message qu'il vérifie), corrigé en abonnant *avant* d'accepter la
+  connexion plutôt qu'après — confirmé stable sur 15 lancements complets consécutifs après coup.
+  Une régression réelle trouvée au passage dans `tests/test_discovery.py` (pas la messagerie
+  elle-même) : `test_match_list_reports_unread_count_from_the_other_side_only` envoyait un
+  événement `"read"` puis fermait la connexion immédiatement, sans jamais attendre d'accusé de
+  réception — un test déjà fragile qui ne survivait que par coïncidence de timing avec l'ancien
+  code (aucun I/O asynchrone dans `connect()`), maintenant exposé par le nouveau
+  `connect()`/`disconnect()` réellement asynchrones. Corrigé en attendant l'écho du broadcast
+  avant de fermer, même patron déjà suivi par les autres tests WebSocket du dépôt.
+  Vérifié en conditions réelles, pas seulement via les tests (qui tournent tous dans un seul
+  process, donc ne peuvent jamais prouver le cas multi-instance) : deux conteneurs `backend`
+  indépendants lancés côte à côte sur le même réseau Docker (sans passer par `--scale`, qui
+  entre en conflit avec le port hôte déjà publié — deux conteneurs nommés directement à la
+  place), un client WebSocket connecté à chacun pour le même match, message envoyé depuis
+  l'instance A et reçu sur l'instance B dans les deux sens. 115/115 tests backend, `ruff check .`
+  propre, 15 lancements complets consécutifs de la suite sans échec après le second correctif.
+  `infra/uptime-kuma/setup.py` gagne un moniteur TCP `redis:6379`, même principe que celui déjà
+  posé pour `db:5432`. `docs/V2_FEATURES.md` §3 et `docs/DPIA.md` mis à jour.
+
+  **Test de charge réel, demandé directement après coup** ("voir les limites, si ça peut
+  tenir") — `backend/scripts/load_test_messaging.py` gagne `--backend-urls` (liste séparée par
+  des virgules) pour répartir délibérément les deux participants de chaque match sur deux
+  instances différentes, au lieu du DNS round-robin de `backend` sous `--scale` (pas fiable pour
+  garantir qu'une paire traverse vraiment le relais Redis). Un vrai bug préexistant corrigé au
+  passage, sans rapport avec ce palier : ce script n'appelait jamais `POST /auth/consent` avant
+  de publier un profil — l'écran de consentement RGPD a été ajouté après son écriture initiale
+  (P4.3) et personne ne l'avait relancé depuis, donc chaque tentative de publication se prenait un
+  403 jusqu'à ce correctif.
+  Montée en charge sur deux vrais conteneurs `backend` : 100/400/800/1600 matchs concurrents
+  (100 → 3200 connexions WebSocket) tous livrés à 100 %, mais une vraie limite trouvée aux
+  alentours de 700-800 connexions WebSocket simultanées *par instance* :
+  `redis.exceptions.ConnectionError: ... Too many open files`. Cause : ce design coûte un
+  descripteur de fichier de plus par connexion WebSocket (sa propre socket Redis d'abonnement, en
+  plus de la socket WS elle-même) comparé à l'ancien registre en mémoire qui n'en coûtait aucun —
+  divise à peu près par deux le nombre de connexions qu'un conteneur peut tenir sous le
+  `ulimit -n` par défaut de Docker (1024, hérité de l'hôte). Corrigé par `ulimits.nofile: 65536`
+  sur le service `backend` (`docker-compose.yml`) — un réglage opérationnel standard, sans aucun
+  inconvénient au repos, pas un changement de code applicatif. Reconfirmé propre (100 %) à 1600 et
+  3200 matchs concurrents (3200 et 6400 utilisateurs) après correctif.
+  Deux constats supplémentaires, ni l'un ni l'autre une régression de ce palier :
+  la latence de connexion se dégrade nettement sous une rafale de connexions simultanées (p50
+  environ 2,8 s à 1600 matchs, environ 5,8 s à 3200) — le coût réel d'une poignée de main Redis
+  par connexion, acceptable pour une croissance organique du trafic mais un vrai risque pour une
+  reconnexion de masse simultanée (ex. juste après un déploiement), à surveiller plus tard si ça
+  devient une plainte réelle, pas avant ; et pousser jusqu'à 3200 créations de match concurrentes
+  (6400 inscriptions via REST, pas WebSocket) a fait ressortir le `QueuePool limit of size 5
+  overflow 10 reached` déjà documenté en P4.3 — la même contrainte connue, cette fois sous une
+  rafale REST plutôt que des sessions WS tenues longtemps, pas une nouvelle limite introduite ici,
+  et hors périmètre de ce palier (redimensionner le pool ou limiter le débit d'inscription est une
+  décision distincte du relais des messages).
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :
 `docs/V2_FEATURES.md`. Ce qui suit ici n'est qu'un résumé du premier point (KYC), historiquement
-le seul détaillé dans ce fichier avant que `docs/V2_FEATURES.md` ne couvre tout le reste (scaling
-messagerie multi-instance, graduation des stubs OTP/paiement/push vers de vrais services,
-réentraînement du modèle de modération, builds mobiles natives, géolocalisation réelle, et les
-actions de conformité DPIA restantes — la revue de modération humaine, qui figurait aussi dans
-cette liste, est livrée depuis P21 ci-dessus).
+le seul détaillé dans ce fichier avant que `docs/V2_FEATURES.md` ne couvre tout le reste
+(graduation des stubs OTP/paiement/push vers de vrais services, réentraînement du modèle de
+modération, builds mobiles natives, géolocalisation réelle, et les actions de conformité DPIA
+restantes — la revue de modération humaine et le scaling multi-instance de la messagerie, qui
+figuraient aussi dans cette liste, sont livrés depuis P21/P22 ci-dessus).
 
 - [ ] **KYC renforcé — vérification d'identité via France Identité / FranceConnect+.** Déjà
   identifié comme hors périmètre MVP dans `docs/DPIA.md` (section 1 : "le KYC renforcé par pièce

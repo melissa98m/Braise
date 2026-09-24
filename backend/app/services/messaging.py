@@ -12,7 +12,14 @@ from app.models.message import Message
 from app.models.profile import PublicProfile
 from app.models.user import User
 from app.services import geo, question_llm
-from app.services.matches import get_match_or_404, message_is_read, other_user_id
+from app.services.matches import (
+    get_match_or_404,
+    message_delivered_at,
+    message_is_delivered,
+    message_is_read,
+    message_read_at,
+    other_user_id,
+)
 
 MAX_MESSAGE_LENGTH = 2000
 DEFAULT_MESSAGE_HISTORY = 50
@@ -75,7 +82,10 @@ def list_messages(
             "sender_id": message.sender_id,
             "body": message.body,
             "created_at": message.created_at,
+            "delivered": message_is_delivered(match, message),
+            "delivered_at": message_delivered_at(match, message),
             "read": message_is_read(match, message),
+            "read_at": message_read_at(match, message),
         }
         for message in reversed(recent)
     ]

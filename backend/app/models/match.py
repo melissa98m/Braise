@@ -34,3 +34,11 @@ class Match(Base):
     # (services/matches.mark_read/message_is_read), pas de table séparée à gérer.
     last_read_at_a = Column(DateTime(timezone=True), nullable=True)
     last_read_at_b = Column(DateTime(timezone=True), nullable=True)
+    # Même principe pour l'accusé de réception ("reçu"), distinct de la lecture : posé dès que le
+    # client de ce côté a effectivement reçu la trame WS d'un message, avant même de l'avoir lu
+    # (services/matches.mark_delivered/message_is_delivered). mark_read fait toujours progresser
+    # ces deux colonnes en même temps que last_read_at_* : lire implique avoir reçu, donc
+    # last_delivered_at_* ne doit jamais rester en retard sur last_read_at_* même si le client
+    # n'envoie jamais l'accusé "delivered" explicite (ex. un client plus ancien).
+    last_delivered_at_a = Column(DateTime(timezone=True), nullable=True)
+    last_delivered_at_b = Column(DateTime(timezone=True), nullable=True)

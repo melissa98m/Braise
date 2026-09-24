@@ -61,6 +61,18 @@ MONITORS = [
         retryInterval=60,
         maxretries=3,
     ),
+    # Depuis docs/ROADMAP.md P22 (messagerie multi-instance, cahier des charges D.4) : Redis est
+    # une dépendance de démarrage dure pour `backend` (docker-compose.yml), au même titre que
+    # Postgres — même moniteur TCP, même raisonnement.
+    dict(
+        type=MonitorType.PORT,
+        name="Redis (TCP)",
+        hostname="redis",
+        port=6379,
+        interval=60,
+        retryInterval=60,
+        maxretries=3,
+    ),
 ]
 
 

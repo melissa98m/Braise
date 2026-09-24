@@ -403,6 +403,12 @@ def test_match_list_reports_unread_count_from_the_other_side_only():
 
     with client.websocket_connect(url_a) as ws_a:
         ws_a.send_json({"type": "read"})
+        # Attendre l'écho du broadcast (voir test_websocket_read_marks_message_read_and_notifies_
+        # sender, même principe) avant de fermer la connexion : sans ça, rien ne garantit que le
+        # serveur a eu le temps de traiter l'événement et de committer mark_read() avant que le
+        # client ne se déconnecte — une fermeture immédiate après un simple envoi ne prouve pas
+        # que le serveur l'a bien reçu.
+        ws_a.receive_json()
 
     matches_a_after_read = client.get("/discovery/matches", headers=match["headers_a"]).json()
     assert matches_a_after_read[0]["unread_count"] == 0

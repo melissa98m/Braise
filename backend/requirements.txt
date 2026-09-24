@@ -17,6 +17,9 @@ ruff==0.7.4
 # flux bout en bout (pas un besoin runtime de l'API elle-même, qui n'utilise que websockets via
 # FastAPI/Starlette côté serveur).
 websockets==13.1
+# Pub/sub multi-instance pour ws/connection_manager.py (cahier des charges D.4) — client officiel,
+# `redis.asyncio` natif depuis la v4+, pas besoin d'un paquet async séparé (aioredis, abandonné).
+redis==5.1.1
 
 # Collecte de données (scripts/, hors runtime API) — voir scripts/scrape_dating_reviews.py
 google-play-scraper==1.2.7

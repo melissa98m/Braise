@@ -10,6 +10,7 @@ import '../../models/messaging.dart';
 import '../../notifications/notification_prefs.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
+import '../../utils/validators.dart';
 import '../../widgets/braise_page_route.dart';
 import '../../widgets/flame_diamonds.dart';
 import '../moderation/report_screen.dart';
@@ -77,8 +78,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
       setState(() => _messages.add(message));
       _scrollToEnd();
       // On regarde activement l'écran quand ce message arrive : on marque tout de suite comme
-      // lu plutôt que d'attendre une action explicite qui n'existe pas dans cette UI.
+      // reçu (immédiatement, avant même le "read" ci-dessous) puis lu plutôt que d'attendre une
+      // action explicite qui n'existe pas dans cette UI.
       if (message.senderId != _myId) {
+        socket.markDelivered();
         socket.markRead();
         unawaited(_maybeNotifyNewMessage(services, message));
       }
@@ -94,13 +97,35 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (mounted) setState(() => _otherIsTyping = false);
       });
     });
+    socket.deliveredEvents.listen((event) {
+      if (!mounted || event.delivererId == _myId) return;
+      setState(() {
+        for (var i = 0; i < _messages.length; i++) {
+          final message = _messages[i];
+          if (message.senderId == _myId &&
+              !message.delivered &&
+              !message.createdAt.isAfter(event.deliveredAt)) {
+            _messages[i] = message.copyWith(delivered: true, deliveredAt: event.deliveredAt);
+          }
+        }
+      });
+    });
     socket.readEvents.listen((event) {
       if (!mounted || event.readerId == _myId) return;
       setState(() {
         for (var i = 0; i < _messages.length; i++) {
           final message = _messages[i];
           if (message.senderId == _myId && !message.createdAt.isAfter(event.readAt)) {
-            _messages[i] = message.copyWith(read: true);
+            // Lire implique avoir reçu : si aucun "delivered" explicite n'est encore arrivé
+            // (ex. les deux frames se doublent en pratique, voir markDelivered() ci-dessus), le
+            // "read" fait quand même progresser l'accusé de réception plutôt que de le laisser
+            // en retard sur la lecture (même règle que services/matches.mark_read côté serveur).
+            _messages[i] = message.copyWith(
+              read: true,
+              readAt: event.readAt,
+              delivered: true,
+              deliveredAt: message.deliveredAt ?? event.readAt,
+            );
           }
         }
       });
@@ -198,6 +223,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (!MediaQuery.of(context).disableAnimations) {
       setState(() => _sendPulse = true);
     }
+  }
+
+  // Trois états, jamais quatre : "Envoyé" (le serveur l'a persisté, personne d'autre ne l'a
+  // encore reçu), "Reçu" (l'autre l'a effectivement reçu mais pas encore lu) et "Lu à HH:mm"
+  // (l'heure exacte à laquelle le destinataire a marqué la conversation comme lue — voir
+  // backend/CLAUDE.md, services/matches.message_read_at).
+  String _statusLabel(ChatMessage message) {
+    if (message.read) return 'Lu à ${_formatTime(message.readAt ?? message.createdAt)}';
+    if (message.delivered) return 'Reçu';
+    return 'Envoyé';
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final local = dateTime.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   void _scrollToEnd() {
@@ -324,16 +366,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
                             right: BraiseSpacing.xs,
                             bottom: BraiseSpacing.sm,
                           ),
-                          // Le statut passe de "Envoyé" à "Lu" en fondu plutôt qu'en changement
-                          // de texte instantané — borné (AnimatedSwitcher fait un seul crossfade
-                          // fini), donc sans risque pour pumpAndSettle même hors mouvement réduit.
+                          // Le statut passe de "Envoyé" à "Reçu" puis "Lu à HH:mm" en fondu plutôt
+                          // qu'en changement de texte instantané — borné (AnimatedSwitcher fait un
+                          // seul crossfade fini), donc sans risque pour pumpAndSettle même hors
+                          // mouvement réduit.
                           child: AnimatedSwitcher(
                             duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
                             switchInCurve: Curves.easeOutCubic,
                             switchOutCurve: Curves.easeOutCubic,
                             child: Text(
-                              message.read ? 'Lu' : 'Envoyé',
-                              key: ValueKey(message.read),
+                              _statusLabel(message),
+                              key: ValueKey('${message.delivered}-${message.read}'),
                               style: textTheme.labelSmall?.copyWith(
                                 color: message.read ? tokens.foiInk : tokens.inkFloor,
                               ),

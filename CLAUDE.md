@@ -190,11 +190,62 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   logic was needed.
 
 - **Messaging & daily question** (`models/message.py`, `models/daily_question.py`,
-  `ws/connection_manager.py`, `services/messaging.py`): `ConnectionManager` is an in-memory
-  `dict[match_id, set[WebSocket]]` — correct for a single backend process (this MVP), but it must
-  be swapped for a shared pub/sub (Centrifugo/Redis, per cahier des charges D.4) before running more
-  than one backend replica, or messages silently stop reaching participants connected to a different
-  instance. WebSocket auth can't use the `Authorization` header (browsers can't set it on the
+  `ws/connection_manager.py`, `services/messaging.py`): `ConnectionManager` relays via Redis
+  pub/sub (P22, `docs/ROADMAP.md`) rather than an in-memory `dict[match_id, set[WebSocket]]` —
+  the in-memory version was correct for a single backend process but went silently blind between
+  two participants connected to different instances (cahier des charges D.4). One Redis client +
+  pub/sub subscription *per WebSocket connection*, never one shared for the whole process — not
+  a style choice, a correctness one: a shared client bound to one event loop breaks (hangs or
+  errors) as soon as a second connection runs on a different loop, which happens for real under
+  `TestClient.websocket_connect()` (every test in this suite uses `TestClient(app)` at module
+  scope, never `with TestClient(app) as client:`, so each connection gets its own anyio portal —
+  its own thread and event loop). Found via `py-spy dump` on a hung test process (every thread
+  idle in `select()`, no deadlock — a message that was simply never delivered), not by inspection.
+  A second, narrower race survived that fix and only reproduced once every several dozen full
+  suite runs (never when running `test_messaging.py` alone): `connect()` called
+  `websocket.accept()` *before* finishing the Redis subscribe, leaving a window where a peer
+  could publish before this connection had actually subscribed — Redis never delivers
+  retroactively to a not-yet-subscribed client. Fixed by subscribing before accepting; confirmed
+  stable across 15 consecutive full suite runs afterward (previously ~1-in-3 to 1-in-5 would
+  hang). One real regression this surfaced in `tests/test_discovery.py`, unrelated to messaging
+  itself: `test_match_list_reports_unread_count_from_the_other_side_only` sent a `"read"` event
+  and closed the connection immediately, never waiting for an acknowledgment — already fragile,
+  only surviving by timing coincidence with the old fully-synchronous `connect()`; fixed by
+  waiting for the broadcast echo first, the same pattern every other WebSocket test here already
+  follows. Verified against the real multi-instance case too, not just the test suite (which
+  runs everything in one process and can't prove this): two independent `backend` containers on
+  the same Docker network (named directly rather than `--scale`, which conflicts with the
+  already-published host port), one WebSocket client against each for the same match, a message
+  sent from one arriving on the other in both directions. `redis` (`docker-compose.yml`,
+  `redis:7-alpine`) publishes no host port — never reachable outside the Compose network — and
+  `backend` has a hard `depends_on: redis: condition: service_healthy`, same as `db`/`minio`; a
+  Redis outage is a startup-time concern, not a runtime fallback path, since messages are already
+  committed to Postgres before `broadcast()` is ever called (a live-delivery hiccup, never a lost
+  message).
+  **Load-tested for real, not just functionally verified** (`backend/scripts/load_test_messaging.py`,
+  extended with `--backend-urls` for this palier so it can deliberately split each match's two
+  participants across different real instances, requested directly to characterize actual limits
+  rather than stop at "it works"): 100/400/800/1600 concurrent matches (100 → 3200 WebSocket
+  connections across 2 real backend containers) all delivered 100%, but a real ceiling showed up
+  at ~700-800 concurrent WS connections *per instance*: `redis.exceptions.ConnectionError: ...
+  Too many open files`, since this design costs one extra file descriptor per WebSocket connection
+  (its own dedicated Redis subscriber socket, see above) versus zero for the old in-memory
+  registry — roughly halving how many connections a container's default `ulimit -n` (1024,
+  inherited from Docker's default) can hold. Fixed with `ulimits.nofile: 65536` on the `backend`
+  service (`docker-compose.yml`) — a standard, zero-downside operational setting, not an
+  application change; reconfirmed clean (100%) at 1600 and 3200 concurrent matches (3200 and 6400
+  users) after the fix. Two things this stress test did *not* newly break, worth naming so they
+  aren't mistaken for a Redis regression: connection-establishment latency degrades substantially
+  under a sudden simultaneous-connect burst (p50 ~2.8s at 1600 matches, ~5.8s at 3200) — a real
+  cost of a fresh Redis TCP handshake per connection, acceptable for organic traffic growth but a
+  genuine risk for a true thundering-herd reconnect (e.g. right after a deploy) that a future
+  palier should watch for if it becomes a real complaint, not before; and pushing to 3200
+  concurrent match *setups* (6400 signups over REST, not WebSocket) hit the pre-existing
+  `QueuePool limit of size 5 overflow 10 reached` SQLAlchemy pool exhaustion already flagged in
+  P4.3 — the same known constraint surfacing under REST burst load this time rather than long-held
+  WS sessions, not a new one this palier introduced, and out of scope to fix here (would mean
+  either resizing the pool or rate-limiting signups, a separate decision from message relay
+  scaling). WebSocket auth can't use the `Authorization` header (browsers can't set it on the
   handshake), so the JWT travels as a `?token=` query param and is checked manually
   (`api/deps.user_from_token`) *before* `websocket.accept()` — a rejected connection is closed with
   `WS_1008_POLICY_VIOLATION`, never accepted-then-closed. `services.matches.get_match_or_404` gates
@@ -238,6 +289,30 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   UUID) is threaded through the receive loop instead of the `User`/`Match` ORM objects from the
   auth check — those become invalid once their session closes, so each per-event session
   re-fetches what it needs by id rather than reusing detached instances across sessions.
+- **Delivery receipts, distinct from read receipts (requested directly, not in the cahier des
+  charges)**: `Match.last_delivered_at_a`/`last_delivered_at_b` are the exact same "up to"
+  timestamp-per-side shape as `last_read_at_a`/`_b`, one column pair added alongside rather than a
+  second table — `services.matches.mark_delivered`/`message_is_delivered`/`message_delivered_at`
+  mirror `mark_read`/`message_is_read` line for line. `mark_read` always bumps
+  `last_delivered_at_*` too (only forward, never backward) so delivered can never trail read even
+  if a client never sends the explicit `"delivered"` WS event — reading necessarily implies having
+  received. `chat_ws` gained a fourth event type, `"delivered"`, same shape as `"read"`
+  (`mark_delivered` then rebroadcast `{"type": "delivered", "deliverer_id", "delivered_at"}`) so
+  the sender's other open connection can show "Reçu" before "Lu". `MessageOut` gained
+  `delivered`/`delivered_at` alongside the existing `read` (kept as-is for the boolean, `read_at`
+  added for the *exact* time of reading, not just whether — both `_at` fields are the recipient's
+  `last_*_at` timestamp, not a per-message record, same "read up to" semantics as before, and
+  always `None` when the corresponding bool is false). On mobile, `ConversationScreen` sends
+  `markDelivered()` the instant a message frame arrives over the socket (before the existing
+  `markRead()` call right after) — in this app's architecture (`ChatSocket` only connects while
+  the conversation screen itself is open, and that screen always auto-marks read on arrival) the
+  two fire back-to-back whenever the recipient has the screen open, so "Reçu" is genuinely real
+  but typically brief; the state that persists is the case where the recipient hasn't opened the
+  conversation at all, where the sender's tick stays on "Envoyé" until they do. The tick under the
+  sender's last message is now 3-state, not 2 (`"Envoyé"` / `"Reçu"` / `"Lu à HH:mm"`, local time,
+  formatted by hand — same manual `padLeft` approach `profiles_api.dart` already uses for dates,
+  no reason to pull in `intl` for one field), `ConversationScreen._statusLabel`. 116/116 backend
+  tests (2 new), mobile `flutter analyze` clean, 119/119 `flutter test` (1 updated).
 - **Personalized daily question via Ollama (optional, post-MVP)** (`services/question_llm.py`,
   `docker-compose.yml`'s `ollama`/`ollama-init` services, `core/config.py`'s `ollama_*` settings):
   the question text itself (never the correctness logic — see below) can now be phrased by a

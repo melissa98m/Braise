@@ -275,7 +275,9 @@ void main() {
     expect(find.textContaining('est en train d\'écrire'), findsNothing);
   });
 
-  testWidgets('a read event from the other side flips "Envoyé" to "Lu"', (tester) async {
+  testWidgets('a delivered event then a read event flip "Envoyé" -> "Reçu" -> "Lu à HH:mm"', (
+    tester,
+  ) async {
     final sentAt = DateTime(2026, 1, 1, 12);
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
@@ -300,18 +302,30 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Envoyé'), findsOneWidget);
-    expect(find.text('Lu'), findsNothing);
+    expect(find.text('Reçu'), findsNothing);
 
     harness.controller.foreign.sink.add(
       jsonEncode({
-        'type': 'read',
-        'reader_id': 'user-2',
-        'read_at': sentAt.add(const Duration(minutes: 1)).toIso8601String(),
+        'type': 'delivered',
+        'match_id': _match.matchId,
+        'deliverer_id': 'user-2',
+        'delivered_at': sentAt.add(const Duration(seconds: 30)).toIso8601String(),
       }),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Lu'), findsOneWidget);
+    expect(find.text('Reçu'), findsOneWidget);
     expect(find.text('Envoyé'), findsNothing);
+
+    final readAt = sentAt.add(const Duration(minutes: 1));
+    harness.controller.foreign.sink.add(
+      jsonEncode({'type': 'read', 'reader_id': 'user-2', 'read_at': readAt.toIso8601String()}),
+    );
+    await tester.pumpAndSettle();
+
+    final hour = readAt.toLocal().hour.toString().padLeft(2, '0');
+    final minute = readAt.toLocal().minute.toString().padLeft(2, '0');
+    expect(find.text('Lu à $hour:$minute'), findsOneWidget);
+    expect(find.text('Reçu'), findsNothing);
   });
 }

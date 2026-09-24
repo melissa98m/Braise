@@ -61,31 +61,36 @@ booléen simple (pas de table de rôles), `get_current_staff_user` sur le patron
 plutôt qu'un écran Flutter (`backend/app/static/admin/`, servie sur `/staff` par le backend
 lui-même, sans build ni dépendance).
 
-## 3. Messagerie temps réel à l'échelle (multi-instance) *(Spec V2 / scaling)*
+## 3. Messagerie temps réel à l'échelle (multi-instance) *(Spec V2 / scaling — livré, voir `docs/ROADMAP.md` P22)*
 
-**Pourquoi ce n'est pas fait** : `ws/connection_manager.py` est un
+Livré en avance sur le déclencheur "seulement une fois plusieurs instances réellement en
+service" décrit ci-dessous — demandé directement plutôt qu'amené par un signal de trafic, même
+cas que la modération humaine (§2). Mécanisme retenu : **Redis pub/sub**, un canal par match
+(`bresonne:chat:{match_id}`), pas le canal global initialement envisagé ni Centrifugo — détail
+complet dans `CLAUDE.md` (section Messaging & daily question) et `docs/ROADMAP.md` (P22),
+notamment la leçon de conception qui a changé la forme de l'implémentation : un abonnement Redis
+*par connexion WebSocket*, jamais un seul partagé pour tout le process, parce qu'un event loop
+partagé entre connexions n'est pas une garantie fiable (`TestClient` en ouvre un nouveau par
+connexion) — voir `ws/connection_manager.py`.
+
+Sketch original conservé ci-dessous pour l'historique (le "quand s'en préoccuper" n'a plus lieu
+d'être, mais le reste du raisonnement — pourquoi Redis plutôt que Centrifugo, pourquoi un canal
+par match — est resté valide et suivi) :
+
+**Pourquoi ce n'était pas fait** : `ws/connection_manager.py` était un
 `dict[match_id, set[WebSocket]]` en mémoire — correct pour un seul process backend (le MVP,
 cahier des charges D.11), mais deux utilisateurs connectés à deux instances différentes du
-backend ne se verraient plus (cahier des charges D.4 anticipe explicitement ce palier).
+backend ne se voyaient plus (cahier des charges D.4 anticipait explicitement ce palier).
 
-**Quand s'en préoccuper** : seulement au moment de faire tourner plus d'une instance backend
-(scaling horizontal réel, pas avant — ne pas anticiper ce chantier tant que le trafic ne le
-justifie pas).
+**Centrifugo**, l'autre option envisagée : serveur de pub/sub dédié au temps réel, plus de
+fonctionnalités (présence, historique) mais une pièce d'infra de plus à opérer que ce projet n'a
+pas besoin d'exploiter — écarté au profit de Redis, plus léger et cohérent avec la contrainte
+"gratuit/local, pas d'outillage superflu" du projet.
 
-**Comment l'implémenter** :
-1. Remplacer `ConnectionManager` par un pub/sub partagé — deux options réalistes :
-   - **Redis** (`redis-py` + `pubsub()`) : chaque instance backend s'abonne au canal
-     `match:{id}`, publie dessus au lieu d'itérer sur ses propres WebSockets locales. Gratuit/
-     local en Docker (`redis:7-alpine`), cohérent avec la contrainte du projet.
-   - **Centrifugo** (explicitement nommé par le cahier des charges D.4) : serveur de pub/sub
-     dédié au temps réel, plus de fonctionnalités (présence, historique) mais une pièce d'infra
-     de plus à opérer.
-2. `chat_ws` (déjà refactoré en P4.3 pour ouvrir une session DB courte par opération — voir
-   `CLAUDE.md`) change peu : au lieu d'itérer `manager.connections[match_id]`, publier l'événement
-   sur le canal partagé ; chaque instance qui a une connexion locale pour ce match la relaie.
-3. Tester avec `backend/scripts/load_test_messaging.py` (déjà existant, P4.3) contre *plusieurs*
-   instances backend derrière un load balancer, pas une seule — c'est spécifiquement le scénario
-   qu'un test single-instance ne peut pas révéler.
+Vérifié en conditions réelles, pas seulement via les tests (qui tournent tous dans un seul
+process) : deux conteneurs `backend` distincts lancés côte à côte sur le même réseau Docker,
+un client WebSocket connecté à chacun pour le même match, message envoyé sur l'un et reçu sur
+l'autre dans les deux sens — le scénario qu'un test mono-process ne peut pas prouver.
 
 ## 4. OTP par vrai SMS *(Stub → réel)*
 
@@ -238,9 +243,9 @@ bêta externe :
 2. Puis les stubs qui bloquent une vraie bêta (§4 OTP SMS en premier — sans ça, aucun utilisateur
    externe ne peut même s'inscrire ; §7 le réentraînement suit naturellement une fois qu'il y a du
    volume réel).
-3. Le reste (KYC, paiement réel, push réel, scaling multi-instance, builds natives) dépend
-   directement de la traction produit observée pendant cette bêta — les construire avant d'avoir
-   ce signal serait le genre de travail spéculatif que ce projet a justement évité jusqu'ici (voir
-   la contrainte "gratuit/local jusqu'à validation", `CLAUDE.md`). Exception : la modération
-   humaine (§2) a été livrée en avance sur ce séquencement, demandée directement plutôt que
-   déclenchée par un signal de traction.
+3. Le reste (KYC, paiement réel, push réel, builds natives) dépend directement de la traction
+   produit observée pendant cette bêta — les construire avant d'avoir ce signal serait le genre
+   de travail spéculatif que ce projet a justement évité jusqu'ici (voir la contrainte
+   "gratuit/local jusqu'à validation", `CLAUDE.md`). Exception : la modération humaine (§2) et le
+   scaling multi-instance de la messagerie (§3) ont tous deux été livrés en avance sur ce
+   séquencement, demandés directement plutôt que déclenchés par un signal de traction.

@@ -87,10 +87,26 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
             event_type = data.get("type", "message")
 
             if event_type == "typing":
-                # Éphémère, jamais persisté : juste un relais aux autres connexions du match
-                # (voir ws/connection_manager.py — un seul process backend pour l'instant).
+                # Éphémère, jamais persisté : juste un relais aux autres connexions du match,
+                # y compris sur une autre instance backend (voir ws/connection_manager.py).
                 await manager.broadcast(
                     match_id, {"type": "typing", "match_id": str(match_id), "sender_id": str(user_id)}
+                )
+                continue
+
+            if event_type == "delivered":
+                with SessionLocal() as db:
+                    user = db.get(User, user_id)
+                    match = messaging_service.assert_match_participant(db, user, match_id)
+                    delivered_at = matches_service.mark_delivered(db, match, user)
+                await manager.broadcast(
+                    match_id,
+                    {
+                        "type": "delivered",
+                        "match_id": str(match_id),
+                        "deliverer_id": str(user_id),
+                        "delivered_at": delivered_at.isoformat(),
+                    },
                 )
                 continue
 
@@ -126,12 +142,15 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
                     "sender_id": str(user_id),
                     "body": saved_body,
                     "created_at": created_at.isoformat(),
-                    # Toujours faux à l'envoi : personne d'autre n'a encore pu marquer le match
-                    # comme lu après ce message (voir services/matches.message_is_read).
+                    # Toujours faux à l'envoi : personne d'autre n'a encore pu recevoir ni lire ce
+                    # message (voir services/matches.message_is_delivered/message_is_read).
+                    "delivered": False,
+                    "delivered_at": None,
                     "read": False,
+                    "read_at": None,
                 },
             )
     except WebSocketDisconnect:
         pass
     finally:
-        manager.disconnect(match_id, websocket)
+        await manager.disconnect(match_id, websocket)

@@ -233,6 +233,9 @@ def test_message_history_reports_unread_by_default():
     ).json()
     sent = next(m for m in history if m["body"] == "Pas encore lu.")
     assert sent["read"] is False
+    assert sent["read_at"] is None
+    assert sent["delivered"] is False
+    assert sent["delivered_at"] is None
 
 
 def test_websocket_read_marks_message_read_and_notifies_sender():
@@ -255,6 +258,36 @@ def test_websocket_read_marks_message_read_and_notifies_sender():
     ).json()
     sent = next(m for m in history if m["body"] == "Tu as vu mon message ?")
     assert sent["read"] is True
+    assert sent["read_at"] is not None
+    # Lire implique avoir reçu : mark_read fait aussi progresser last_delivered_at_* côté lecteur
+    # (services/matches.mark_read), même si aucun accusé "delivered" explicite n'a été envoyé.
+    assert sent["delivered"] is True
+    assert sent["delivered_at"] is not None
+
+
+def test_websocket_delivered_marks_message_delivered_without_marking_read():
+    match = create_match(client)
+    url_a = f"/messaging/ws/{match['match_id']}?token={match['token_a']}"
+    url_b = f"/messaging/ws/{match['match_id']}?token={match['token_b']}"
+
+    with client.websocket_connect(url_a) as ws_a, client.websocket_connect(url_b) as ws_b:
+        ws_a.send_json({"type": "message", "body": "Juste reçu, pas encore lu."})
+        ws_a.receive_json()
+        ws_b.receive_json()
+
+        ws_b.send_json({"type": "delivered"})
+        notified = ws_a.receive_json()
+        assert notified["type"] == "delivered"
+        assert notified["deliverer_id"] == match["id_b"]
+
+    history = client.get(
+        f"/messaging/matches/{match['match_id']}/messages", headers=match["headers_a"]
+    ).json()
+    sent = next(m for m in history if m["body"] == "Juste reçu, pas encore lu.")
+    assert sent["delivered"] is True
+    assert sent["delivered_at"] is not None
+    assert sent["read"] is False
+    assert sent["read_at"] is None
 
 
 def test_websocket_typing_broadcasts_to_other_participant():

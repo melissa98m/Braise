@@ -12,9 +12,17 @@ class MessageOut(BaseModel):
     sender_id: uuid.UUID
     body: str
     created_at: datetime
+    # Vrai dès que le destinataire a effectivement reçu la trame WS de ce message — avant même de
+    # l'avoir lu (voir services/matches.message_is_delivered). `delivered_at` porte l'heure exacte
+    # de cet accusé ; toujours None quand `delivered` est faux.
+    delivered: bool
+    delivered_at: datetime | None = None
     # Vrai dès que le destinataire (jamais l'émetteur) a marqué le match comme lu après l'envoi
-    # de ce message — voir services/matches.message_is_read.
+    # de ce message — voir services/matches.message_is_read. `read_at` porte l'heure exacte de
+    # cette lecture (celle où le destinataire a marqué le match comme lu, pas forcément le moment
+    # où il a physiquement vu ce message précis) ; toujours None quand `read` est faux.
     read: bool
+    read_at: datetime | None = None
 
 
 class DailyQuestionOut(BaseModel):

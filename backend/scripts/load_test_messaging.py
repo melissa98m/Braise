@@ -18,6 +18,14 @@ de l'API d'inscription.
 Usage (le backend doit déjà tourner) :
     docker compose run --rm backend python scripts/load_test_messaging.py --matches 50
     docker compose run --rm backend python scripts/load_test_messaging.py --matches 200 --setup-concurrency 40
+
+Multi-instance (P22, docs/ROADMAP.md) : --backend-urls accepte une liste d'URLs séparées par des
+virgules. Chaque match assigne délibérément ses deux participants à deux URLs *différentes* de la
+liste (round-robin décalé, pas un tirage au hasard ni le DNS round-robin de `backend` sous
+`--scale`) — pour un test à 2 instances, chaque paire est donc garantie de traverser le relais
+Redis, jamais l'ancien chemin de livraison locale au process :
+    docker compose run --rm backend python scripts/load_test_messaging.py --matches 5 \
+        --backend-urls http://braise-backend-repl-a:8000,http://braise-backend-repl-b:8000
 """
 
 import argparse
@@ -29,33 +37,48 @@ import uuid
 import httpx
 import websockets
 
-BASE_URL = "http://backend:8000"
-WS_BASE_URL = "ws://backend:8000"
 
-
-async def _signup_and_publish(client: httpx.AsyncClient, display_name: str) -> tuple[str, str]:
+async def _signup_and_publish(
+    client: httpx.AsyncClient, base_url: str, display_name: str
+) -> tuple[str, str]:
     # Chiffres uniquement (jamais un hex brut, qui contient a-f) : schemas.auth.OTPRequest valide
     # maintenant le format du numéro.
     phone = "+336" + f"{uuid.uuid4().int % 10**8:08d}"
-    otp = await client.post(f"{BASE_URL}/auth/request-otp", json={"phone": phone})
+    otp = await client.post(f"{base_url}/auth/request-otp", json={"phone": phone})
     otp.raise_for_status()
     code = otp.json()["debug_code"]
     if code is None:
         raise RuntimeError("DEBUG_OTP doit être à true côté backend pour ce script.")
 
     token_response = await client.post(
-        f"{BASE_URL}/auth/verify-otp", json={"phone": phone, "code": code}
+        f"{base_url}/auth/verify-otp", json={"phone": phone, "code": code}
     )
     token_response.raise_for_status()
     token = token_response.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    me = await client.get(f"{BASE_URL}/auth/me", headers=headers)
+    me = await client.get(f"{base_url}/auth/me", headers=headers)
     me.raise_for_status()
     user_id = me.json()["id"]
 
+    # Écran de consentement RGPD, gate obligatoire avant tout accès au profil (services/
+    # consent.py) — ajouté après l'écriture initiale de ce script (P4.3, avant le consentement),
+    # jamais mis à jour depuis : sans lui, PUT /profiles/me/public répond 403. Même charge utile
+    # que tests/helpers.py::auth_token, qui reproduit le même parcours réel côté mobile.
+    consent = await client.post(
+        f"{base_url}/auth/consent",
+        headers=headers,
+        json={
+            "age_confirmed": True,
+            "cgu_accepted": True,
+            "privacy_acknowledged": True,
+            "sensitive_data_consented": True,
+        },
+    )
+    consent.raise_for_status()
+
     publish = await client.put(
-        f"{BASE_URL}/profiles/me/public",
+        f"{base_url}/profiles/me/public",
         headers=headers,
         json={
             "display_name": display_name,
@@ -69,20 +92,26 @@ async def _signup_and_publish(client: httpx.AsyncClient, display_name: str) -> t
     return token, user_id
 
 
-async def create_match_pair(client: httpx.AsyncClient, index: int) -> dict:
-    token_a, id_a = await _signup_and_publish(client, f"Charge A{index}")
-    token_b, id_b = await _signup_and_publish(client, f"Charge B{index}")
+async def create_match_pair(
+    client: httpx.AsyncClient, index: int, base_url_a: str, base_url_b: str
+) -> dict:
+    # base_url_a/b : la même base Postgres/Redis est partagée par toutes les instances (voir
+    # docker-compose.yml), donc peu importe laquelle sert les appels REST — mais utiliser celle
+    # assignée à chaque participant simule fidèlement "chaque utilisateur parle à SON instance",
+    # pas seulement sa connexion WebSocket plus bas.
+    token_a, id_a = await _signup_and_publish(client, base_url_a, f"Charge A{index}")
+    token_b, id_b = await _signup_and_publish(client, base_url_b, f"Charge B{index}")
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
     like_a = await client.post(
-        f"{BASE_URL}/discovery/swipe",
+        f"{base_url_a}/discovery/swipe",
         headers=headers_a,
         json={"to_user_id": id_b, "decision": "like"},
     )
     like_a.raise_for_status()
     like_b = await client.post(
-        f"{BASE_URL}/discovery/swipe",
+        f"{base_url_b}/discovery/swipe",
         headers=headers_b,
         json={"to_user_id": id_a, "decision": "like"},
     )
@@ -90,11 +119,18 @@ async def create_match_pair(client: httpx.AsyncClient, index: int) -> dict:
     if not like_b.json()["matched"]:
         raise RuntimeError(f"Match #{index} : le swipe réciproque n'a pas matché.")
 
-    matches = await client.get(f"{BASE_URL}/discovery/matches", headers=headers_a)
+    matches = await client.get(f"{base_url_a}/discovery/matches", headers=headers_a)
     matches.raise_for_status()
     match_id = next(m["match_id"] for m in matches.json() if m["other_user_id"] == id_b)
 
-    return {"index": index, "match_id": match_id, "token_a": token_a, "token_b": token_b}
+    return {
+        "index": index,
+        "match_id": match_id,
+        "token_a": token_a,
+        "token_b": token_b,
+        "ws_url_a": base_url_a.replace("http://", "ws://").replace("https://", "wss://"),
+        "ws_url_b": base_url_b.replace("http://", "ws://").replace("https://", "wss://"),
+    }
 
 
 async def run_match_session(match: dict, timeout: float) -> dict:
@@ -106,8 +142,8 @@ async def run_match_session(match: dict, timeout: float) -> dict:
         "broadcast_seconds": None,
         "error": None,
     }
-    url_a = f"{WS_BASE_URL}/messaging/ws/{match['match_id']}?token={match['token_a']}"
-    url_b = f"{WS_BASE_URL}/messaging/ws/{match['match_id']}?token={match['token_b']}"
+    url_a = f"{match['ws_url_a']}/messaging/ws/{match['match_id']}?token={match['token_a']}"
+    url_b = f"{match['ws_url_b']}/messaging/ws/{match['match_id']}?token={match['token_b']}"
     try:
         connect_start = time.monotonic()
         async with websockets.connect(url_a) as ws_a, websockets.connect(url_b) as ws_b:
@@ -162,7 +198,24 @@ async def main() -> None:
         default=5.0,
         help="Délai max d'attente d'un message avant échec (secondes, défaut 5).",
     )
+    parser.add_argument(
+        "--backend-urls",
+        type=str,
+        default="http://backend:8000",
+        help=(
+            "URL(s) backend séparées par des virgules (défaut : http://backend:8000, une seule "
+            "instance). Avec plusieurs URLs, chaque match assigne ses deux participants à deux "
+            "URLs différentes — voir la docstring du module."
+        ),
+    )
     args = parser.parse_args()
+
+    backend_urls = [u.strip().rstrip("/") for u in args.backend_urls.split(",") if u.strip()]
+    if len(backend_urls) < 2:
+        print(f"Instance(s) backend : {backend_urls[0]} (une seule — pas de cas multi-instance testé)\n")
+    else:
+        print(f"Instances backend ({len(backend_urls)}) : {', '.join(backend_urls)}")
+        print("Chaque match assigne ses 2 participants à 2 instances différentes.\n")
 
     print(f"=== Test de charge messagerie — {args.matches} matchs concurrents ===\n")
 
@@ -171,8 +224,13 @@ async def main() -> None:
     semaphore = asyncio.Semaphore(args.setup_concurrency)
 
     async def _bounded_create(client: httpx.AsyncClient, index: int) -> dict:
+        # Décalage d'index (pas un tirage au hasard) : pour 2 instances, garantit que A et B
+        # tombent toujours sur des instances différentes, à chaque match — le scénario que ce
+        # test doit prouver, pas seulement une probabilité.
+        base_url_a = backend_urls[index % len(backend_urls)]
+        base_url_b = backend_urls[(index + 1) % len(backend_urls)]
         async with semaphore:
-            return await create_match_pair(client, index)
+            return await create_match_pair(client, index, base_url_a, base_url_b)
 
     async with httpx.AsyncClient(timeout=30) as client:
         matches = await asyncio.gather(

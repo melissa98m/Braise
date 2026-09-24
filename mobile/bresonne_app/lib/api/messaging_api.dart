@@ -49,6 +49,15 @@ class ReadEvent {
   final DateTime readAt;
 }
 
+/// `delivererId` a effectivement reçu la trame WS jusqu'à `deliveredAt` — distinct de `ReadEvent`
+/// (voir backend/CLAUDE.md, services/matches.mark_delivered) : sert à afficher "Reçu" avant "Lu"
+/// sur les messages qu'on a soi-même envoyés.
+class DeliveredEvent {
+  const DeliveredEvent(this.delivererId, this.deliveredAt);
+  final String delivererId;
+  final DateTime deliveredAt;
+}
+
 /// Connexion WebSocket au chat d'un match. Le token voyage en query string : un navigateur ne
 /// peut pas poser de header Authorization sur une poignée de main WebSocket (voir
 /// backend/CLAUDE.md, même contrainte des deux côtés).
@@ -66,9 +75,9 @@ class ChatSocket {
           WebSocketChannel.connect(
             Uri.parse('${ApiConfig.wsBaseUrl}/messaging/ws/$matchId?token=$token'),
           ) {
-    // Un seul flux brut, démultiplexé en 3 par type — le serveur tague déjà chaque frame
-    // ("message"/"typing"/"read", voir api/v1/messaging.py), donc pas besoin d'une classe
-    // d'union scellée pour ça.
+    // Un seul flux brut, démultiplexé par type — le serveur tague déjà chaque frame
+    // ("message"/"typing"/"read"/"delivered", voir api/v1/messaging.py), donc pas besoin d'une
+    // classe d'union scellée pour ça.
     final raw = _channel.stream
         .map((data) => jsonDecode(data as String) as Map<String, dynamic>)
         .asBroadcastStream();
@@ -84,16 +93,26 @@ class ChatSocket {
         .map(
           (json) => ReadEvent(json['reader_id'] as String, DateTime.parse(json['read_at'] as String)),
         );
+    _delivered = raw
+        .where((json) => json['type'] == 'delivered')
+        .map(
+          (json) => DeliveredEvent(
+            json['deliverer_id'] as String,
+            DateTime.parse(json['delivered_at'] as String),
+          ),
+        );
   }
 
   final StreamChannel<dynamic> _channel;
   late final Stream<ChatMessage> _messages;
   late final Stream<TypingEvent> _typing;
   late final Stream<ReadEvent> _reads;
+  late final Stream<DeliveredEvent> _delivered;
 
   Stream<ChatMessage> get messages => _messages;
   Stream<TypingEvent> get typingEvents => _typing;
   Stream<ReadEvent> get readEvents => _reads;
+  Stream<DeliveredEvent> get deliveredEvents => _delivered;
 
   void send(String body) {
     _channel.sink.add(jsonEncode({'type': 'message', 'body': body}));
@@ -105,6 +124,10 @@ class ChatSocket {
 
   void markRead() {
     _channel.sink.add(jsonEncode({'type': 'read'}));
+  }
+
+  void markDelivered() {
+    _channel.sink.add(jsonEncode({'type': 'delivered'}));
   }
 
   Future<void> close() => _channel.sink.close();
