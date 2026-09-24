@@ -16,14 +16,29 @@
 /// notion) : l'hôte y est fourni à la compilation via `--dart-define=API_HOST=<ip-lan>`
 /// (`flutter build apk --dart-define=API_HOST=192.168.1.39`), lu par `String.fromEnvironment`, qui
 /// prend le pas sur la dérivation web quand il est fourni.
+///
+/// `API_HOST` suppose que l'API est joignable au même hôte que la page, juste sur le port 8010 —
+/// vrai pour une IP LAN, faux pour un tunnel (devtunnels, ngrok...) où chaque port forwardé a son
+/// propre nom d'hôte et où la page est servie en https (donc un appel http:// est aussi bloqué en
+/// mixed content, pas seulement mal routé). `API_BASE_URL` prend le dessus sur tout le reste pour
+/// ce cas : une origine complète (`--dart-define=API_BASE_URL=https://dw8461v4-8010.uks1.devtunnels.ms`,
+/// le tunnel forwardé pour le port 8010 du backend, pas celui de la page elle-même) ; le WS en est
+/// dérivé en substituant juste le schéma (http→ws, https→wss).
 class ApiConfig {
   static const String _dartDefineHost = String.fromEnvironment('API_HOST');
+  static const String _dartDefineBaseUrl = String.fromEnvironment('API_BASE_URL');
 
   static String get _host {
     if (_dartDefineHost.isNotEmpty) return _dartDefineHost;
     return Uri.base.host.isEmpty ? 'localhost' : Uri.base.host;
   }
 
-  static String get httpBaseUrl => 'http://$_host:8010';
-  static String get wsBaseUrl => 'ws://$_host:8010';
+  static String get _baseUrl {
+    final override = _dartDefineBaseUrl;
+    if (override.isEmpty) return 'http://$_host:8010';
+    return override.endsWith('/') ? override.substring(0, override.length - 1) : override;
+  }
+
+  static String get httpBaseUrl => _baseUrl;
+  static String get wsBaseUrl => _baseUrl.replaceFirst(RegExp(r'^http'), 'ws');
 }

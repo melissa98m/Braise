@@ -176,6 +176,9 @@ services:
       # production statique, sans connexion de debug, ce qu'il faut pour un bêta-test réseau
       # local (voir README, "Bêta-test entre proches") — voir mobile/entrypoint.sh.
       MOBILE_MODE: ${MOBILE_MODE:-dev}
+      # Origine complète du backend quand un tunnel (devtunnels, ngrok...) est utilisé — voir
+      # mobile/entrypoint.sh et lib/api/api_config.dart. Vide par défaut (dérivation normale).
+      API_BASE_URL: ${API_BASE_URL:-}
     volumes:
       - ./mobile:/app
     ports:

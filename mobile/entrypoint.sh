@@ -27,10 +27,13 @@ flutter pub get
 # Un vrai build de production (`flutter build web`), servi en fichiers statiques sans aucune
 # connexion de debug, n'a pas ce problème — c'est aussi ce qu'il faudrait de toute façon pour un
 # vrai déploiement (docs/DEPLOYMENT.md), pas seulement un contournement pour la bêta.
+# API_BASE_URL (optionnel) : origine complète du backend (ex. un tunnel devtunnels/ngrok forwardé
+# sur le port 8010, distinct du tunnel de cette page) quand l'hôte de la page ne suffit pas à la
+# déduire — voir lib/api/api_config.dart pour pourquoi l'IP LAN seule ne marche pas dans ce cas.
 if [ "${MOBILE_MODE:-dev}" = "serve" ]; then
-  flutter build web
+  flutter build web --dart-define=API_BASE_URL="${API_BASE_URL:-}"
   echo "Bêta (build de production) servie sur http://0.0.0.0:5000 — build/web"
   exec python3 -m http.server 5000 --bind 0.0.0.0 --directory build/web
 fi
 
-flutter run -d web-server --web-port 5000 --web-hostname 0.0.0.0
+flutter run -d web-server --web-port 5000 --web-hostname 0.0.0.0 --dart-define=API_BASE_URL="${API_BASE_URL:-}"
