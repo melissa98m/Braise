@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from fastapi import (
@@ -22,6 +23,7 @@ from app.schemas.messaging import (
 )
 from app.services import matches as matches_service
 from app.services import messaging as messaging_service
+from app.services import notifications as notifications_service
 from app.ws.connection_manager import manager
 
 router = APIRouter(prefix="/messaging", tags=["messaging"])
@@ -133,6 +135,14 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
                 user = db.get(User, user_id)
                 message = messaging_service.create_message(db, user, match_id, body)
                 message_id, created_at, saved_body = message.id, message.created_at, message.body
+            # asyncio.to_thread : pywebpush est bloquant, chat_ws est async — jamais bloquer la
+            # boucle de réception WS dessus. Fire-and-forget (résultat jamais attendu) : un échec
+            # d'envoi push ne doit jamais retarder la livraison du message sur le socket déjà
+            # ouvert, qui est le mécanisme de livraison principal, le push n'étant qu'un rattrapage
+            # pour l'onglet fermé.
+            asyncio.create_task(
+                asyncio.to_thread(notifications_service.notify_new_message, match_id, user_id, saved_body)
+            )
             await manager.broadcast(
                 match_id,
                 {

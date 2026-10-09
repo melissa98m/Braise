@@ -75,6 +75,7 @@ class _BanAppealScreenState extends State<BanAppealScreen> {
 
   Future<void> _signOut() async {
     final services = context.read<AppServices>();
+    await services.pushSubscriptionService.disable(services.notificationsApi);
     await services.authController.signOut();
     if (!mounted) return;
     Navigator.of(

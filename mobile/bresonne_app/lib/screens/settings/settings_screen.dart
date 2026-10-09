@@ -69,14 +69,27 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Future<void> _setNotifPref(String key, bool value) async {
+    final services = context.read<AppServices>();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
     // Demander la permission ici (activation explicite d'une bascule), pas au chargement de
     // l'écran ni au démarrage de l'app : les navigateurs traitent une demande de permission hors
     // d'un geste utilisateur explicite comme du spam et la rejettent souvent d'office.
     if (value && mounted) {
-      await context.read<AppServices>().notificationsService.requestPermission();
+      await services.notificationsService.requestPermission();
     }
+    if (!mounted) return;
+    // Synchronise l'abonnement push réel (Web Push, voir lib/push/) avec les 3 préférences
+    // courantes — y compris quand `value` est false : le filtrage par catégorie vit côté serveur
+    // (PushSubscription.notify_*), pas dans un cache navigateur, donc désactiver une catégorie
+    // doit aussi mettre à jour la ligne côté serveur, pas seulement le booléen local. `sync` est
+    // silencieux si aucune permission n'a jamais été accordée (jamais de prompt ici).
+    await services.pushSubscriptionService.sync(
+      services.notificationsApi,
+      match: _notifMatch,
+      question: _notifQuestion,
+      messages: _notifMessages,
+    );
   }
 
   String _maskPhone(String phone) {
@@ -132,6 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
       return;
     }
+    await services.pushSubscriptionService.disable(services.notificationsApi);
     await services.authController.signOut();
     if (!mounted) return;
     Navigator.of(
@@ -141,6 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   Future<void> _signOut() async {
     final services = context.read<AppServices>();
+    await services.pushSubscriptionService.disable(services.notificationsApi);
     await services.authController.signOut();
     if (!mounted) return;
     Navigator.of(
@@ -244,9 +259,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 const SizedBox(height: BraiseSpacing.xxl),
                 _SectionLabel('NOTIFICATIONS'),
                 Text(
-                  // Notifications navigateur réelles (P9.1) uniquement quand l'app est ouverte —
-                  // pas de vraies notifications push (Service Worker), voir docs/V2_FEATURES.md.
-                  'Fonctionnent tant que l\'application est ouverte dans un onglet.',
+                  // Web Push réel (Service Worker, voir lib/push/) depuis ce palier — reçues même
+                  // onglet fermé, sur cet appareil (voir docs/V2_FEATURES.md §6).
+                  'Reçues même quand l\'application est fermée, sur cet appareil.',
                   style: textTheme.bodyMedium,
                 ),
                 const SizedBox(height: BraiseSpacing.sm),

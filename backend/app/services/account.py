@@ -9,6 +9,7 @@ from app.models.profile import PrivateProfile, PublicProfile
 from app.models.rating import Rating
 from app.models.report import Report
 from app.models.user import User
+from app.services import notifications as notifications_service
 from app.services import storage
 from app.services.matches import other_user_id
 
@@ -129,6 +130,12 @@ def delete_my_account(db: Session, user: User) -> None:
     db.query(Message).filter(Message.sender_id == user.id).update(
         {"body": "[message supprimé]"}
     )
+
+    # Un abonnement push oublié survivrait à la suppression du compte et continuerait de recevoir
+    # des notifications tant qu'il n'est pas détecté mort côté service de push (404/410) — la même
+    # ligne de raisonnement que la purge des photos privées ci-dessus, pas une donnée à laisser
+    # orpheline.
+    notifications_service.delete_all_subscriptions_for_user(db, user.id)
 
     now = datetime.now(timezone.utc)
     user.phone = f"deleted-{uuid.uuid4().hex}"

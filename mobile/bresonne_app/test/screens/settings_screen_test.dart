@@ -6,6 +6,7 @@
 import 'dart:convert';
 
 import 'package:bresonne_app/notifications/notifications_service.dart';
+import 'package:bresonne_app/push/push_subscription_service.dart';
 import 'package:bresonne_app/screens/onboarding/otp_screen.dart';
 import 'package:bresonne_app/screens/settings/settings_screen.dart';
 import 'package:bresonne_app/state/app_services.dart';
@@ -223,6 +224,66 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(permissionRequested, isFalse);
+  });
+
+  testWidgets('turning a notification preference on also syncs the push subscription', (
+    tester,
+  ) async {
+    await _useTallViewport(tester);
+    Map<String, dynamic>? postedBody;
+    final client = MockClient((request) async {
+      if (request.url.path == '/notifications/vapid-public-key') {
+        return _json({'public_key': 'fake-key'}, 200);
+      }
+      if (request.method == 'POST' && request.url.path == '/notifications/subscribe') {
+        postedBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return _json({'ok': true}, 200);
+      }
+      return http.Response('not found', 404);
+    });
+    final services = AppServices(
+      httpClient: client,
+      notificationsService: NotificationsService(requestPermission: () async => true),
+      pushSubscriptionService: PushSubscriptionService(
+        isPermissionGranted: () => true,
+        registerServiceWorker: () async {},
+        subscribe: (_) async =>
+            (endpoint: 'https://fcm.googleapis.com/x', p256dh: 'p', auth: 'a'),
+      ),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(Switch).last); // "Messages", false -> true
+    await tester.pumpAndSettle();
+
+    expect(postedBody, isNotNull);
+    expect(postedBody!['notify_messages'], isTrue);
+  });
+
+  testWidgets('signing out disables the push subscription first', (tester) async {
+    await _useTallViewport(tester);
+    var disableCalled = false;
+    final client = MockClient((_) async => http.Response('not found', 404));
+    final services = AppServices(
+      httpClient: client,
+      pushSubscriptionService: PushSubscriptionService(
+        unsubscribeAndReturnEndpoint: () async {
+          disableCalled = true;
+          return null;
+        },
+      ),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Se déconnecter'));
+    await tester.pumpAndSettle();
+
+    expect(disableCalled, isTrue);
+    expect(find.byType(OtpScreen), findsOneWidget);
   });
 
   testWidgets('exporting data shows the RGPD confirmation', (tester) async {

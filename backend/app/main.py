@@ -4,7 +4,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import admin, auth, discovery, health, messaging, moderation, profiles, subscriptions
+from app.api.v1 import (
+    admin,
+    auth,
+    discovery,
+    health,
+    messaging,
+    moderation,
+    notifications,
+    profiles,
+    subscriptions,
+)
 from app.core.config import get_settings
 
 app = FastAPI(title="Bresonne API", version="0.1.0")
@@ -26,6 +36,7 @@ app.include_router(messaging.router)
 app.include_router(moderation.router)
 app.include_router(subscriptions.router)
 app.include_router(admin.router)
+app.include_router(notifications.router)
 
 # Tableau de bord staff (interface de revue de modération humaine, C.1/C.2) : HTML/CSS/JS statique
 # servi par ce même conteneur, sur /staff — pas /admin, déjà pris par le routeur API ci-dessus.

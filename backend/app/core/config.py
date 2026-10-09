@@ -62,6 +62,20 @@ class Settings(BaseSettings):
     # donnée n'y est durablement stockée (voir docs/DPIA.md) : seul le relais pub/sub est utilisé.
     redis_url: str = "redis://redis:6379/0"
 
+    # Notifications push réelles (Web Push standard + VAPID, RFC 8291/8292) — remplace P9.1
+    # (notifications navigateur premier-plan uniquement), voir docs/V2_FEATURES.md §6. Off par
+    # défaut, même garde-fou que ollama_enabled ci-dessus : sans PUSH_ENABLED=true, aucun appel
+    # réseau vers un service de push de navigateur n'est jamais tenté, y compris en CI. Aucun
+    # service tiers payant : le service de push est celui déjà intégré au navigateur de la
+    # personne (inhérent au standard Web Push), pas une dépendance opérationnelle de ce projet —
+    # cohérent avec la contrainte "pas de Firebase" du cahier des charges.
+    push_enabled: bool = False
+    vapid_private_key: str
+    vapid_public_key: str
+    # Exigé par la RFC 8292 (contact joignable en cas de souci côté service de push) — une vraie
+    # adresse en prod, jamais une valeur bidon.
+    vapid_subject: str = "mailto:CHANGE_ME@example.com"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
