@@ -43,15 +43,15 @@ async def _signup_and_publish(
 ) -> tuple[str, str]:
     # Chiffres uniquement (jamais un hex brut, qui contient a-f) : schemas.auth.OTPRequest valide
     # maintenant le format du numéro.
-    phone = "+336" + f"{uuid.uuid4().int % 10**8:08d}"
-    otp = await client.post(f"{base_url}/auth/request-otp", json={"phone": phone})
+    email = f"load-{uuid.uuid4().hex}@example.com"
+    otp = await client.post(f"{base_url}/auth/request-otp", json={"email": email})
     otp.raise_for_status()
     code = otp.json()["debug_code"]
     if code is None:
         raise RuntimeError("DEBUG_OTP doit être à true côté backend pour ce script.")
 
     token_response = await client.post(
-        f"{base_url}/auth/verify-otp", json={"phone": phone, "code": code}
+        f"{base_url}/auth/verify-otp", json={"email": email, "code": code}
     )
     token_response.raise_for_status()
     token = token_response.json()["access_token"]

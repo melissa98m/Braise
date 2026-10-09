@@ -1,13 +1,13 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.helpers import auth_headers, unique_phone
+from tests.helpers import auth_headers, unique_email
 
 client = TestClient(app)
 
 
 def test_subscription_defaults_to_free():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     response = client.get("/subscriptions/me", headers=headers)
     assert response.status_code == 200
     body = response.json()
@@ -16,7 +16,7 @@ def test_subscription_defaults_to_free():
 
 
 def test_debug_activate_grants_premium():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     response = client.post("/subscriptions/debug-activate", headers=headers)
     assert response.status_code == 200
     body = response.json()
@@ -29,7 +29,7 @@ def test_debug_activate_grants_premium():
 
 
 def test_premium_badge_reflected_on_public_profile():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     client.put(
         "/profiles/me/public",
         headers=headers,
@@ -50,7 +50,7 @@ def test_premium_badge_reflected_on_public_profile():
 
 
 def test_cancel_keeps_premium_until_expiry():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     client.post("/subscriptions/debug-activate", headers=headers)
 
     response = client.post("/subscriptions/cancel", headers=headers)

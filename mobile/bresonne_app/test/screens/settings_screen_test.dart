@@ -60,7 +60,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('no phone restored yet shows a dash, notification defaults are respected', (
+  testWidgets('no email restored yet shows a dash, notification defaults are respected', (
     tester,
   ) async {
     await _useTallViewport(tester);
@@ -77,12 +77,12 @@ void main() {
     expect(switches[2].value, isFalse); // Messages
   });
 
-  testWidgets('the phone number is masked, keeping only the last 2 digits', (tester) async {
+  testWidgets('the email is masked, keeping the first letter and the domain', (tester) async {
     await _useTallViewport(tester);
     SharedPreferences.setMockInitialValues({'braise_token': 'token-1'});
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'u1', 'phone': '+33612345678', 'is_verified': true}, 200);
+        return _json({'id': 'u1', 'email': 'lea@example.com', 'is_verified': true}, 200);
       }
       return http.Response('not found', 404);
     });
@@ -92,7 +92,7 @@ void main() {
     await tester.pumpWidget(_harness(services));
     await tester.pumpAndSettle();
 
-    expect(find.text('••••••••••78'), findsOneWidget);
+    expect(find.text('l••@example.com'), findsOneWidget);
   });
 
   testWidgets('toggling a notification preference persists it', (tester) async {

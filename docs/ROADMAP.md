@@ -1143,6 +1143,22 @@ techniques : cahier des charges sections A, B, C, D.
   et hors périmètre de ce palier (redimensionner le pool ou limiter le débit d'inscription est une
   décision distincte du relais des messages).
 
+- [x] **P23 — Connexion par OTP email (remplace l'OTP téléphone).** Prérequis d'un test avec un
+  vrai groupe d'utilisateur·rice·s : avec `DEBUG_OTP=true`, le code était renvoyé à quiconque le
+  demandait, donc taper le numéro de quelqu'un d'autre suffisait à prendre son compte ; et un vrai
+  SMS est payant. L'email remplace complètement le téléphone (choix produit : aucun numéro collecté,
+  minimisation RGPD). Resend en SMTP en bêta/prod (offre gratuite), console ou Mailpit en local.
+  Sécurité renforcée au passage, au-delà de l'existant P6.1 : code haché (HMAC à clé) au lieu d'être
+  stocké en clair, table `otp_challenges` séparée (plus aucun compte créé avant une vérification
+  réussie), code à usage unique, plafonds par adresse (30 s, 5/heure) et par IP (Redis), réponse et
+  temps de réponse identiques qu'un compte existe ou non, et un validateur de démarrage qui refuse
+  une config dangereuse hors développement (`ENVIRONMENT=beta|production`). Détail dans
+  `CLAUDE.md`. Vérifié de bout en bout : vrai email reçu dans Mailpit via SMTP, parcours complet
+  dans Chrome (adresse invalide refusée côté client, code, « Modifier l'adresse », connexion avec
+  une casse différente retrouvant le bon compte). CGU, politique de confidentialité (+ copie in-app)
+  et DPIA mises à jour (Resend nommé comme seul sous-traitant, DPA et région UE à confirmer à la
+  souscription). 149/149 tests backend, 129/129 tests Flutter, `ruff`/`flutter analyze` propres.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

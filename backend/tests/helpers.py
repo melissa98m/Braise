@@ -2,18 +2,18 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 
-def unique_phone() -> str:
-    # Les tests tournent contre le vrai Postgres de dev (pas de base jetable) : un numéro
+def unique_email() -> str:
+    # Les tests tournent contre le vrai Postgres de dev (pas de base jetable) : une adresse
     # unique par appel évite les collisions avec les données laissées par un run précédent.
-    # Chiffres uniquement (jamais les lettres a-f d'un hex brut) : schemas.auth.OTPRequest/
-    # OTPVerify valident maintenant le format du numéro, un numéro de test doit rester réaliste.
-    return "+336" + f"{uuid.uuid4().int % 10**8:08d}"
+    # example.com (RFC 2606) plutôt que .test/.invalid : email-validator refuse ces derniers
+    # comme noms réservés, alors qu'example.com reste une adresse syntaxiquement valide.
+    return f"test-{uuid.uuid4().hex}@example.com"
 
 
-def auth_token(client, phone: str) -> str:
-    request = client.post("/auth/request-otp", json={"phone": phone})
+def auth_token(client, email: str) -> str:
+    request = client.post("/auth/request-otp", json={"email": email})
     code = request.json()["debug_code"]
-    verify = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
+    verify = client.post("/auth/verify-otp", json={"email": email, "code": code})
     token = verify.json()["access_token"]
     # Le vrai parcours mobile passe par l'écran de consentement juste après l'OTP, avant tout
     # accès au profil (voir services/consent.py, POST /auth/consent gate PUT /profiles/me/public)
@@ -32,8 +32,8 @@ def auth_token(client, phone: str) -> str:
     return token
 
 
-def auth_headers(client, phone: str) -> dict:
-    return {"Authorization": f"Bearer {auth_token(client, phone)}"}
+def auth_headers(client, email: str) -> dict:
+    return {"Authorization": f"Bearer {auth_token(client, email)}"}
 
 
 def create_published_user(
@@ -49,7 +49,7 @@ def create_published_user(
     max_distance_km: int | None = None,
     bio: str = "",
 ) -> tuple[dict, str]:
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     me = client.get("/auth/me", headers=headers).json()
     client.put(
         "/profiles/me/public",
@@ -80,8 +80,8 @@ def create_match(
     city_a: str | None = None,
     city_b: str | None = None,
 ) -> dict:
-    token_a = auth_token(client, unique_phone())
-    token_b = auth_token(client, unique_phone())
+    token_a = auth_token(client, unique_email())
+    token_b = auth_token(client, unique_email())
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
@@ -132,7 +132,7 @@ def create_match_with(client, other_headers: dict, other_id: str) -> dict:
     notent tous le même compte), ce que `create_match` seul ne permet pas puisqu'il crée
     systématiquement deux comptes neufs.
     """
-    token = auth_token(client, unique_phone())
+    token = auth_token(client, unique_email())
     headers = {"Authorization": f"Bearer {token}"}
     my_id = client.get("/auth/me", headers=headers).json()["id"]
 
@@ -193,17 +193,17 @@ def ban_user(client, victim_headers: dict, victim_id: str) -> None:
         assert response.status_code == 200
 
 
-def force_otp_requested_at(phone: str, seconds_ago: float) -> None:
+def force_otp_requested_at(email: str, seconds_ago: float) -> None:
     # Attendre MIN_RESEND_INTERVAL_SECONDS pour de vrai ralentirait chaque test qui vérifie le
     # comportement *après* la fenêtre de throttle : on recule directement `otp_requested_at` en
     # base, comme force_match_unlocked recule `unlocked_at` plutôt que d'attendre des jours réels.
     from app.db.session import SessionLocal
-    from app.models.user import User
+    from app.models.otp_challenge import OtpChallenge
 
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.phone == phone).one()
-        user.otp_requested_at = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+        challenge = db.query(OtpChallenge).filter(OtpChallenge.email == email).one()
+        challenge.requested_at = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
         db.commit()
     finally:
         db.close()

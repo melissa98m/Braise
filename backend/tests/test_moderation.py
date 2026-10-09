@@ -9,7 +9,7 @@ from tests.helpers import (
     create_published_user,
     force_match_unlocked,
     read_trust_score,
-    unique_phone,
+    unique_email,
 )
 
 client = TestClient(app)
@@ -60,7 +60,7 @@ def test_rating_once_per_match():
 
 def test_rating_requires_match_participant():
     match = create_match(client)
-    outsider_headers = auth_headers(client, unique_phone())
+    outsider_headers = auth_headers(client, unique_email())
     response = client.post(
         f"/moderation/matches/{match['match_id']}/rating",
         headers=outsider_headers,
@@ -182,7 +182,7 @@ def test_report_creation_and_listing():
 
 def test_report_requires_match_participant():
     match = create_match(client)
-    outsider_headers = auth_headers(client, unique_phone())
+    outsider_headers = auth_headers(client, unique_email())
     response = client.post(
         f"/moderation/matches/{match['match_id']}/report",
         headers=outsider_headers,

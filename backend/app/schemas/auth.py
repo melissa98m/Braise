@@ -1,29 +1,22 @@
-import re
-
-from pydantic import BaseModel, Field, field_validator
-
-# Le backend ne normalise jamais le numéro (comparaison exacte à chaque requête, voir
-# services/otp.py) — cette regex n'attrape donc qu'une saisie clairement invalide (lettres,
-# numéro tronqué...), pas un format que le backend imposerait lui-même. Même règle que
-# mobile/bresonne_app/lib/utils/validators.dart::validatePhoneNumber ; garder les deux
-# synchronisées si l'une change.
-_PHONE_PATTERN = re.compile(r"^\+?[0-9]{8,15}$")
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
-def _validate_phone(value: str) -> str:
-    digits_only = re.sub(r"[\s.\-()]", "", value.strip())
-    if not _PHONE_PATTERN.match(digits_only):
-        raise ValueError("Numéro de téléphone invalide.")
-    return value
+def _normalize_email(value: str) -> str:
+    # EmailStr a déjà validé le format (et mis le domaine en minuscules) ; on met aussi la partie
+    # locale en minuscules : "Lea@Gmail.com" et "lea@gmail.com" désignent la même boîte chez la
+    # quasi-totalité des fournisseurs, et deux comptes distincts pour la même personne seraient
+    # pires que l'hypothétique fournisseur sensible à la casse. Comparaison exacte ensuite
+    # partout (services/otp.py), jamais de `lower()` à refaire côté requête.
+    return value.strip().lower()
 
 
 class OTPRequest(BaseModel):
-    phone: str = Field(min_length=1)
+    email: EmailStr = Field(max_length=254)
 
-    @field_validator("phone")
+    @field_validator("email")
     @classmethod
-    def phone_is_valid(cls, value: str) -> str:
-        return _validate_phone(value)
+    def email_is_normalized(cls, value: str) -> str:
+        return _normalize_email(value)
 
 
 class OTPRequestResponse(BaseModel):
@@ -32,16 +25,16 @@ class OTPRequestResponse(BaseModel):
 
 
 class OTPVerify(BaseModel):
-    phone: str = Field(min_length=1)
+    email: EmailStr = Field(max_length=254)
     # Le code OTP fait toujours 6 chiffres (core/security.generate_otp_code) — un format
     # vérifiable avant même de toucher la base, plutôt que de laisser un simple mismatch faire
     # tout le travail pour une saisie qui n'a de toute façon aucune chance d'être correcte.
     code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
 
-    @field_validator("phone")
+    @field_validator("email")
     @classmethod
-    def phone_is_valid(cls, value: str) -> str:
-        return _validate_phone(value)
+    def email_is_normalized(cls, value: str) -> str:
+        return _normalize_email(value)
 
 
 class TokenResponse(BaseModel):

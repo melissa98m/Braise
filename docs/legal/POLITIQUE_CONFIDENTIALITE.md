@@ -23,7 +23,7 @@ Contact relatif aux données personnelles : bresonne@hotmail.com.
 
 | Donnée | Pourquoi | Base légale | Conservée jusqu'à |
 |---|---|---|---|
-| Numéro de téléphone + code de vérification | Créer et sécuriser votre compte (seul identifiant) | Exécution du contrat | Suppression du compte (anonymisé ensuite) |
+| Adresse email + code de vérification | Créer et sécuriser votre compte (seul identifiant) ; l'adresse ne sert qu'à vous envoyer vos codes de connexion, jamais à de la prospection | Exécution du contrat | Adresse : suppression du compte (anonymisée ensuite). Code : jamais stocké en clair (empreinte cryptographique uniquement), effacé dès son utilisation ou au plus tard à la demande suivante, valable 10 minutes |
 | Bio, centres d'intérêt, avatar généré | Votre profil public, le matching, et la question quotidienne du jeu des flammes (bio/ville/intérêts servent d'options réelles, bonnes ou leurres, proposées à l'*autre* participant d'un match — y compris à un utilisateur non apparié quand sa bio est piochée comme leurre, déjà visible de la même façon en découverte) | Exécution du contrat | Suppression du compte |
 | Date de naissance | Vérifier que vous avez 18 ans, calculer l'âge affiché (jamais la date elle-même) | Exécution du contrat, obligation légale (protection des mineurs) | Suppression du compte |
 | Genre et genre recherché (facultatifs) — la combinaison des deux relève de l'orientation sexuelle, une donnée sensible au sens RGPD | Filtres de base de la découverte que vous choisissez d'activer | Consentement explicite et dédié, recueilli séparément des CGU à l'inscription (case à cocher spécifique, jamais pré-cochée ni groupée avec les autres) | Suppression du compte |
@@ -78,14 +78,19 @@ Mangione, à des prestataires techniques et d'hébergement intervenant pour le c
 vendons pas vos données personnelles et ne les utilisons actuellement pas à des fins de publicité
 ciblée par des tiers.
 
-Pendant la phase de bêta actuelle, aucun sous-traitant commercial externe n'est utilisé : pas de
-fournisseur SMS réel (vérification simulée), pas de Firebase/Google, pas de service de modération
-externe — tout tourne sur notre propre infrastructure. Vos photos et messages ne sont jamais
+Un seul sous-traitant externe intervient dans le fonctionnement du service : **Resend** (Resend,
+Inc., États-Unis), qui achemine les emails contenant vos codes de connexion. Il ne reçoit que votre
+adresse email et le code à transmettre — jamais votre profil, vos photos ni vos messages. L'envoi
+est configuré sur sa région d'hébergement européenne ; Resend étant une société américaine, ce
+transfert est encadré par les garanties contractuelles de son accord de traitement des données
+(clauses contractuelles types de la Commission européenne). Aucun autre tiers commercial : pas de
+Firebase/Google, pas de service de modération externe — le reste tourne sur notre propre
+infrastructure. Vos photos et messages ne sont jamais
 utilisés pour entraîner un modèle autrement que sur des données déjà collectées avec votre
 consentement d'utilisation du service (le modèle de détection de commentaires abusifs n'analyse
 que le texte des notes, jamais vos messages privés ; le modèle local, optionnel, de formulation de
 la question quotidienne ne lit que votre prénom et votre bio, jamais votre identité complète, votre
-téléphone ou vos messages, et reste hébergé sur notre propre infrastructure).
+adresse email ou vos messages, et reste hébergé sur notre propre infrastructure).
 
 ## 6. Hébergement et infrastructure
 
@@ -119,8 +124,8 @@ droit de retirer un consentement lorsqu'un traitement repose sur celui-ci.
   envoyés, notes données et reçues, signalements) depuis Paramètres → Exporter mes données.
 - **Effacement** : supprimez votre compte à tout moment depuis Paramètres. Ce que ça fait
   précisément :
-  - votre profil public est vidé, vos photos privées supprimées, votre numéro de téléphone
-    remplacé par un identifiant anonyme ;
+  - votre profil public est vidé, vos photos privées supprimées, votre adresse email
+    remplacée par un identifiant anonyme ;
   - vos messages restent visibles pour vos interlocuteur·rice·s (leur conversation est aussi leur
     donnée), mais leur contenu est remplacé par un texte générique — votre message d'origine n'est
     plus lisible par personne ;

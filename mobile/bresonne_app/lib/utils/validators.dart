@@ -1,20 +1,19 @@
 // Validateurs de champs de formulaire partagés — un seul endroit pour la règle plutôt qu'une
 // regex ou un message d'erreur recopié à chaque écran.
 
-// Le backend (`services/otp.py`) ne valide ni ne normalise le numéro : il compare la chaîne
-// telle quelle à chaque requête, sans jamais la reformater. Cette regex n'attrape donc qu'une
-// saisie clairement invalide côté client (lettres, numéro trop court...) — elle n'impose pas un
-// format que le backend n'exige pas lui-même, pour ne jamais bloquer un numéro qui marcherait.
-final _phoneDigitsPattern = RegExp(r'^\+?[0-9]{8,15}$');
+// Volontairement permissif : le backend (`schemas/auth.py`, `EmailStr`) reste la seule vraie
+// validation. Ici on n'attrape qu'une saisie clairement invalide (pas d'arobase, pas de point dans
+// le domaine, espace au milieu) avant l'appel réseau — jamais une règle plus stricte que celle du
+// backend, pour ne pas bloquer une adresse qui marcherait.
+final _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
-/// `null` si `value` ressemble à un numéro de téléphone valide, sinon un message d'erreur en
-/// français prêt à afficher.
-String? validatePhoneNumber(String value) {
+/// `null` si `value` ressemble à une adresse email valide, sinon un message d'erreur en français
+/// prêt à afficher.
+String? validateEmail(String value) {
   final trimmed = value.trim();
-  if (trimmed.isEmpty) return 'Le numéro de téléphone est obligatoire.';
-  final digitsOnly = trimmed.replaceAll(RegExp(r'[\s.\-()]'), '');
-  if (!_phoneDigitsPattern.hasMatch(digitsOnly)) {
-    return 'Entrez un numéro de téléphone valide, ex. +33 6 12 34 56 78.';
+  if (trimmed.isEmpty) return "L'adresse email est obligatoire.";
+  if (!_emailPattern.hasMatch(trimmed)) {
+    return 'Entrez une adresse email valide, ex. prenom@exemple.fr.';
   }
   return null;
 }
@@ -25,7 +24,7 @@ final _otpCodePattern = RegExp(r'^[0-9]{6}$');
 /// peut vérifier avant même d'appeler l'API, plutôt que de laisser un backend 400 faire le travail.
 String? validateOtpCode(String value) {
   final trimmed = value.trim();
-  if (trimmed.isEmpty) return 'Entrez le code reçu par SMS.';
+  if (trimmed.isEmpty) return 'Entrez le code reçu par email.';
   if (!_otpCodePattern.hasMatch(trimmed)) {
     return 'Le code contient 6 chiffres.';
   }

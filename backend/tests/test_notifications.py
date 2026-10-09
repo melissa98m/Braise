@@ -6,7 +6,7 @@ from app.db.session import SessionLocal
 from app.main import app
 from app.models.push_subscription import PushSubscription
 from app.services.notifications import _is_subscription_dead
-from tests.helpers import auth_headers, unique_phone
+from tests.helpers import auth_headers, unique_email
 
 client = TestClient(app)
 
@@ -46,7 +46,7 @@ def test_unsubscribe_requires_auth():
 
 
 def test_subscribe_creates_a_subscription():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     payload = _subscribe_payload()
     response = client.post("/notifications/subscribe", headers=headers, json=payload)
     assert response.status_code == 200
@@ -54,7 +54,7 @@ def test_subscribe_creates_a_subscription():
 
 
 def test_subscribe_upserts_on_same_endpoint():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     endpoint = f"{_VALID_ENDPOINT_PREFIX}{uuid.uuid4().hex}"
     client.post("/notifications/subscribe", headers=headers, json=_subscribe_payload(endpoint))
     second_payload = _subscribe_payload(endpoint)
@@ -72,7 +72,7 @@ def test_subscribe_upserts_on_same_endpoint():
 
 
 def test_subscribe_rejects_disallowed_endpoint_host():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     response = client.post(
         "/notifications/subscribe", headers=headers, json=_subscribe_payload("https://evil.example/x")
     )
@@ -80,7 +80,7 @@ def test_subscribe_rejects_disallowed_endpoint_host():
 
 
 def test_subscribe_rejects_non_https_endpoint():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     response = client.post(
         "/notifications/subscribe",
         headers=headers,
@@ -90,7 +90,7 @@ def test_subscribe_rejects_non_https_endpoint():
 
 
 def test_unsubscribe_removes_subscription():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     endpoint = f"{_VALID_ENDPOINT_PREFIX}{uuid.uuid4().hex}"
     client.post("/notifications/subscribe", headers=headers, json=_subscribe_payload(endpoint))
     response = client.delete("/notifications/subscribe", headers=headers, params={"endpoint": endpoint})
@@ -99,7 +99,7 @@ def test_unsubscribe_removes_subscription():
 
 
 def test_unsubscribe_on_missing_endpoint_404s():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     response = client.delete(
         "/notifications/subscribe", headers=headers, params={"endpoint": "https://fcm.googleapis.com/x"}
     )
@@ -107,8 +107,8 @@ def test_unsubscribe_on_missing_endpoint_404s():
 
 
 def test_unsubscribe_requires_ownership():
-    headers_a = auth_headers(client, unique_phone())
-    headers_b = auth_headers(client, unique_phone())
+    headers_a = auth_headers(client, unique_email())
+    headers_b = auth_headers(client, unique_email())
     endpoint = f"{_VALID_ENDPOINT_PREFIX}{uuid.uuid4().hex}"
     client.post("/notifications/subscribe", headers=headers_a, json=_subscribe_payload(endpoint))
     response = client.delete("/notifications/subscribe", headers=headers_b, params={"endpoint": endpoint})
@@ -117,7 +117,7 @@ def test_unsubscribe_requires_ownership():
 
 
 def test_account_deletion_removes_push_subscriptions():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     endpoint = f"{_VALID_ENDPOINT_PREFIX}{uuid.uuid4().hex}"
     client.post("/notifications/subscribe", headers=headers, json=_subscribe_payload(endpoint))
     assert _count_subscriptions_for_endpoint(endpoint) == 1

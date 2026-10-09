@@ -97,6 +97,16 @@ services:
       redis:
         condition: service_healthy
 
+  # Boîte de réception de test (optionnelle, profil "mail") : attrape tous les emails envoyés en
+  # SMTP par le backend sans jamais les délivrer à l'extérieur — pour vérifier le vrai chemin
+  # d'envoi du code OTP en local (EMAIL_BACKEND=smtp, voir .env.example) sans compte Resend.
+  # Gratuit, local ; interface web sur http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.20
+    profiles: ["mail"]
+    ports:
+      - "127.0.0.1:8025:8025"
+
   adminer:
     image: adminer
     ports:

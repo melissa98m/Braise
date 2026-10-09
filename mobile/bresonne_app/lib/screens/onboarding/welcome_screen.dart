@@ -6,7 +6,7 @@ import '../legal/legal_screen.dart';
 import 'otp_screen.dart';
 
 /// Écran d'accueil — premier écran vu à l'installation, avant toute authentification. L'OTP
-/// téléphone ne distingue pas techniquement "créer un compte" et "se connecter" (le même
+/// par email ne distingue pas techniquement "créer un compte" et "se connecter" (le même
 /// `POST /auth/verify-otp` crée le compte au premier succès et connecte ensuite — voir
 /// `services/otp.py`) : les deux CTA ci-dessous mènent donc tous les deux à `OtpScreen`, sans
 /// paramètre de mode à lui passer. Les distinguer visuellement reste la bonne UX (attente

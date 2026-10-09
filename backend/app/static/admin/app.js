@@ -99,20 +99,20 @@ function showLoginError(message) {
 }
 
 function wireLogin() {
-  const phoneForm = document.getElementById("phone-form");
+  const emailForm = document.getElementById("email-form");
   const codeForm = document.getElementById("code-form");
   const debugCode = document.getElementById("debug-code");
-  let phone = "";
+  let email = "";
 
-  phoneForm.addEventListener("submit", async (event) => {
+  emailForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     showLoginError("");
-    phone = document.getElementById("phone-input").value.trim();
-    const submitButton = document.getElementById("phone-submit");
+    email = document.getElementById("email-input").value.trim().toLowerCase();
+    const submitButton = document.getElementById("email-submit");
     submitButton.disabled = true;
     try {
-      const result = await api("/auth/request-otp", { method: "POST", body: JSON.stringify({ phone }) });
-      phoneForm.hidden = true;
+      const result = await api("/auth/request-otp", { method: "POST", body: JSON.stringify({ email }) });
+      emailForm.hidden = true;
       codeForm.hidden = false;
       if (result && result.debug_code) {
         debugCode.textContent = `Code de test (DEBUG_OTP) : ${result.debug_code}`;
@@ -137,7 +137,7 @@ function wireLogin() {
     try {
       const tokenResult = await api("/auth/verify-otp", {
         method: "POST",
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({ email, code }),
       });
       token = tokenResult.access_token;
     } catch (err) {
@@ -155,7 +155,7 @@ function wireLogin() {
       enterDashboard(me);
     } catch (err) {
       // verify-otp a réussi (donc a déjà consommé le code) : le problème ici est l'accès, pas
-      // le code. Revenir à l'étape téléphone plutôt que de laisser le formulaire de code affiché
+      // le code. Revenir à l'étape adresse plutôt que de laisser le formulaire de code affiché
       // avec un code désormais invalide — le renvoyer produirait un "code invalide" trompeur qui
       // masque le vrai message (incident réel : un compte non-staff a vu ce piège en pratique).
       state.token = null;
@@ -170,9 +170,9 @@ function wireLogin() {
 }
 
 function resetLoginForm() {
-  document.getElementById("phone-form").hidden = false;
+  document.getElementById("email-form").hidden = false;
   document.getElementById("code-form").hidden = true;
-  document.getElementById("phone-form").reset();
+  document.getElementById("email-form").reset();
   document.getElementById("code-form").reset();
   document.getElementById("debug-code").hidden = true;
   showLoginError("");
@@ -356,7 +356,7 @@ function userSummaryCard(title, user) {
     el("h3", {}, [title]),
     el("dl", {}, [
       el("dt", {}, ["Nom affiché"]), el("dd", {}, [user.display_name || "—"]),
-      el("dt", {}, ["Téléphone"]), el("dd", {}, [user.phone || "—"]),
+      el("dt", {}, ["Email"]), el("dd", {}, [user.email || "—"]),
       el("dt", {}, ["Vérifié"]), el("dd", {}, [user.is_verified ? "Oui" : "Non"]),
       el("dt", {}, ["Banni"]), el("dd", {}, [user.is_banned ? "Oui" : "Non"]),
       el("dt", {}, ["Confiance"]), el("dd", {}, [
@@ -465,7 +465,7 @@ function renderReportDetail(detail) {
       onSubmit: async (decision, note) => {
         const banReported = banCheckbox.checked;
         const summary = banReported
-          ? `Marquer ce signalement "${statusLabel("reports", decision)}" et bannir ${detail.reported.display_name || detail.reported.phone} ?`
+          ? `Marquer ce signalement "${statusLabel("reports", decision)}" et bannir ${detail.reported.display_name || detail.reported.email} ?`
           : `Marquer ce signalement "${statusLabel("reports", decision)}" ?`;
         const confirmed = await confirmAction("Confirmer la décision", summary);
         if (!confirmed) return;
@@ -497,8 +497,8 @@ function renderBanAppealDetail(detail) {
       ],
       onSubmit: async (decision, note) => {
         const summary = decision === "overturned"
-          ? `Annuler le bannissement de ${detail.user.display_name || detail.user.phone} ? Le compte redeviendra immédiatement actif.`
-          : `Maintenir le bannissement de ${detail.user.display_name || detail.user.phone} ?`;
+          ? `Annuler le bannissement de ${detail.user.display_name || detail.user.email} ? Le compte redeviendra immédiatement actif.`
+          : `Maintenir le bannissement de ${detail.user.display_name || detail.user.email} ?`;
         const confirmed = await confirmAction("Confirmer la décision", summary);
         if (!confirmed) return;
         await submitDecision("ban_appeals", detail.id, "resolve", { decision, note });
@@ -569,7 +569,7 @@ async function submitDecision(queue, id, verb, payload) {
 function enterDashboard(me) {
   document.getElementById("login-view").hidden = true;
   document.getElementById("dashboard-view").hidden = false;
-  document.getElementById("staff-identity").textContent = me.display_name || me.phone || "";
+  document.getElementById("staff-identity").textContent = me.display_name || me.email || "";
   refreshCounts();
   selectTab("reports");
 }

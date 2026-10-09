@@ -3,7 +3,7 @@
 Application de rencontre où l'affinité précède le physique. Cahier des charges complet et
 maquettes fournis séparément ; voir `docs/ROADMAP.md` pour le plan d'exécution phase par phase,
 `docs/DESIGN_TOKENS.md` pour la charte graphique, et `docs/V2_FEATURES.md` pour ce qu'il reste à
-construire au-delà du MVP actuel (KYC, modération humaine, paiement/push/SMS réels, etc.).
+construire au-delà du MVP actuel (KYC, modération humaine, paiement réel, envoi d'email réel via Resend, etc.).
 
 ## Démarrer en local (gratuit, 100 % Docker)
 
@@ -37,6 +37,24 @@ docker compose --profile mobile up mobile
 ```
 
 - App : http://localhost:5000
+
+## Connexion par email (OTP)
+
+On se connecte avec une adresse email et un code à 6 chiffres reçu par email, sans mot de passe
+ni numéro de téléphone. Trois modes, choisis dans `.env` :
+
+- **Local par défaut** (`EMAIL_BACKEND=console`, `DEBUG_OTP=true`) : aucun email ne part, le code
+  s'affiche dans l'app (pré-rempli) et dans `docker compose logs backend`.
+- **Local avec une vraie boîte de test** : `docker compose --profile mail up -d mailpit`, puis
+  `EMAIL_BACKEND=smtp`, `SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_SECURITY=none`,
+  `SMTP_USERNAME=` (vide). Les emails arrivent sur http://localhost:8025, rien ne sort de la
+  machine.
+- **Bêta/prod** (Resend, voir `.env.prod.example`) : `EMAIL_BACKEND=smtp` sur
+  `smtp.resend.com:465`. Avec `ENVIRONMENT=beta` ou `production`, le backend refuse de démarrer
+  si `DEBUG_OTP=true` ou si un secret vaut encore une valeur d'exemple.
+
+Donner le rôle staff à un compte : `docker compose run --rm backend python scripts/grant_staff.py
+prenom@exemple.fr`.
 
 ## Bêta-test entre proches sur le réseau local
 
@@ -72,7 +90,7 @@ machine, pas `localhost` (qui sur son appareil ne désignerait que lui-même).
 L'app Flutter (`lib/api/api_config.dart`) résout déjà l'hôte de l'API dynamiquement depuis l'URL
 de la page (`Uri.base.host`) : aucune modification de code nécessaire pour ça, seulement les
 variables d'environnement ci-dessus. `DEBUG_OTP=true` reste actif (défaut de `.env.example`) : le
-code de vérification s'affiche directement dans l'app, pas besoin d'un vrai SMS pour ce type de
+code de vérification s'affiche directement dans l'app, pas besoin d'un vrai email pour ce type de
 bêta.
 
 ### Données de test
@@ -86,11 +104,11 @@ docker compose run --rm backend python scripts/seed_beta_tester.py
 ```
 
 Crée 6 profils candidats variés (genre, âge, ville — de quoi tester les filtres de découverte,
-voir `services/geo.py`) et un compte testeur (`+33600000099`) déjà dans un état riche : un match
+voir `services/geo.py`) et un compte testeur (`testeur@example.com`) déjà dans un état riche : un match
 déjà débloqué avec 2 messages non lus et une vraie photo privée visible (`Alice`), un match en
 cours à 2/5 flammes avec la question du jour encore disponible (`Bruno`), et 4 profils jamais
-swipés pour tester la découverte/le matching à froid. Se connecter avec `+33600000099` — le code
-s'affiche directement dans l'app (`DEBUG_OTP=true`). Idempotent pour les profils (même numéro à
+swipés pour tester la découverte/le matching à froid. Se connecter avec `testeur@example.com` — le code
+s'affiche directement dans l'app (`DEBUG_OTP=true`). Idempotent pour les profils (même adresse à
 chaque lancement) ; le déblocage forcé et le flame_count partiel sont réappliqués à chaque
 exécution, sans conséquence si déjà en place.
 

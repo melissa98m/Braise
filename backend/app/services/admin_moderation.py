@@ -35,7 +35,7 @@ def user_summary(db: Session, user_id: uuid.UUID) -> dict:
     trust = compute_trust_score(db, user_id)
     return {
         "id": user_id,
-        "phone": user.phone if user else None,
+        "email": user.email if user else None,
         "display_name": profile.display_name if profile else None,
         "is_verified": bool(user.is_verified) if user else False,
         "is_banned": bool(user.is_banned) if user else False,

@@ -22,13 +22,13 @@ class AuthController extends ChangeNotifier {
 
   String? _token;
   String? _userId;
-  String? _phone;
+  String? _email;
   AuthStatus _status = AuthStatus.unknown;
   bool _consentsGiven = false;
 
   String? get token => _token;
   String? get userId => _userId;
-  String? get phone => _phone;
+  String? get email => _email;
   AuthStatus get status => _status;
   // Reflète `GET /auth/me`'s `consents_given` (voir services/consent.py) — un compte `signedIn`
   // sans les 4 consentements RGPD doit passer par ConsentScreen avant tout le reste, y compris
@@ -54,7 +54,7 @@ class AuthController extends ChangeNotifier {
     try {
       final me = await _authApi.me();
       _userId = me['id'] as String;
-      _phone = me['phone'] as String;
+      _email = me['email'] as String;
       _consentsGiven = me['consents_given'] as bool? ?? false;
       _status = AuthStatus.signedIn;
     } on ApiException catch (e) {
@@ -73,7 +73,7 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> requestOtp(String phone) => _authApi.requestOtp(phone);
+  Future<String?> requestOtp(String email) => _authApi.requestOtp(email);
 
   /// Les 4 cases de [ConsentScreen] sont toutes obligatoires pour continuer (bouton désactivé
   /// tant qu'elles ne sont pas cochées) — cette méthode n'est donc appelée qu'une fois les 4 déjà
@@ -88,15 +88,15 @@ class AuthController extends ChangeNotifier {
     if (complete) markConsentsGiven();
   }
 
-  Future<void> verifyOtp(String phone, String code) async {
-    final token = await _authApi.verifyOtp(phone, code);
+  Future<void> verifyOtp(String email, String code) async {
+    final token = await _authApi.verifyOtp(email, code);
     _token = token;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
     try {
       final me = await _authApi.me();
       _userId = me['id'] as String;
-      _phone = me['phone'] as String;
+      _email = me['email'] as String;
       _consentsGiven = me['consents_given'] as bool? ?? false;
       _status = AuthStatus.signedIn;
     } on ApiException catch (e) {
@@ -111,7 +111,7 @@ class AuthController extends ChangeNotifier {
   Future<void> signOut() async {
     _token = null;
     _userId = null;
-    _phone = null;
+    _email = null;
     _consentsGiven = false;
     _status = AuthStatus.signedOut;
     final prefs = await SharedPreferences.getInstance();

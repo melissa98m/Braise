@@ -68,7 +68,7 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   `services/`, not in the router or in `core/`. `access_token_expire_minutes` (`core/config.py`,
   `.env`) is 21600 (15 days), not a short session-style expiry — staying signed in across app
   restarts matters more for this product than a tight expiry window, and re-auth past that point
-  is just the phone OTP flow again (`WelcomeScreen` → `OtpScreen`), never a silent dead end. No
+  is just the email OTP flow again (`WelcomeScreen` → `OtpScreen`), never a silent dead end. No
   separate refresh token: one long-lived JWT is the simplest thing that works, revisit only if a
   real need for shorter-lived tokens shows up (`docs/V2_FEATURES.md`).
 - `db/base.py` (declarative `Base`) and `db/session.py` (`get_db()` FastAPI dependency) are the only
@@ -444,7 +444,7 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   future need. `get_current_staff_user` follows `get_current_user_even_if_banned`'s exact shape:
   goes through `user_from_token` (a banned staff account still loses access) then 403s
   `"Accès réservé au personnel."` when `not is_staff`. No self-service way to grant it — Adminer,
-  or `backend/scripts/grant_staff.py <phone>` as a shortcut, matching this project's existing
+  or `backend/scripts/grant_staff.py <email>` as a shortcut, matching this project's existing
   "no role-management UI while there's only one privilege level" stance. Three queues, each with
   real decisions that change state rather than just archiving: `POST /admin/reports/{id}/resolve`
   (`founded`/`unfounded`, with an opt-in `ban_reported` — not automatic on every founded report),
@@ -469,7 +469,7 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   the API prefix, no collision) rather than as a Flutter screen, matching `docs/V2_FEATURES.md`
   §2's own suggestion ("a separate web page, faster to iterate for low-traffic internal use") and
   this project's "everything in Docker, no extra tooling" constraint; since it's same-origin,
-  nothing was added to `CORS_ORIGINS`. Logs in through the same phone+OTP flow as the mobile app,
+  nothing was added to `CORS_ORIGINS`. Logs in through the same email+OTP flow as the mobile app,
   token kept in `sessionStorage` rather than `localStorage` (shorter exposure window for a
   privileged credential, at the cost of more frequent re-login — a deliberate tradeoff, not an
   oversight). CSP is strict (`default-src 'self'`, no third-party scripts/fonts) and set both via
@@ -526,8 +526,8 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   retention figure; don't quote it outside internal debugging without that caveat attached.
 - `backend/scripts/seed_test_data.py` publishes 6 fixed personas (phone, profile, `city` — the
   last for exercising the P9.3 distance filter without hand-publishing 6 different profiles) via
-  the real HTTP API, not direct DB writes — idempotent, since each persona has a fixed phone
-  number and OTP verify just re-authenticates the same account rather than creating a duplicate.
+  the real HTTP API, not direct DB writes — idempotent, since each persona has a fixed email
+  address (`alice@example.com`...) and OTP verify just re-authenticates the same account rather than creating a duplicate.
   `seed_persona()` returns `(token, headers, user_id)` specifically so
   `backend/scripts/seed_beta_tester.py` can reuse an already-open session instead of requesting a
   second OTP for the same number moments later — the P6.1 throttle (`MIN_RESEND_INTERVAL_SECONDS`)
@@ -543,27 +543,49 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   real `ChatSocket`-equivalent WebSocket connection (`websockets`, matching the pattern in
   `load_test_messaging.py`), not inserted directly into the `messages` table, so the same
   read/unread and broadcast logic a real conversation goes through actually ran.
-- **OTP brute-force protection (P6.1)**: `services/otp.py` had no limits at all — a 6-digit code
-  (10^6 possibilities) valid for `OTP_TTL_MINUTES = 10` with unlimited verify attempts is a real
-  account-takeover path, not a robustness nitpick, given anyone who learns a victim's phone number
-  could script the whole keyspace within the validity window. Two independent limits, both on
-  `User` (`otp_requested_at`, `otp_attempts` — no Redis/external store, matches this project's
-  "everything in Postgres" pattern): `MIN_RESEND_INTERVAL_SECONDS = 30` rejects a repeated
-  `request_otp` for the same phone with 429 before that window elapses (raised as `HTTPException`
-  straight from the service, same pattern as `discovery.py`/`moderation.py`); `MAX_OTP_ATTEMPTS =
-  5` neutralizes the *current* code (`otp_code` cleared) once that many `verify_otp` calls for it
-  have failed — deliberately not just a rejection: without clearing the code, a correct code
-  submitted after the limit would still work, so `MAX_OTP_ATTEMPTS` would only slow an attacker
-  down instead of stopping them. Both counters reset on every fresh `request_otp` call, so a
-  legitimate user who mistypes a code isn't punished by their *next* code. No mobile changes
-  needed — `OtpScreen` has no resend button while a code is pending (`_requestOtp`'s button is
-  disabled via `_loading` during the call), so the throttle path isn't reachable from the current
-  UI at all; it exists purely as a server-side backstop.
+- **Email OTP login (P23 — replaced the phone OTP; requested directly to make a real user-group
+  test possible without a paid SMS provider)**: `User.email` (normalized to lowercase in
+  `schemas/auth.py`, validated by `EmailStr`) is the only login identifier — no phone is collected
+  anywhere anymore. The pending code lives in its own `otp_challenges` table
+  (`models/otp_challenge.py`), never on `User`: a `User` is only created by a *successful*
+  `verify_otp`, so requesting a code for an arbitrary address never creates an account (the old
+  phone flow inserted a `User` per typed number). The code is never stored in clear —
+  `core/security.hash_otp_code` is an HMAC-SHA256 keyed by a `JWT_SECRET`-derived key (a plain
+  hash of a 6-digit code would reverse in milliseconds), compared with `hmac.compare_digest`. The
+  challenge row is deleted on success (single-use). Rate limits, all raising 429 from the service:
+  `MIN_RESEND_INTERVAL_SECONDS = 30` and `MAX_REQUESTS_PER_EMAIL_PER_HOUR = 5` per address
+  (on the challenge row), `MAX_OTP_ATTEMPTS = 5` per code (code neutralized at the limit — a
+  correct code after that must still fail, otherwise the limit only slows brute force down), and
+  `Settings.otp_requests_per_ip_per_hour` per IP via a Redis `INCR`/`EXPIRE` counter — **0 in
+  `.env.example`/CI on purpose** (the test suite and seed/load scripts create hundreds of accounts
+  from one IP), 20 in `.env.prod.example`; fails open on a Redis error since the per-address
+  limits in Postgres still hold. `request-otp` returns the same message whether an account exists
+  or not, and sends the email in a `BackgroundTasks` task (`services/email.send_otp_email`, never
+  raises, logs the code only in `console` mode) so neither status nor timing reveals anything.
+  `EMAIL_BACKEND=console` (default) only logs; `smtp` is plain `smtplib` — Resend in prod
+  (`smtp.resend.com:465`, user `resend`, password = API key), Mailpit locally (`mail` Compose
+  profile, inbox on `localhost:8025`). `Settings.environment` (`development`/`beta`/`production`)
+  gates a startup validator: outside development the backend refuses to boot with
+  `DEBUG_OTP=true`, `EMAIL_BACKEND=console`, `SMTP_SECURITY=none`, a short/placeholder
+  `JWT_SECRET` or any `CHANGE_ME`/`example.com` secret — and in `production` (not `beta`, where
+  testers are meant to try Premium) with the debug subscription endpoint on. `/docs` is only
+  served in development. Account deletion tombstones the address as
+  `deleted-{uuid}@deleted.invalid` (`.invalid` is refused by `EmailStr`, so it can never log in
+  again) and deletes any pending challenge; the original address can then sign up fresh. The
+  migration backfilled pre-existing dev rows with `legacy-{id}@legacy.invalid` (hand-added data
+  step on top of the autogenerated diff — a NOT NULL column can't be added to a populated table
+  otherwise). Tests use `tests.helpers.unique_email()` (`@example.com`, since email-validator
+  rejects `.test`/`.invalid` as special-use). `OtpScreen` gained "Modifier l'adresse ou renvoyer
+  un code" (a typo in an email is common and the field locks once a code is requested) and now
+  scrolls its content above a pinned button — step 2 overflowed a 900px-tall phone viewport.
+  Writing the email switch also exposed a latent bug in `seed_test_data.seed_persona`/
+  `seed_beta_tester._auth`: neither ever called `POST /auth/consent`, invisible while the personas
+  already existed with an old consent, a hard 403 once they were recreated from scratch.
 
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):
-- OTP: no SMS provider. `services/otp.py` logs the code to stdout and the API returns it directly
-  in the response body when `DEBUG_OTP=true` in `.env`.
+- OTP: email, not SMS (see P23 above) — free locally (`EMAIL_BACKEND=console`, the code is logged
+  and returned in the response body when `DEBUG_OTP=true`), Resend's free tier in beta/prod.
 - Payments/subscriptions: real free/premium logic exists (Phase 5), but activation is
   `POST /subscriptions/debug-activate` rather than a real purchase — no StoreKit/Play Billing
   integration until there's an actual store build to attach it to (cahier des charges D.8).
@@ -1093,8 +1115,8 @@ to alphabetize away. `app/migrations/` is excluded entirely — autogenerated, n
 
 **Tests run against the real dev Postgres/MinIO, not a throwaway database** — there's no
 per-test transaction rollback or fixture teardown. Any test that creates a `User` (i.e. touches
-auth) must call `tests.helpers.unique_phone()` rather than a hardcoded number, or it will pass once
-and then fail on every rerun once that phone number already has data attached to it.
+auth) must call `tests.helpers.unique_email()` rather than a hardcoded address, or it will pass once
+and then fail on every rerun once that address already has data attached to it.
 `tests/helpers.py` also has `create_published_user`, `create_match`/`create_match_with` (a second
 user matched to an *existing* one, for "N raters, one target" scenarios), and
 `force_match_unlocked` (writes `Match.flame_count`/`unlocked_at` directly — reaching

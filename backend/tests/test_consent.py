@@ -1,22 +1,22 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.helpers import auth_token, unique_phone
+from tests.helpers import auth_token, unique_email
 
 client = TestClient(app)
 
 
-def _verify_only(phone: str) -> str:
+def _verify_only(email: str) -> str:
     """Comme `tests.helpers.auth_token`, mais sans l'appel automatique à `POST /auth/consent` —
     pour tester le comportement d'un compte qui n'a encore rien consenti."""
-    request_response = client.post("/auth/request-otp", json={"phone": phone})
+    request_response = client.post("/auth/request-otp", json={"email": email})
     code = request_response.json()["debug_code"]
-    verify_response = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
+    verify_response = client.post("/auth/verify-otp", json={"email": email, "code": code})
     return verify_response.json()["access_token"]
 
 
 def test_new_account_has_no_consent_and_cannot_publish_profile():
-    headers = {"Authorization": f"Bearer {_verify_only(unique_phone())}"}
+    headers = {"Authorization": f"Bearer {_verify_only(unique_email())}"}
 
     me = client.get("/auth/me", headers=headers)
     assert me.json()["consents_given"] is False
@@ -30,7 +30,7 @@ def test_new_account_has_no_consent_and_cannot_publish_profile():
 
 
 def test_partial_consent_is_not_complete():
-    headers = {"Authorization": f"Bearer {_verify_only(unique_phone())}"}
+    headers = {"Authorization": f"Bearer {_verify_only(unique_email())}"}
 
     partial = client.post(
         "/auth/consent",
@@ -49,7 +49,7 @@ def test_partial_consent_is_not_complete():
 
 
 def test_full_consent_unlocks_profile_publish():
-    headers = {"Authorization": f"Bearer {_verify_only(unique_phone())}"}
+    headers = {"Authorization": f"Bearer {_verify_only(unique_email())}"}
 
     full = client.post(
         "/auth/consent",
@@ -73,7 +73,7 @@ def test_full_consent_unlocks_profile_publish():
 
 
 def test_consent_timestamps_do_not_move_once_set():
-    headers = {"Authorization": f"Bearer {_verify_only(unique_phone())}"}
+    headers = {"Authorization": f"Bearer {_verify_only(unique_email())}"}
     first = client.post(
         "/auth/consent",
         headers=headers,
@@ -88,5 +88,5 @@ def test_consent_timestamps_do_not_move_once_set():
 
 
 def test_helper_auth_token_already_grants_full_consent():
-    headers = {"Authorization": f"Bearer {auth_token(client, unique_phone())}"}
+    headers = {"Authorization": f"Bearer {auth_token(client, unique_email())}"}
     assert client.get("/auth/me", headers=headers).json()["consents_given"] is True

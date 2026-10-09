@@ -17,9 +17,18 @@ from app.api.v1 import (
 )
 from app.core.config import get_settings
 
-app = FastAPI(title="Bresonne API", version="0.1.0")
-
 settings = get_settings()
+# Swagger/OpenAPI seulement en développement : en bêta/prod, la carte complète de l'API (schémas,
+# endpoints de debug éventuels) n'a pas à être servie à n'importe quel visiteur.
+_api_docs = settings.is_development
+app = FastAPI(
+    title="Bresonne API",
+    version="0.1.0",
+    docs_url="/docs" if _api_docs else None,
+    redoc_url="/redoc" if _api_docs else None,
+    openapi_url="/openapi.json" if _api_docs else None,
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,

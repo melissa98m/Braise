@@ -12,7 +12,7 @@ import '../profile/profile_setup_screen.dart';
 import '../root_shell.dart';
 import 'consent_screen.dart';
 
-/// Écran 01 — adapté à ce qui existe réellement côté backend (OTP téléphone), pas le scan de
+/// Écran 01 — adapté à ce qui existe réellement côté backend (OTP par email), pas le scan de
 /// pièce d'identité de la maquette : il n'y a pas de KYC fort dans ce MVP (cahier des charges
 /// D.6, stub gratuit/local — voir CLAUDE.md).
 class OtpScreen extends StatefulWidget {
@@ -23,7 +23,7 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMixin {
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _codeController = TextEditingController();
   bool _codeSent = false;
   bool _loading = false;
@@ -64,9 +64,9 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _requestOtp() async {
-    final phoneError = validatePhoneNumber(_phoneController.text);
-    if (phoneError != null) {
-      setState(() => _error = phoneError);
+    final emailError = validateEmail(_emailController.text);
+    if (emailError != null) {
+      setState(() => _error = emailError);
       return;
     }
     setState(() {
@@ -75,7 +75,7 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
     });
     try {
       final auth = context.read<AuthController>();
-      final debugCode = await auth.requestOtp(_phoneController.text.trim());
+      final debugCode = await auth.requestOtp(_emailController.text.trim());
       setState(() {
         _codeSent = true;
         _debugCode = debugCode;
@@ -86,6 +86,15 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  void _changeEmail() {
+    setState(() {
+      _codeSent = false;
+      _debugCode = null;
+      _error = null;
+      _codeController.clear();
+    });
   }
 
   Future<void> _verifyOtp() async {
@@ -103,7 +112,7 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
     });
     try {
       final auth = context.read<AuthController>();
-      await auth.verifyOtp(_phoneController.text.trim(), _codeController.text.trim());
+      await auth.verifyOtp(_emailController.text.trim(), _codeController.text.trim());
       if (!mounted) return;
       // Consentement RGPD (ConsentScreen) avant absolument tout le reste, y compris pour un
       // compte banni (BanAppealScreen reste atteignable ensuite via _AuthGate, ce chemin-ci ne
@@ -158,120 +167,150 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(BraiseSpacing.xxl),
+          // Contenu défilant au-dessus d'un bouton toujours visible en bas : l'étape 2 (champ
+          // code, aide « courriers indésirables », « Modifier l'adresse », bannière debug)
+          // dépasse la hauteur d'un petit téléphone — et de n'importe lequel clavier ouvert. Une
+          // Column fixe avec Spacer débordait alors simplement, bouton compris.
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: BraiseSpacing.lg),
-              // 2 étapes (numéro, code) — mêmes segments pleins/vides que la maquette 3 étapes,
-              // jamais seulement une couleur pour indiquer la progression.
-              Row(
-                children: [
-                  Expanded(
-                    child: AnimatedContainer(
-                      duration: animDuration,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: tokens.braiseInk,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: BraiseSpacing.sm),
-                  Expanded(
-                    child: AnimatedContainer(
-                      duration: animDuration,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: _codeSent ? tokens.braiseInk : tokens.borderHairline,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: BraiseSpacing.sm),
-                  Text(
-                    _codeSent ? '2/2' : '1/2',
-                    style: textTheme.labelSmall?.copyWith(color: tokens.inkSecondary),
-                  ),
-                ],
-              ),
-              const SizedBox(height: BraiseSpacing.xxl),
-              Text(
-                'On vérifie que vous êtes bien vous.',
-                style: textTheme.displayLarge?.copyWith(fontSize: 30, height: 34 / 30),
-              ),
-              const SizedBox(height: BraiseSpacing.lg),
-              Text(
-                "Un code est envoyé par SMS pour confirmer votre numéro. Aucune pièce d'identité "
-                "n'est demandée à ce stade.",
-                style: textTheme.bodyLarge?.copyWith(color: tokens.inkSecondary),
-              ),
-              const SizedBox(height: BraiseSpacing.xxl),
-              TextField(
-                controller: _phoneController,
-                enabled: !_codeSent,
-                keyboardType: TextInputType.phone,
-                autofillHints: const [AutofillHints.telephoneNumber],
-                // `labelText` distinct du `hintText` (l'exemple de format) : sans lui, le repère
-                // visuel du champ disparaissait dès la première frappe — repéré en revoyant les
-                // 9 champs de texte de l'app, un seul motif partout, jamais un oubli isolé.
-                decoration: const InputDecoration(
-                  labelText: 'Numéro de téléphone',
-                  hintText: '+33 6 12 34 56 78',
-                ),
-              ),
-              AnimatedSize(
-                duration: animDuration,
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: !_codeSent
-                    ? const SizedBox(width: double.infinity)
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: BraiseSpacing.lg),
+                      // 2 étapes (numéro, code) — mêmes segments pleins/vides que la maquette 3 étapes,
+                      // jamais seulement une couleur pour indiquer la progression.
+                      Row(
                         children: [
-                          const SizedBox(height: BraiseSpacing.lg),
-                          AnimatedBuilder(
-                            animation: _shakeOffset,
-                            builder: (context, child) =>
-                                Transform.translate(offset: Offset(_shakeOffset.value, 0), child: child),
-                            child: TextField(
-                              controller: _codeController,
-                              keyboardType: TextInputType.number,
-                              autofillHints: const [AutofillHints.oneTimeCode],
-                              decoration: const InputDecoration(labelText: 'Code reçu par SMS'),
+                          Expanded(
+                            child: AnimatedContainer(
+                              duration: animDuration,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: tokens.braiseInk,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
-                          if (_debugCode != null)
-                            Container(
-                              margin: const EdgeInsets.only(top: BraiseSpacing.md),
-                              padding: const EdgeInsets.all(BraiseSpacing.md),
+                          const SizedBox(width: BraiseSpacing.sm),
+                          Expanded(
+                            child: AnimatedContainer(
+                              duration: animDuration,
+                              height: 4,
                               decoration: BoxDecoration(
-                                color: tokens.surface1,
-                                border: Border.all(color: tokens.borderHairline),
-                                borderRadius: BorderRadius.circular(BraiseRadii.card),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SignSquareCore(color: tokens.foiInk, size: 26),
-                                  const SizedBox(width: BraiseSpacing.md),
-                                  Expanded(
-                                    child: Text(
-                                      'Mode debug local : code pré-rempli ($_debugCode).',
-                                      style: textTheme.bodyMedium?.copyWith(color: tokens.inkPrimary),
-                                    ),
-                                  ),
-                                ],
+                                color: _codeSent ? tokens.braiseInk : tokens.borderHairline,
+                                borderRadius: BorderRadius.circular(2),
                               ),
                             ),
+                          ),
+                          const SizedBox(width: BraiseSpacing.sm),
+                          Text(
+                            _codeSent ? '2/2' : '1/2',
+                            style: textTheme.labelSmall?.copyWith(color: tokens.inkSecondary),
+                          ),
                         ],
                       ),
-              ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: BraiseSpacing.lg),
-                  child: Text(_error!, style: textTheme.bodyMedium?.copyWith(color: tokens.erreur)),
+                      const SizedBox(height: BraiseSpacing.xxl),
+                      Text(
+                        'On vérifie que vous êtes bien vous.',
+                        style: textTheme.displayLarge?.copyWith(fontSize: 30, height: 34 / 30),
+                      ),
+                      const SizedBox(height: BraiseSpacing.lg),
+                      Text(
+                        "Un code est envoyé par email pour confirmer votre adresse. Aucune pièce "
+                        "d'identité n'est demandée à ce stade.",
+                        style: textTheme.bodyLarge?.copyWith(color: tokens.inkSecondary),
+                      ),
+                      const SizedBox(height: BraiseSpacing.xxl),
+                      TextField(
+                        controller: _emailController,
+                        enabled: !_codeSent,
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        textCapitalization: TextCapitalization.none,
+                        autofillHints: const [AutofillHints.email],
+                        // `labelText` distinct du `hintText` (l'exemple de format) : sans lui, le repère
+                        // visuel du champ disparaissait dès la première frappe — repéré en revoyant les
+                        // 9 champs de texte de l'app, un seul motif partout, jamais un oubli isolé.
+                        decoration: const InputDecoration(
+                          labelText: 'Adresse email',
+                          hintText: 'prenom@exemple.fr',
+                        ),
+                      ),
+                      AnimatedSize(
+                        duration: animDuration,
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: !_codeSent
+                            ? const SizedBox(width: double.infinity)
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: BraiseSpacing.lg),
+                                  AnimatedBuilder(
+                                    animation: _shakeOffset,
+                                    builder: (context, child) => Transform.translate(
+                                      offset: Offset(_shakeOffset.value, 0),
+                                      child: child,
+                                    ),
+                                    child: TextField(
+                                      controller: _codeController,
+                                      keyboardType: TextInputType.number,
+                                      autofillHints: const [AutofillHints.oneTimeCode],
+                                      decoration: const InputDecoration(labelText: 'Code reçu par email'),
+                                    ),
+                                  ),
+                                  const SizedBox(height: BraiseSpacing.sm),
+                                  Text(
+                                    'Rien reçu ? Vérifiez vos courriers indésirables.',
+                                    style: textTheme.bodyMedium?.copyWith(color: tokens.inkSecondary),
+                                  ),
+                                  // Le champ adresse est verrouillé une fois le code demandé : sans ce
+                                  // retour à l'étape 1, une faute de frappe dans l'adresse (fréquente,
+                                  // contrairement à un numéro) laissait la personne bloquée sur un code
+                                  // qui n'arrivera jamais. Redemander un code passe par la même étape.
+                                  TextButton(
+                                    onPressed: _loading ? null : _changeEmail,
+                                    child: const Text("Modifier l'adresse ou renvoyer un code"),
+                                  ),
+                                  if (_debugCode != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: BraiseSpacing.md),
+                                      padding: const EdgeInsets.all(BraiseSpacing.md),
+                                      decoration: BoxDecoration(
+                                        color: tokens.surface1,
+                                        border: Border.all(color: tokens.borderHairline),
+                                        borderRadius: BorderRadius.circular(BraiseRadii.card),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          SignSquareCore(color: tokens.foiInk, size: 26),
+                                          const SizedBox(width: BraiseSpacing.md),
+                                          Expanded(
+                                            child: Text(
+                                              'Mode debug local : code pré-rempli ($_debugCode).',
+                                              style: textTheme.bodyMedium?.copyWith(color: tokens.inkPrimary),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                      ),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: BraiseSpacing.lg),
+                          child: Text(_error!, style: textTheme.bodyMedium?.copyWith(color: tokens.erreur)),
+                        ),
+                    ],
+                  ),
                 ),
-              const Spacer(),
+              ),
+              const SizedBox(height: BraiseSpacing.lg),
               ElevatedButton(
                 onPressed: _loading
                     ? null
@@ -288,7 +327,7 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _emailController.dispose();
     _codeController.dispose();
     _shakeController.dispose();
     super.dispose();

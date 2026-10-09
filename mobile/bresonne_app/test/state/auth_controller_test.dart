@@ -46,10 +46,10 @@ http.Response _json(Object data, int status) {
 
 http.Response _mePayload({
   String id = 'user-1',
-  String phone = '+33600000000',
+  String email = 'me@example.com',
   bool consentsGiven = true,
 }) {
-  return _json({'id': id, 'phone': phone, 'consents_given': consentsGiven}, 200);
+  return _json({'id': id, 'email': email, 'consents_given': consentsGiven}, 200);
 }
 
 http.Response _forbidden(String detail) {
@@ -72,12 +72,12 @@ void main() {
     test('stored token + /auth/me 200 -> signedIn with profile populated', () async {
       SharedPreferences.setMockInitialValues({'braise_token': 'stored-token'});
       final controller = buildController(
-        meResponse: () => _mePayload(id: 'abc', phone: '+33611111111'),
+        meResponse: () => _mePayload(id: 'abc', email: 'abc@example.com'),
       );
       await controller.restoreSession();
       expect(controller.status, AuthStatus.signedIn);
       expect(controller.userId, 'abc');
-      expect(controller.phone, '+33611111111');
+      expect(controller.email, 'abc@example.com');
     });
 
     test('stored token + 403 "Compte suspendu." -> banned, token kept', () async {
@@ -129,7 +129,7 @@ void main() {
   group('verifyOtp', () {
     test('happy path -> signedIn, token persisted', () async {
       final controller = buildController(meResponse: () => _mePayload());
-      await controller.verifyOtp('+33600000000', '123456');
+      await controller.verifyOtp('me@example.com', '123456');
       expect(controller.status, AuthStatus.signedIn);
       expect(controller.token, 'tok-123');
 
@@ -143,7 +143,7 @@ void main() {
       final controller = buildController(
         meResponse: () => _forbidden('Compte suspendu.'),
       );
-      await controller.verifyOtp('+33600000000', '123456');
+      await controller.verifyOtp('me@example.com', '123456');
       expect(controller.status, AuthStatus.banned);
       expect(controller.token, 'tok-123');
     });
@@ -153,7 +153,7 @@ void main() {
         meResponse: () => _json({'detail': 'Erreur serveur.'}, 500),
       );
       await expectLater(
-        () => controller.verifyOtp('+33600000000', '123456'),
+        () => controller.verifyOtp('me@example.com', '123456'),
         throwsA(anything),
       );
     });
@@ -162,7 +162,7 @@ void main() {
       final controller = buildController(
         meResponse: () => _mePayload(consentsGiven: false),
       );
-      await controller.verifyOtp('+33600000000', '123456');
+      await controller.verifyOtp('me@example.com', '123456');
       expect(controller.status, AuthStatus.signedIn);
       expect(controller.consentsGiven, isFalse);
     });
@@ -186,7 +186,7 @@ void main() {
       final apiClient = ApiClient(tokenProvider: () => controller.token, httpClient: client);
       controller = AuthController(AuthApi(apiClient));
 
-      await controller.verifyOtp('+33600000000', '123456');
+      await controller.verifyOtp('me@example.com', '123456');
       expect(controller.consentsGiven, isFalse);
 
       await controller.submitFullConsent();

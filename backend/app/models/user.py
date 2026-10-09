@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
+from sqlalchemy import Boolean, Column, DateTime, String, text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
@@ -11,16 +11,11 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    phone = Column(String, unique=True, nullable=False, index=True)
-    otp_code = Column(String, nullable=True)
-    otp_expires_at = Column(DateTime(timezone=True), nullable=True)
-    # Anti brute-force (P6.1) : `otp_requested_at` impose un délai minimum entre deux demandes de
-    # code pour le même numéro (services/otp.py::MIN_RESEND_INTERVAL_SECONDS) ; `otp_attempts`
-    # compte les essais de vérification ratés sur le code courant et le neutralise après
-    # `MAX_OTP_ATTEMPTS` — sans ça, un code à 6 chiffres (10^6 possibilités, 10 min de validité)
-    # se force par brute force sans aucun frein.
-    otp_requested_at = Column(DateTime(timezone=True), nullable=True)
-    otp_attempts = Column(Integer, default=0, nullable=False, server_default=text("0"))
+    # Identifiant de connexion (OTP par email, services/otp.py) — toujours normalisé en
+    # minuscules avant d'arriver ici (schemas/auth.py), donc une comparaison exacte suffit. Le
+    # code OTP lui-même ne vit pas sur User mais dans `otp_challenges` (models/otp_challenge.py) :
+    # un compte n'est créé qu'après une vérification réussie, jamais à la simple demande d'un code.
+    email = Column(String, unique=True, nullable=False, index=True)
     is_verified = Column(Boolean, default=False, nullable=False)
     # server_default (pas seulement default=) : cette colonne a été ajoutée à une table déjà
     # peuplée — sans valeur par défaut côté base, l'ALTER TABLE NOT NULL échoue sur les lignes

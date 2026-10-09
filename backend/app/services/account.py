@@ -10,6 +10,7 @@ from app.models.rating import Rating
 from app.models.report import Report
 from app.models.user import User
 from app.services import notifications as notifications_service
+from app.services import otp as otp_service
 from app.services import storage
 from app.services.matches import other_user_id
 
@@ -44,7 +45,7 @@ def export_my_data(db: Session, user: User) -> dict:
     return {
         "account": {
             "id": str(user.id),
-            "phone": user.phone,
+            "email": user.email,
             "is_verified": user.is_verified,
             "created_at": user.created_at.isoformat(),
             "consents": {
@@ -138,9 +139,12 @@ def delete_my_account(db: Session, user: User) -> None:
     notifications_service.delete_all_subscriptions_for_user(db, user.id)
 
     now = datetime.now(timezone.utc)
-    user.phone = f"deleted-{uuid.uuid4().hex}"
-    user.otp_code = None
-    user.otp_expires_at = None
+    otp_service.delete_challenge(db, user.email)
+    # Domaine réservé `.invalid` (RFC 2606) : refusé par la validation des schémas d'auth, donc ce
+    # tombstone ne pourra jamais redevenir une adresse de connexion, et ne libère pas pour autant
+    # l'adresse d'origine d'un historique rattaché — elle est simplement réutilisable pour un
+    # nouveau compte vierge.
+    user.email = f"deleted-{uuid.uuid4().hex}@deleted.invalid"
     user.deleted_at = now
 
     db.commit()

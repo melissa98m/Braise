@@ -1,7 +1,7 @@
 """Crée un jeu de comptes/profils de test publiés, pour tester manuellement l'app (Swagger,
 Flutter web) sans repasser par le flux OTP à la main pour chaque persona.
 
-Idempotent : chaque persona a un numéro de téléphone fixe, donc relancer ce script réutilise le
+Idempotent : chaque persona a une adresse email fixe, donc relancer ce script réutilise le
 même compte (créé au premier passage) et se contente de rejouer OTP + republier le profil, plutôt
 que de créer des doublons.
 
@@ -20,7 +20,7 @@ BASE_URL = "http://backend:8000"
 
 PERSONAS = [
     {
-        "phone": "+33600000001",
+        "email": "alice@example.com",
         "display_name": "Alice",
         "birth_date": "2004-03-15",
         "bio": "Toujours partante pour un concert ou une expo.",
@@ -32,7 +32,7 @@ PERSONAS = [
         "city": "Paris",
     },
     {
-        "phone": "+33600000002",
+        "email": "bruno@example.com",
         "display_name": "Bruno",
         "birth_date": "2001-05-20",
         "bio": "Grimpe, cuisine, recommence.",
@@ -44,7 +44,7 @@ PERSONAS = [
         "city": "Lyon",
     },
     {
-        "phone": "+33600000003",
+        "email": "chloe@example.com",
         "display_name": "Chloé",
         "birth_date": "2002-07-10",
         "bio": "Libraire le jour, série le soir.",
@@ -56,7 +56,7 @@ PERSONAS = [
         "city": "Marseille",
     },
     {
-        "phone": "+33600000004",
+        "email": "david@example.com",
         "display_name": "David",
         "birth_date": "1998-01-25",
         "bio": "Randonnée le week-end, code la semaine.",
@@ -68,7 +68,7 @@ PERSONAS = [
         "city": "Reims",
     },
     {
-        "phone": "+33600000005",
+        "email": "emma@example.com",
         "display_name": "Emma",
         "birth_date": "2000-11-02",
         "bio": "Cuisine du monde et vieux vinyles.",
@@ -80,7 +80,7 @@ PERSONAS = [
         "city": "Lille",
     },
     {
-        "phone": "+33600000006",
+        "email": "farid@example.com",
         "display_name": "Farid",
         "birth_date": "1996-04-18",
         "bio": "Cinéphile, footeux, jamais les deux en même temps.",
@@ -96,11 +96,11 @@ PERSONAS = [
 
 def seed_persona(client: httpx.Client, persona: dict) -> tuple[str, dict, str]:
     """Renvoie (token, headers, user_id) — pour que `seed_beta_tester.py` puisse réutiliser cette
-    même session au lieu de redemander un OTP pour le même numéro juste après (le throttle
+    même session au lieu de redemander un OTP pour la même adresse juste après (le throttle
     anti-brute-force posé en P6.1, `MIN_RESEND_INTERVAL_SECONDS`, le refuserait à raison)."""
-    phone = persona["phone"]
+    email = persona["email"]
 
-    otp_response = client.post("/auth/request-otp", json={"phone": phone})
+    otp_response = client.post("/auth/request-otp", json={"email": email})
     otp_response.raise_for_status()
     code = otp_response.json()["debug_code"]
     if code is None:
@@ -108,7 +108,7 @@ def seed_persona(client: httpx.Client, persona: dict) -> tuple[str, dict, str]:
             "debug_code est vide : DEBUG_OTP doit être à true dans backend/.env pour ce script."
         )
 
-    token_response = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
+    token_response = client.post("/auth/verify-otp", json={"email": email, "code": code})
     token_response.raise_for_status()
     token = token_response.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -116,6 +116,22 @@ def seed_persona(client: httpx.Client, persona: dict) -> tuple[str, dict, str]:
     me = client.get("/auth/me", headers=headers)
     me.raise_for_status()
     user_id = me.json()["id"]
+
+    # Écran de consentement RGPD, gate obligatoire avant toute publication de profil
+    # (services/consent.py) — jamais envoyé par ce script jusqu'ici, ce qui ne se voyait pas tant
+    # que les personas existaient déjà en base avec un consentement ancien ; exposé par le
+    # passage à la connexion par email, qui a recréé ces comptes de zéro.
+    consent = client.post(
+        "/auth/consent",
+        headers=headers,
+        json={
+            "age_confirmed": True,
+            "cgu_accepted": True,
+            "privacy_acknowledged": True,
+            "sensitive_data_consented": True,
+        },
+    )
+    consent.raise_for_status()
 
     profile_response = client.put(
         "/profiles/me/public",
@@ -135,7 +151,7 @@ def seed_persona(client: httpx.Client, persona: dict) -> tuple[str, dict, str]:
     )
     profile_response.raise_for_status()
 
-    print(f"{persona['display_name']:<8} user_id={user_id}  phone={phone}  token={token}")
+    print(f"{persona['display_name']:<8} user_id={user_id}  email={email}  token={token}")
     return token, headers, user_id
 
 

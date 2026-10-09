@@ -11,7 +11,7 @@ RatingReviewDecision = Literal["confirmed", "cleared"]
 
 class UserSummaryOut(BaseModel):
     id: uuid.UUID
-    phone: str | None
+    email: str | None
     display_name: str | None
     is_verified: bool
     is_banned: bool

@@ -9,9 +9,9 @@ d'hébergeur).
 ## 1. Contexte et champ d'application
 
 Bresonne traite des données susceptibles d'être qualifiées de sensibles au sens large : photos de
-profil privé, contenu de conversations privées, numéro de téléphone (identifiant d'authentification
-via OTP), commentaires de notation et de signalement. Aucune donnée biométrique n'est traitée à ce
-stade (le KYC MVP est un OTP téléphone/email — cahier des charges D.6 ; le KYC renforcé par pièce
+profil privé, contenu de conversations privées, adresse email (identifiant d'authentification
+via OTP — remplace le numéro de téléphone depuis octobre 2026, plus aucun numéro n'est collecté), commentaires de notation et de signalement. Aucune donnée biométrique n'est traitée à ce
+stade (le KYC MVP est un OTP par email — cahier des charges D.6 ; le KYC renforcé par pièce
 d'identité est explicitement hors périmètre MVP, réservé à une option V2 — piste envisagée :
 France Identité / FranceConnect+, voir `docs/ROADMAP.md` § Backlog V2 pour les contraintes
 d'accréditation qui la reportent au-delà du MVP).
@@ -25,7 +25,7 @@ les traitements côté serveur).
 
 | Donnée | Finalité | Base légale | Où (code) | Conservation |
 |---|---|---|---|---|
-| Téléphone + code OTP | Authentification, unicité de compte | Exécution du contrat (CGU) | `models/user.py`, `services/otp.py` | Jusqu'à suppression de compte (anonymisé ensuite) |
+| Adresse email + code OTP | Authentification, unicité de compte | Exécution du contrat (CGU) | `models/user.py` (`User.email`), `models/otp_challenge.py`, `services/otp.py`, `services/email.py` — le code n'est jamais stocké en clair (HMAC-SHA256 à clé, `core/security.hash_otp_code`), et aucun compte n'est créé avant une vérification réussie (une adresse saisie au hasard ne laisse qu'une ligne `otp_challenges` sans profil) | Adresse : jusqu'à suppression de compte (remplacée par un tombstone `@deleted.invalid` ensuite). Code : 10 minutes, ligne `otp_challenges` supprimée à la vérification réussie ou à la suppression du compte |
 | Bio, centres d'intérêt, avatar-sigil | Profil public, matching ; question du jour du quiz flammes — bio/ville/intérêts servent d'options réelles (bonne réponse comme leurres, voir `services/messaging.py::_eligible_categories`) proposées à l'*autre* participant d'un match, y compris un utilisateur non apparié quand sa bio est piochée comme leurre pour le quiz de quelqu'un d'autre (déjà visible de la même façon en découverte, même audience) ; prénom + bio (jamais quand la bio est elle-même le sujet du quiz) également relus par le modèle Ollama local pour personnaliser la formulation (optionnel, off par défaut — voir ci-dessous) | Exécution du contrat | `models/profile.py` (`PublicProfile`), `services/messaging.py`, `services/question_llm.py` | Jusqu'à suppression de compte |
 | Date de naissance | Calcul de l'âge affiché, contrôle 18+ | Exécution du contrat / obligation légale (protection des mineurs, A.9) | `models/profile.py`, schéma `PublicProfileOut` (n'expose jamais la date brute, seulement l'âge calculé) | Jusqu'à suppression de compte |
 | Genre déclaré + préférences de découverte (genre recherché, tranche d'âge) — la combinaison genre/genre recherché est traitée comme une donnée sensible au sens RGPD art. 9 (elle révèle l'orientation) | Filtres de base du feed de découverte (A.5) | Consentement explicite et dédié, recueilli à l'inscription via `ConsentScreen` (case 4, séparée des CGU) avant tout accès à `PUT /profiles/me/public` — voir `services/consent.py` | `models/user.py` (`User.consent_sensitive_data_at`), `models/profile.py` (`PublicProfile.gender`/`looking_for_gender`), `services/consent.py` | Jusqu'à suppression de compte |
@@ -36,18 +36,25 @@ les traitements côté serveur).
 | Notes + commentaires | Score de confiance, modération | Intérêt légitime (sécurité de la plateforme) | `models/rating.py`, `services/moderation.py` | Conservés (nécessaires à l'historique de confiance d'un tiers) |
 | Signalements | Modération, sécurité | Intérêt légitime / obligation légale | `models/report.py` | Conservés pour l'historique de modération |
 | Journal d'accès aux photos | Traçabilité RGPD des divulgations entre utilisateurs | Obligation légale (auditabilité) | `models/photo_access_log.py` — uniquement les accès *à autrui*, jamais à ses propres photos | Conservé |
-| Accès du personnel de modération (staff) aux signalements/contestations/notes signalées, y compris le numéro de téléphone des personnes concernées | Revue humaine de modération (cahier des charges C.1/C.2, `docs/ROADMAP.md` P21) — un accès interne nouveau depuis ce palier, pas une nouvelle collecte : même base légale que les lignes Notes/Signalements ci-dessus, ici explicitée pour ce public précis | Intérêt légitime (sécurité de la plateforme) | `User.is_staff`, `api/deps.get_current_staff_user`, `services/admin_moderation.py`, `backend/app/static/admin/` (tableau de bord sur `/staff`) | Le journal des décisions (`models/moderation_action.py`) est conservé (append-only) ; l'accès en lecture lui-même n'est pas journalisé au-delà de la décision prise |
+| Accès du personnel de modération (staff) aux signalements/contestations/notes signalées, y compris l'adresse email des personnes concernées | Revue humaine de modération (cahier des charges C.1/C.2, `docs/ROADMAP.md` P21) — un accès interne nouveau depuis ce palier, pas une nouvelle collecte : même base légale que les lignes Notes/Signalements ci-dessus, ici explicitée pour ce public précis | Intérêt légitime (sécurité de la plateforme) | `User.is_staff`, `api/deps.get_current_staff_user`, `services/admin_moderation.py`, `backend/app/static/admin/` (tableau de bord sur `/staff`) | Le journal des décisions (`models/moderation_action.py`) est conservé (append-only) ; l'accès en lecture lui-même n'est pas journalisé au-delà de la décision prise |
 | Contenu des messages, en transit sur Redis pub/sub (`ws/connection_manager.py`, P22 : messagerie multi-instance, cahier des charges D.4) | Relais du message au(x) participant(s) connecté(s) à une autre instance backend — pas une nouvelle finalité, seulement un nouveau saut technique interne pour une donnée déjà traitée (voir ligne « Messages » ci-dessus) | Exécution du contrat (déjà couverte par la ligne « Messages ») | Canal `bresonne:chat:{match_id}`, gratuit/local, jamais exposé hors du réseau Docker (aucun port publié, voir `docker-compose.yml`) | Non conservé : `PUBLISH`/`SUBSCRIBE` ne sont jamais écrits dans l'espace de clés Redis (pas de RDB/AOF impliqué) — un passage en mémoire, pas un nouvel emplacement de stockage |
 
-Aucune donnée n'est transmise à un tiers commercial : pas de SMS provider réel, pas de Firebase, pas
-de service de modération externe (cahier des charges D.11 — tout est auto-hébergé/interne dès le
+Un seul tiers commercial reçoit des données : **Resend** (Resend, Inc., États-Unis — envoi des
+emails de connexion, `services/email.py`, SMTP `smtp.resend.com`), qui ne reçoit que l'adresse
+email et le code à 6 chiffres, jamais de donnée de profil, photo ou message. Sous-traitant au sens
+de l'art. 28 RGPD : accord de traitement (DPA) à accepter à la création du compte, région d'envoi
+européenne à choisir à la création du domaine, transfert hors UE (société américaine) encadré par
+les clauses contractuelles types de ce DPA — **à vérifier au moment de la souscription**, pas
+encore fait (aucun compte Resend n'existe à la date de ce changement). En local et en CI, aucun
+envoi réel (`EMAIL_BACKEND=console`, ou Mailpit en conteneur local). Hors Resend : pas de
+Firebase, pas de service de modération externe (cahier des charges D.11 — tout est auto-hébergé/interne dès le
 MVP, voir aussi `CLAUDE.md` section « Stubs »). Le seul flux sortant en V2 sera la commission de
 paiement des stores Apple/Google (D.8), qui ne transite par aucune donnée personnelle sensible.
 Le modèle Ollama (question du jour personnalisée, optionnel — voir `CLAUDE.md` section
 messagerie) reste dans cette même catégorie « aucun tiers » : conteneur auto-hébergé sur le réseau
 Docker interne (`ollama:11434`, jamais exposé publiquement), aucune donnée ne quitte
 l'infrastructure. Il ne lit que le prénom et la bio (déjà des données de profil public), jamais
-l'identité complète, le téléphone ou les messages.
+l'identité complète, l'adresse email ou les messages.
 
 ## 3. Principes fondamentaux
 
@@ -87,8 +94,9 @@ l'identité complète, le téléphone ou les messages.
     photos ne sont pas inclus dans l'export (redondant avec `/profiles/me/private`), seules leurs
     clés le sont.
   - Effacement : `DELETE /auth/me` (`services/account.delete_my_account`) — anonymisation, pas un
-    cascade destructif : photos supprimées de MinIO, profil public vidé, téléphone remplacé par un
-    tombstone `deleted-{uuid}`, messages de l'auteur remplacés par un placeholder (la conversation
+    cascade destructif : photos supprimées de MinIO, profil public vidé, adresse email remplacée par un
+    tombstone `deleted-{uuid}@deleted.invalid` (domaine réservé, jamais réutilisable pour se
+    connecter) et code OTP en attente supprimé, messages de l'auteur remplacés par un placeholder (la conversation
     reste lisible pour l'autre participant — c'est aussi sa donnée). Les lignes `Match`/`Rating`/
     `Report` impliquant ce compte restent, car elles portent aussi les droits d'un tiers.
 

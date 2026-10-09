@@ -9,7 +9,7 @@ from tests.helpers import (
     find_rating_id,
     force_match_unlocked,
     make_staff,
-    unique_phone,
+    unique_email,
 )
 
 client = TestClient(app)
@@ -58,7 +58,7 @@ def test_admin_routes_require_authentication():
 
 
 def test_admin_routes_reject_non_staff_user():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     for path in ("/admin/queue-counts", "/admin/reports", "/admin/ban-appeals", "/admin/flagged-ratings"):
         response = client.get(path, headers=headers)
         assert response.status_code == 403

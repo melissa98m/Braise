@@ -7,17 +7,17 @@ from fastapi.testclient import TestClient
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.photo_access_log import PhotoAccessLog
-from tests.helpers import auth_headers, create_match, force_match_unlocked, unique_phone
+from tests.helpers import auth_headers, create_match, force_match_unlocked, unique_email
 
 client = TestClient(app)
 
 
-def _auth_headers(phone: str) -> dict:
-    return auth_headers(client, phone)
+def _auth_headers(email: str) -> dict:
+    return auth_headers(client, email)
 
 
 def test_public_profile_round_trip():
-    headers = _auth_headers(unique_phone())
+    headers = _auth_headers(unique_email())
 
     get_before = client.get("/profiles/me/public", headers=headers)
     assert get_before.status_code == 200
@@ -44,7 +44,7 @@ def test_public_profile_round_trip():
 
 
 def test_public_profile_rejects_minor():
-    headers = _auth_headers(unique_phone())
+    headers = _auth_headers(unique_email())
 
     too_young = date.today().replace(year=date.today().year - 10)
     payload = {
@@ -58,7 +58,7 @@ def test_public_profile_rejects_minor():
 
 
 def test_avatar_regenerate_changes_seed():
-    headers = _auth_headers(unique_phone())
+    headers = _auth_headers(unique_email())
     first = client.post("/profiles/me/avatar/regenerate", headers=headers).json()
     second = client.post("/profiles/me/avatar/regenerate", headers=headers).json()
     assert first["seed"] != second["seed"]
@@ -70,7 +70,7 @@ def test_public_profile_requires_auth():
 
 
 def test_private_photo_upload_list_delete():
-    headers = _auth_headers(unique_phone())
+    headers = _auth_headers(unique_email())
 
     fake_image = io.BytesIO(b"\xff\xd8\xff" + b"0" * 100)  # en-tête JPEG minimal
     upload = client.post(
@@ -94,7 +94,7 @@ def test_private_photo_upload_list_delete():
 
 
 def test_private_photo_max_three():
-    headers = _auth_headers(unique_phone())
+    headers = _auth_headers(unique_email())
     for _ in range(3):
         fake_image = io.BytesIO(b"\xff\xd8\xff" + b"0" * 50)
         response = client.post(
@@ -157,7 +157,7 @@ def test_partner_photos_available_after_unlock_and_logged():
 
 def test_partner_photos_requires_match_participant():
     match = create_match(client)
-    outsider_headers = auth_headers(client, unique_phone())
+    outsider_headers = auth_headers(client, unique_email())
     response = client.get(
         f"/profiles/matches/{match['match_id']}/partner-photos", headers=outsider_headers
     )

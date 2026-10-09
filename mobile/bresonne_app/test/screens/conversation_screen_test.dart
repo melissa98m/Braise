@@ -93,7 +93,7 @@ void main() {
   testWidgets('loads and shows the message history', (tester) async {
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'me', 'phone': '+33600000000'}, 200);
+        return _json({'id': 'me', 'email': 'me@example.com'}, 200);
       }
       if (request.method == 'GET' &&
           request.url.path == '/messaging/matches/${_match.matchId}/messages') {
@@ -123,7 +123,7 @@ void main() {
   ) async {
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'me', 'phone': '+33600000000'}, 200);
+        return _json({'id': 'me', 'email': 'me@example.com'}, 200);
       }
       if (request.method == 'GET' &&
           request.url.path == '/messaging/matches/${_match.matchId}/messages') {
@@ -168,7 +168,7 @@ void main() {
   ) async {
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'me', 'phone': '+33600000000'}, 200);
+        return _json({'id': 'me', 'email': 'me@example.com'}, 200);
       }
       if (request.method == 'GET' &&
           request.url.path == '/messaging/matches/${_match.matchId}/messages') {
@@ -209,7 +209,7 @@ void main() {
   testWidgets('the daily question renders and answering shows the result', (tester) async {
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'me', 'phone': '+33600000000'}, 200);
+        return _json({'id': 'me', 'email': 'me@example.com'}, 200);
       }
       if (request.method == 'GET' &&
           request.url.path == '/messaging/matches/${_match.matchId}/messages') {
@@ -249,7 +249,7 @@ void main() {
   ) async {
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'me', 'phone': '+33600000000'}, 200);
+        return _json({'id': 'me', 'email': 'me@example.com'}, 200);
       }
       if (request.method == 'GET' &&
           request.url.path == '/messaging/matches/${_match.matchId}/messages') {
@@ -281,7 +281,7 @@ void main() {
     final sentAt = DateTime(2026, 1, 1, 12);
     final client = MockClient((request) async {
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'me', 'phone': '+33600000000'}, 200);
+        return _json({'id': 'me', 'email': 'me@example.com'}, 200);
       }
       if (request.method == 'GET' &&
           request.url.path == '/messaging/matches/${_match.matchId}/messages') {

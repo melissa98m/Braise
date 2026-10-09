@@ -4,7 +4,7 @@ des messages non lus, un match déjà débloqué (photo privée visible tout de 
 cours de progression (question du jour encore disponible) — pour tester en quelques clics plutôt
 que de devoir reconstruire cet état à la main à chaque fois.
 
-Idempotent comme `seed_test_data.py` : relancer ce script réutilise le même numéro de téléphone
+Idempotent comme `seed_test_data.py` : relancer ce script réutilise la même adresse email
 (donc le même compte) plutôt que d'en créer un nouveau à chaque fois. Le déblocage forcé du match
 et le flame_count partiel sur le second, en revanche, sont réappliqués à chaque lancement (pas de
 mal à le refaire, juste redondant si déjà fait).
@@ -35,7 +35,7 @@ from app.models.match import Match  # noqa: E402
 BASE_URL = "http://backend:8000"
 WS_BASE_URL = "ws://backend:8000"
 
-TESTER_PHONE = "+33600000099"
+TESTER_EMAIL = "testeur@example.com"
 TESTER_PROFILE = {
     "display_name": "Testeur",
     "birth_date": "1995-06-15",
@@ -61,18 +61,29 @@ _PLACEHOLDER_PNG = base64.b64decode(
 )
 
 
-def _auth(client: httpx.Client, phone: str) -> tuple[str, dict, str]:
-    otp = client.post("/auth/request-otp", json={"phone": phone})
+def _auth(client: httpx.Client, email: str) -> tuple[str, dict, str]:
+    otp = client.post("/auth/request-otp", json={"email": email})
     otp.raise_for_status()
     code = otp.json()["debug_code"]
     if code is None:
         raise RuntimeError("DEBUG_OTP doit être à true dans backend/.env pour ce script.")
-    verify = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
+    verify = client.post("/auth/verify-otp", json={"email": email, "code": code})
     verify.raise_for_status()
     token = verify.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     me = client.get("/auth/me", headers=headers)
     me.raise_for_status()
+    # Consentement RGPD obligatoire avant toute publication (voir seed_test_data.seed_persona).
+    client.post(
+        "/auth/consent",
+        headers=headers,
+        json={
+            "age_confirmed": True,
+            "cgu_accepted": True,
+            "privacy_acknowledged": True,
+            "sensitive_data_consented": True,
+        },
+    ).raise_for_status()
     return token, headers, me.json()["id"]
 
 
@@ -139,11 +150,11 @@ def main() -> None:
             sessions[persona["display_name"]] = seed_persona(client, persona)
 
         print("\n=== Compte testeur ===")
-        token_t, headers_t, id_t = _auth(client, TESTER_PHONE)
+        token_t, headers_t, id_t = _auth(client, TESTER_EMAIL)
         client.put(
             "/profiles/me/public", headers=headers_t, json={**TESTER_PROFILE, "is_published": True}
         ).raise_for_status()
-        print(f"Testeur   user_id={id_t}  phone={TESTER_PHONE}")
+        print(f"Testeur   user_id={id_t}  email={TESTER_EMAIL}")
 
         print(f"\n=== Match débloqué avec {UNLOCKED_MATCH_PERSONA} ===")
         token_u, headers_u, id_u = sessions[UNLOCKED_MATCH_PERSONA]
@@ -182,7 +193,7 @@ def main() -> None:
 
         print(
             "\nConnexion : ouvrir l'app, \"J'ai déjà un compte\", entrer "
-            f"{TESTER_PHONE} — le code s'affiche directement (DEBUG_OTP)."
+            f"{TESTER_EMAIL} — le code s'affiche directement (DEBUG_OTP)."
         )
 
 

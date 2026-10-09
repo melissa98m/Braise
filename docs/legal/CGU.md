@@ -21,9 +21,9 @@ Bresonne implique l'acceptation des présentes CGU.
 **Statut bêta — à savoir avant de vous inscrire :**
 - L'application tourne sur une infrastructure de test (pas d'hébergement de production), sans
   garantie de disponibilité continue.
-- La vérification par SMS est simulée (« mode debug ») : le code de vérification s'affiche
-  directement dans l'application plutôt que d'être envoyé par un vrai SMS. Aucun numéro de
-  téléphone n'est donc communiqué à un opérateur SMS tiers pendant cette phase.
+- La connexion se fait par un code à usage unique envoyé à votre adresse email, via notre
+  prestataire d'envoi d'emails (Resend — voir la politique de confidentialité). Aucun numéro de
+  téléphone n'est demandé.
 - L'abonnement « Bresonne+ » est un stub gratuit à but de test (aucun paiement réel n'est traité) —
   voir article 6.
 - Vos données peuvent être réinitialisées sans préavis pendant cette phase de test.
@@ -41,9 +41,9 @@ remplissant pas cette condition.
 
 ## Article 3 — Création de compte et vérification
 
-L'inscription se fait par numéro de téléphone (code à usage unique — aucune pièce d'identité n'est
-demandée à ce stade). Vous êtes responsable de la confidentialité de l'accès à votre numéro de
-téléphone, seul moyen de récupérer l'accès à votre compte, et de toute activité effectuée depuis
+L'inscription se fait par adresse email (code à usage unique envoyé à cette adresse — aucune pièce
+d'identité n'est demandée à ce stade). Vous êtes responsable de la confidentialité de l'accès à
+votre boîte email, seul moyen de récupérer l'accès à votre compte, et de toute activité effectuée depuis
 votre compte. Vous vous engagez à fournir des informations exactes, sincères et à jour, et à
 informer Bresonne dans les meilleurs délais en cas d'utilisation non autorisée de votre compte.
 
@@ -151,7 +151,7 @@ présentes CGU.
 ## Article 11 — Suppression de compte
 
 Vous pouvez supprimer votre compte à tout moment depuis Paramètres. La suppression anonymise votre
-profil et votre numéro de téléphone ; elle ne supprime pas les messages déjà lus par vos
+profil et votre adresse email ; elle ne supprime pas les messages déjà lus par vos
 interlocuteur·rice·s ni les notes/signalements déjà émis ou reçus, qui portent aussi les droits
 d'un tiers — voir la politique de confidentialité pour le détail exact.
 

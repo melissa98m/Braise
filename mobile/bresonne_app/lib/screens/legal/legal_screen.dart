@@ -25,9 +25,9 @@ const _cguSections = <_LegalSection>[
   _LegalSection(
     'Statut bêta',
     "L'application tourne sur une infrastructure de test, sans garantie de disponibilité "
-        'continue. La vérification par SMS est simulée : le code s\'affiche directement dans '
-        'l\'app plutôt que d\'être envoyé par un vrai SMS — aucun numéro n\'est communiqué à un '
-        'opérateur tiers pendant cette phase. L\'abonnement Bresonne+ est un stub gratuit : '
+        'continue. La connexion se fait par un code à usage unique envoyé à votre adresse '
+        'email, via notre prestataire d\'envoi d\'emails (Resend) ; aucun numéro de téléphone '
+        'n\'est demandé. L\'abonnement Bresonne+ est un stub gratuit : '
         'aucun paiement réel n\'est traité. Vos données peuvent être réinitialisées sans '
         'préavis pendant cette phase de test.',
   ),
@@ -64,7 +64,7 @@ const _cguSections = <_LegalSection>[
   ),
   _LegalSection(
     'Suppression de compte',
-    'Supprimable à tout moment depuis Paramètres. Anonymise votre profil et votre numéro ; ne '
+    'Supprimable à tout moment depuis Paramètres. Anonymise votre profil et votre adresse email ; ne '
         'supprime pas les messages déjà lus par vos interlocuteur·rice·s ni les notes/'
         'signalements déjà émis ou reçus, qui portent aussi les droits d\'un tiers — détail '
         'complet dans la politique de confidentialité.',
@@ -80,7 +80,8 @@ const _cguSections = <_LegalSection>[
 const _privacySections = <_LegalSection>[
   _LegalSection(
     'Quelles données, pourquoi',
-    'Téléphone (créer/sécuriser votre compte), bio/intérêts/avatar (profil public), date de '
+    'Adresse email (créer/sécuriser votre compte — code de connexion jamais stocké en clair, '
+        'effacé dès son utilisation), bio/intérêts/avatar (profil public), date de '
         'naissance (vérifier vos 18 ans — jamais affichée telle quelle, seulement l\'âge '
         'calculé), genre et genre recherché si vous les renseignez (donnée sensible : leur '
         'combinaison relève de l\'orientation sexuelle, traitée avec votre consentement exprès '
@@ -93,9 +94,12 @@ const _privacySections = <_LegalSection>[
   ),
   _LegalSection(
     'À qui vos données sont transmises',
-    'À personne d\'autre. Aucun sous-traitant commercial externe pendant la bêta : pas de '
-        'fournisseur SMS réel, pas de Firebase/Google, pas de service de modération externe — '
-        'tout tourne sur notre propre infrastructure.',
+    'Un seul sous-traitant externe : Resend (Resend, Inc., États-Unis), qui achemine les '
+        'emails de vos codes de connexion — il ne reçoit que votre adresse et le code, jamais '
+        'votre profil, vos photos ni vos messages. Envoi configuré sur sa région européenne, '
+        'transfert encadré par les clauses contractuelles types de la Commission européenne. '
+        'Aucun autre tiers : pas de Firebase/Google, pas de service de modération externe — le '
+        'reste tourne sur notre propre infrastructure.',
   ),
   _LegalSection(
     'Sécurité',
@@ -107,7 +111,7 @@ const _privacySections = <_LegalSection>[
   _LegalSection(
     'Vos droits',
     'Export complet de vos données depuis Paramètres. Suppression de compte à tout moment : '
-        'profil vidé, photos supprimées, numéro anonymisé ; vos messages restent visibles pour '
+        'profil vidé, photos supprimées, adresse email anonymisée ; vos messages restent visibles pour '
         'vos interlocuteur·rice·s mais leur contenu original n\'est plus lisible par personne ; '
         'les matchs/notes/signalements restent en base (ils portent aussi les droits d\'un '
         'tiers) mais détachés de votre identité. Réclamation possible auprès de la CNIL '

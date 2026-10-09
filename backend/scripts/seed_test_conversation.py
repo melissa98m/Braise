@@ -18,18 +18,18 @@ import websockets
 BASE_URL = "http://backend:8000"
 WS_BASE_URL = "ws://backend:8000"
 
-ALICE_PHONE = "+33600000001"
-BRUNO_PHONE = "+33600000002"
+ALICE_EMAIL = "alice@example.com"
+BRUNO_EMAIL = "bruno@example.com"
 
 
-def login(client: httpx.Client, phone: str) -> tuple[str, str]:
-    otp = client.post("/auth/request-otp", json={"phone": phone})
+def login(client: httpx.Client, email: str) -> tuple[str, str]:
+    otp = client.post("/auth/request-otp", json={"email": email})
     otp.raise_for_status()
     code = otp.json()["debug_code"]
     if code is None:
         raise RuntimeError("debug_code est vide : DEBUG_OTP doit être à true dans backend/.env.")
 
-    token_response = client.post("/auth/verify-otp", json={"phone": phone, "code": code})
+    token_response = client.post("/auth/verify-otp", json={"email": email, "code": code})
     token_response.raise_for_status()
     token = token_response.json()["access_token"]
 
@@ -73,8 +73,8 @@ async def exchange(token_a: str, token_b: str, match_id: str) -> None:
 
 def main() -> None:
     with httpx.Client(base_url=BASE_URL, timeout=10) as client:
-        token_a, id_a = login(client, ALICE_PHONE)
-        token_b, id_b = login(client, BRUNO_PHONE)
+        token_a, id_a = login(client, ALICE_EMAIL)
+        token_b, id_b = login(client, BRUNO_EMAIL)
 
         match_id = ensure_match(client, token_a, id_a, token_b, id_b)
         print(f"Match Alice<->Bruno : {match_id}")

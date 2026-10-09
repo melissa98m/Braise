@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.daily_question import DailyQuestion
-from tests.helpers import auth_headers, auth_token, create_match, create_published_user, unique_phone
+from tests.helpers import auth_headers, auth_token, create_match, create_published_user, unique_email
 
 client = TestClient(app)
 
@@ -173,7 +173,7 @@ def test_daily_question_uses_bio_when_no_interests_or_city():
 
 def test_daily_question_requires_match_participant():
     match = create_match(client, interests_a=[], interests_b=["escalade", "poterie-x"])
-    outsider_headers = auth_headers(client, unique_phone())
+    outsider_headers = auth_headers(client, unique_email())
 
     response = client.get(
         f"/messaging/matches/{match['match_id']}/daily-question", headers=outsider_headers
@@ -183,7 +183,7 @@ def test_daily_question_requires_match_participant():
 
 def test_message_history_requires_participant():
     match = create_match(client)
-    outsider_headers = auth_headers(client, unique_phone())
+    outsider_headers = auth_headers(client, unique_email())
 
     response = client.get(
         f"/messaging/matches/{match['match_id']}/messages", headers=outsider_headers
@@ -307,7 +307,7 @@ def test_websocket_typing_broadcasts_to_other_participant():
 
 def test_websocket_rejects_non_participant():
     match = create_match(client)
-    outsider_token = auth_token(client, unique_phone())
+    outsider_token = auth_token(client, unique_email())
 
     url = f"/messaging/ws/{match['match_id']}?token={outsider_token}"
     try:

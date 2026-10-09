@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.subscriptions import FREE_MATCH_LIMIT
-from tests.helpers import auth_headers, create_match, create_published_user, unique_phone
+from tests.helpers import auth_headers, create_match, create_published_user, unique_email
 
 client = TestClient(app)
 
@@ -51,7 +51,7 @@ def test_feed_excludes_unpublished_and_already_swiped_profiles():
     me_headers, _ = create_published_user(
         client, "Observateur", interests=[_tag("cinéma", suffix)]
     )
-    unpublished_headers = auth_headers(client, unique_phone())
+    unpublished_headers = auth_headers(client, unique_email())
     client.put(
         "/profiles/me/public",
         headers=unpublished_headers,
@@ -132,7 +132,7 @@ def test_swipe_on_missing_or_unpublished_profile_returns_404():
     )
     assert missing.status_code == 404
 
-    unpublished_headers = auth_headers(client, unique_phone())
+    unpublished_headers = auth_headers(client, unique_email())
     unpublished_id = client.get("/auth/me", headers=unpublished_headers).json()["id"]
     response = client.post(
         "/discovery/swipe",
@@ -347,7 +347,7 @@ def test_feed_filters_by_age_range():
 
 
 def test_profile_rejects_age_min_above_age_max():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     response = client.put(
         "/profiles/me/public",
         headers=headers,
@@ -365,7 +365,7 @@ def test_profile_rejects_age_min_above_age_max():
 
 
 def test_profile_rejects_invalid_gender_value():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     response = client.put(
         "/profiles/me/public",
         headers=headers,
@@ -424,7 +424,7 @@ def test_list_cities_returns_known_french_cities():
 
 
 def test_nearest_city_resolves_gps_coordinates_to_closest_known_city():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     # Coordonnées de Paris (Notre-Dame, à quelques centaines de mètres près) : doit résoudre à
     # "Paris" plutôt qu'à n'importe quelle autre ville de la liste fermée.
     response = client.get(

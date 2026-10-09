@@ -92,10 +92,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
-  String _maskPhone(String phone) {
-    if (phone.length <= 4) return phone;
-    final visible = phone.substring(phone.length - 2);
-    return '${'•' * (phone.length - 2)}$visible';
+  // Garde la première lettre et le domaine (de quoi reconnaître son adresse), masque le reste —
+  // l'écran Paramètres peut être vu par-dessus l'épaule, l'adresse complète n'y sert à rien.
+  String _maskEmail(String email) {
+    final at = email.indexOf('@');
+    if (at <= 1) return email;
+    return '${email[0]}${'•' * (at - 1)}${email.substring(at)}';
   }
 
   Future<void> _exportData() async {
@@ -167,7 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   Widget build(BuildContext context) {
     final tokens = BraiseTokens.of(context);
     final textTheme = Theme.of(context).textTheme;
-    final phone = context.watch<AppServices>().authController.phone;
+    final email = context.watch<AppServices>().authController.email;
     final themeMode = context.watch<ThemeController>().mode;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
 
@@ -189,7 +191,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 _SectionLabel('COMPTE'),
                 _SettingsCard(
                   children: [
-                    _SettingsRow(label: 'Téléphone', value: phone == null ? '—' : _maskPhone(phone)),
+                    _SettingsRow(label: 'Email', value: email == null ? '—' : _maskEmail(email)),
                   ],
                 ),
                 const SizedBox(height: BraiseSpacing.xxl),

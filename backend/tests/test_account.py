@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.helpers import auth_headers, create_match, unique_phone
+from tests.helpers import auth_headers, create_match, unique_email
 
 client = TestClient(app)
 
@@ -12,14 +12,14 @@ def test_export_contains_profile_and_matches():
     export = client.get("/auth/me/export", headers=match["headers_a"])
     assert export.status_code == 200
     body = export.json()
-    assert body["account"]["phone"] is not None
+    assert body["account"]["email"] is not None
     assert body["public_profile"]["interests"] == ["cinéma"]
     assert len(body["matches"]) == 1
     assert body["matches"][0]["other_user_id"] == match["id_b"]
 
 
 def test_delete_account_scrubs_profile_and_blocks_future_auth():
-    headers = auth_headers(client, unique_phone())
+    headers = auth_headers(client, unique_email())
     client.put(
         "/profiles/me/public",
         headers=headers,
@@ -60,3 +60,16 @@ def test_deleted_users_messages_are_scrubbed_for_the_other_participant():
 def test_export_and_delete_require_auth():
     assert client.get("/auth/me/export").status_code == 401
     assert client.delete("/auth/me").status_code == 401
+
+
+def test_deleted_account_email_is_tombstoned_and_reusable_for_a_fresh_account():
+    email = unique_email()
+    headers = auth_headers(client, email)
+    old_id = client.get("/auth/me", headers=headers).json()["id"]
+    assert client.delete("/auth/me", headers=headers).status_code == 200
+
+    # L'adresse d'origine ne pointe plus vers le compte anonymisé : une nouvelle inscription avec
+    # la même adresse repart d'un compte vierge, jamais de l'historique supprimé.
+    new_me = client.get("/auth/me", headers=auth_headers(client, email)).json()
+    assert new_me["id"] != old_id
+    assert new_me["email"] == email

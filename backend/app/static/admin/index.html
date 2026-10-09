@@ -26,14 +26,14 @@
   <main id="login-view" class="view">
     <div class="login-card">
       <h1>Bresonne — Modération</h1>
-      <p class="subtitle">Réservé au personnel. Connexion par numéro de téléphone + code, comme
-        dans l'application.</p>
+      <p class="subtitle">Réservé au personnel. Connexion par adresse email + code, comme dans
+        l'application.</p>
 
-      <form id="phone-form" novalidate>
-        <label for="phone-input">Numéro de téléphone</label>
-        <input id="phone-input" name="phone" type="tel" inputmode="tel" autocomplete="tel"
-               placeholder="+33612345678" required />
-        <button type="submit" id="phone-submit">Recevoir un code</button>
+      <form id="email-form" novalidate>
+        <label for="email-input">Adresse email</label>
+        <input id="email-input" name="email" type="email" inputmode="email" autocomplete="email"
+               autocapitalize="none" spellcheck="false" placeholder="prenom@exemple.fr" required />
+        <button type="submit" id="email-submit">Recevoir un code</button>
       </form>
 
       <form id="code-form" novalidate hidden>

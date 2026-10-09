@@ -71,7 +71,7 @@ Widget _harness(AppServices services) {
 /// `debug_code` renseigné pré-remplit le champ code, exactement comme en dev réel
 /// (`DEBUG_OTP=true`, voir CLAUDE.md).
 Future<void> _requestCode(WidgetTester tester) async {
-  await tester.enterText(find.byType(TextField).first, '+33612345678');
+  await tester.enterText(find.byType(TextField).first, 'lea@example.com');
   await tester.tap(find.text('Recevoir mon code'));
   await tester.pumpAndSettle();
 }
@@ -107,7 +107,7 @@ void main() {
     await _useTallViewport(tester);
     final client = MockClient((request) async {
       if (request.method == 'POST' && request.url.path == '/auth/request-otp') {
-        return _json({'detail': 'Numéro invalide.'}, 400);
+        return _json({'detail': 'Trop de demandes de code.'}, 429);
       }
       return http.Response('not found', 404);
     });
@@ -115,7 +115,7 @@ void main() {
     await tester.pumpWidget(_harness(AppServices(httpClient: client)));
     await _requestCode(tester);
 
-    expect(find.text('Numéro invalide.'), findsOneWidget);
+    expect(find.text('Trop de demandes de code.'), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
   });
@@ -132,7 +132,7 @@ void main() {
         return _json({'access_token': 'token-1'}, 200);
       }
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'user-1', 'phone': '+33612345678', 'consents_given': true}, 200);
+        return _json({'id': 'user-1', 'email': 'lea@example.com', 'consents_given': true}, 200);
       }
       if (request.method == 'GET' && request.url.path == '/profiles/me/public') {
         return _json(_publicProfile(isPublished: false), 200);
@@ -164,7 +164,7 @@ void main() {
         return _json({'access_token': 'token-1'}, 200);
       }
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'user-1', 'phone': '+33612345678', 'consents_given': true}, 200);
+        return _json({'id': 'user-1', 'email': 'lea@example.com', 'consents_given': true}, 200);
       }
       if (request.method == 'GET' && request.url.path == '/profiles/me/public') {
         return _json(_publicProfile(isPublished: true), 200);
@@ -223,7 +223,7 @@ void main() {
         return _json({'access_token': 'token-1'}, 200);
       }
       if (request.method == 'GET' && request.url.path == '/auth/me') {
-        return _json({'id': 'user-1', 'phone': '+33612345678', 'consents_given': false}, 200);
+        return _json({'id': 'user-1', 'email': 'lea@example.com', 'consents_given': false}, 200);
       }
       return http.Response('not found', 404);
     });
@@ -234,5 +234,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ConsentScreen), findsOneWidget);
+  });
+
+  testWidgets('an obviously invalid email is caught before any network call', (tester) async {
+    await _useTallViewport(tester);
+    var calls = 0;
+    final client = MockClient((request) async {
+      calls++;
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'lea-at-example');
+    await tester.tap(find.text('Recevoir mon code'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Entrez une adresse email valide, ex. prenom@exemple.fr.'), findsOneWidget);
+    expect(calls, 0);
+  });
+
+  testWidgets('"Modifier l\'adresse" goes back to step 1 with the email field editable', (
+    tester,
+  ) async {
+    await _useTallViewport(tester);
+    final client = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path == '/auth/request-otp') {
+        return _json({'message': 'ok', 'debug_code': '123456'}, 200);
+      }
+      return http.Response('not found', 404);
+    });
+
+    await tester.pumpWidget(_harness(AppServices(httpClient: client)));
+    await _requestCode(tester);
+    expect(find.text('2/2'), findsOneWidget);
+
+    await tester.tap(find.text("Modifier l'adresse ou renvoyer un code"));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1/2'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+    expect(find.text('Recevoir mon code'), findsOneWidget);
   });
 }
