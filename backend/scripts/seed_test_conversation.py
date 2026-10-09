@@ -14,6 +14,7 @@ import json
 
 import httpx
 import websockets
+from _dev_only import require_development
 
 BASE_URL = "http://backend:8000"
 WS_BASE_URL = "ws://backend:8000"
@@ -72,6 +73,7 @@ async def exchange(token_a: str, token_b: str, match_id: str) -> None:
 
 
 def main() -> None:
+    require_development("seed_test_conversation.py")
     with httpx.Client(base_url=BASE_URL, timeout=10) as client:
         token_a, id_a = login(client, ALICE_EMAIL)
         token_b, id_b = login(client, BRUNO_EMAIL)

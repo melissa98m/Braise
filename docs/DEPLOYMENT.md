@@ -141,6 +141,28 @@ curl -I https://<domaine>/api/docs         # 404 : Swagger n'est servi qu'en dé
 Puis une vraie inscription depuis un téléphone : le code doit arriver par email (vérifier aussi
 les courriers indésirables), et le tableau de bord staff répondre sur `https://<domaine>/api/staff/`.
 
+## 5 bis. Checklist avant d'inviter les testeur·se·s
+
+Tout ce qui précède est prêt dans le dépôt ; ce qui suit ne peut être fait que par les éditeurs.
+
+- [ ] **Domaine** acheté, enregistrement A vers le VPS (§ 2).
+- [ ] **VPS LWS** loué et provisionné (§ 1) — premier passage réel de `provision.sh`.
+- [ ] **Resend** : compte, domaine d'envoi vérifié (SPF/DKIM/DMARC), région UE, DPA accepté, clé
+      API « Sending access » dans `SMTP_PASSWORD` (§ 2-3). Envoyer un code à une adresse Gmail et
+      à une adresse Outlook pour vérifier qu'il n'arrive pas en indésirables.
+- [ ] **Secrets** générés, `ENVIRONMENT=beta` : le backend démarre sans refus (§ 3).
+- [ ] **Sauvegardes hors serveur** : choisir et configurer un second emplacement pour
+      `backup_data` (§ 6) — sans lui, une panne du VPS fait tout perdre.
+- [ ] **Compte staff** : s'inscrire via l'app, puis `grant_staff.py` (§ 5) ; vérifier
+      `/api/staff/` (5 files, dont « Retours bêta » et « Erreurs de l'app »).
+- [ ] **Tests sur vrais téléphones** : un iPhone (Safari, puis « Sur l'écran d'accueil » pour les
+      notifications) et un Android (Chrome) — inscription par email, profil, swipe, match,
+      messages, notification reçue app fermée, retour envoyé.
+- [ ] **Groupe de testeur·se·s** : assez de personnes, et de profils variés, pour que les filtres
+      de découverte (genre, âge, distance) ne laissent personne avec un fil vide.
+- [ ] **Juridique** : CGU / confidentialité relues avant d'ouvrir au-delà d'un cercle de proches ;
+      mettre à jour les mentions légales (hébergement réel) dès le premier déploiement.
+
 ## 6. Sauvegardes, supervision, KPIs (déjà construits, juste à pointer vers ce serveur)
 
 - **Sauvegardes** (`infra/backup/`, déjà testées par restauration en local — voir

@@ -36,6 +36,7 @@ import uuid
 
 import httpx
 import websockets
+from _dev_only import require_development
 
 
 async def _signup_and_publish(
@@ -177,6 +178,7 @@ def _percentile(values: list[float], pct: float) -> float:
 
 
 async def main() -> None:
+    require_development("load_test_messaging.py")
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )

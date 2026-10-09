@@ -1206,6 +1206,13 @@ techniques : cahier des charges sections A, B, C, D.
   désormais créé une seule fois dans `main()` (il l'était dans `build()` de la racine), et les
   catégories du retour sont annoncées comme des boutons radio, pas comme des cases à cocher.
 
+- [x] **P27 — Base de bêta vierge, garantie.** Choix produit : la bêta démarre sans aucun faux
+  profil. Les scripts de seed et de charge refusent désormais explicitement de tourner hors
+  `ENVIRONMENT=development` (`scripts/_dev_only.py`) au lieu d'échouer par accident en cours de
+  route faute de `DEBUG_OTP`. `docs/DEPLOYMENT.md` gagne la checklist des actions qui restent
+  aux éditeurs avant d'inviter des testeur·se·s (domaine, VPS, Resend, sauvegardes hors serveur,
+  tests sur vrais téléphones, relecture juridique).
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

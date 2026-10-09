@@ -27,6 +27,12 @@ import websockets
 # scripts/, pas la racine du backend — nécessaire pour importer app.* ci-dessous.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from _dev_only import require_development  # noqa: E402
+
+# Avant d'importer `app.*` : hors développement, la configuration elle-même refuse de se charger
+# (core/config.py) — mieux vaut ce message-ci, explicite, que cette trace-là.
+require_development("seed_beta_tester.py")
+
 from seed_test_data import PERSONAS, seed_persona  # noqa: E402
 
 from app.db.session import SessionLocal  # noqa: E402

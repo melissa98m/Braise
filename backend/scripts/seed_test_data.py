@@ -15,6 +15,7 @@ matché/en conversation, pour un bêta-test qui n'a pas à tout construire à la
 """
 
 import httpx
+from _dev_only import require_development
 
 BASE_URL = "http://backend:8000"
 
@@ -156,6 +157,7 @@ def seed_persona(client: httpx.Client, persona: dict) -> tuple[str, dict, str]:
 
 
 def main() -> None:
+    require_development("seed_test_data.py")
     with httpx.Client(base_url=BASE_URL, timeout=10) as client:
         for persona in PERSONAS:
             seed_persona(client, persona)
