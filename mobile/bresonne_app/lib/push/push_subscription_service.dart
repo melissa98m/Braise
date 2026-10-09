@@ -1,4 +1,8 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../api/notifications_api.dart';
+import '../notifications/notification_prefs.dart';
+import 'push_availability.dart';
 import 'push_platform.dart' as platform;
 
 /// Enveloppe injectable autour du Service Worker/Push API — même motif que
@@ -16,16 +20,58 @@ class PushSubscriptionService {
     Future<({String endpoint, String p256dh, String auth})?> Function(String)? subscribe,
     Future<String?> Function()? unsubscribeAndReturnEndpoint,
     bool Function()? isPermissionGranted,
+    PushAvailability Function()? availability,
+    Stream<String> Function()? openMatchRequests,
+    String? Function()? takeInitialOpenMatch,
   }) : _registerServiceWorker = registerServiceWorker ?? platform.registerServiceWorker,
        _subscribe = subscribe ?? platform.subscribe,
        _unsubscribeAndReturnEndpoint =
            unsubscribeAndReturnEndpoint ?? platform.unsubscribeAndReturnEndpoint,
-       _isPermissionGranted = isPermissionGranted ?? platform.isNotificationPermissionGranted;
+       _isPermissionGranted = isPermissionGranted ?? platform.isNotificationPermissionGranted,
+       _availability = availability ?? platform.pushAvailability,
+       _openMatchRequests = openMatchRequests ?? platform.openMatchRequests,
+       _takeInitialOpenMatch = takeInitialOpenMatch ?? platform.takeInitialOpenMatch;
 
   final Future<void> Function() _registerServiceWorker;
   final Future<({String endpoint, String p256dh, String auth})?> Function(String) _subscribe;
   final Future<String?> Function() _unsubscribeAndReturnEndpoint;
   final bool Function() _isPermissionGranted;
+  final PushAvailability Function() _availability;
+  final Stream<String> Function() _openMatchRequests;
+  final String? Function() _takeInitialOpenMatch;
+
+  PushAvailability get availability => _availability();
+
+  /// Conversations à ouvrir parce qu'on a touché une notification alors que l'app était déjà
+  /// ouverte (voir web/push_worker.js) — écouté par RootShell.
+  Stream<String> get openMatchRequests => _openMatchRequests();
+
+  /// Conversation à ouvrir parce que l'app vient d'être lancée depuis une notification (`?match=`).
+  /// Consommée à la première lecture.
+  String? takeInitialOpenMatch() => _takeInitialOpenMatch();
+
+  /// Le « oui » de la carte d'activation (ou du bouton de Paramètres) : demande la permission
+  /// système — toujours sur ce geste explicite, jamais d'office — puis abonne cet appareil avec
+  /// les préférences courantes. `true` si les notifications sont effectivement actives ensuite.
+  Future<bool> enable(NotificationsApi api, Future<bool> Function() requestPermission) async {
+    if (!await requestPermission()) return false;
+    await syncFromPrefs(api);
+    return true;
+  }
+
+  /// `sync` avec les 3 préférences telles qu'enregistrées (ou leurs valeurs par défaut) — appelé
+  /// au démarrage quand la permission est déjà accordée : un appareil sur lequel on vient de se
+  /// (re)connecter retrouve ses notifications sans repasser par Paramètres.
+  Future<void> syncFromPrefs(NotificationsApi api) async {
+    final prefs = await SharedPreferences.getInstance();
+    bool pref(String key) => prefs.getBool(key) ?? NotificationPrefs.defaultFor(key);
+    await sync(
+      api,
+      match: pref(NotificationPrefs.match),
+      question: pref(NotificationPrefs.question),
+      messages: pref(NotificationPrefs.messages),
+    );
+  }
 
   /// Assure qu'un abonnement push existe pour cet appareil et reflète les 3 préférences
   /// courantes. Ne provoque jamais l'invite de permission (voir isPermissionGranted) — appelant

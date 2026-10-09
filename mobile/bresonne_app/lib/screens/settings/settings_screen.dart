@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../api/api_exception.dart';
 import '../../notifications/notification_prefs.dart';
+import '../../push/push_availability.dart';
 import '../../state/app_services.dart';
 import '../../state/theme_controller.dart';
 import '../../theme/braise_tokens.dart';
@@ -39,11 +40,62 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   // détruit — contrairement à un `Timer` brut, qui ferait échouer `pumpAndSettle()` dans les tests.
   late final AnimationController _pulseController;
 
+  PushAvailability? _pushAvailability;
+
   @override
   void initState() {
     super.initState();
     _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
     _loadNotifPrefs();
+    _pushAvailability = context.read<AppServices>().pushSubscriptionService.availability;
+  }
+
+  Future<void> _enablePush() async {
+    final services = context.read<AppServices>();
+    final enabled = await services.pushSubscriptionService.enable(
+      services.notificationsApi,
+      services.notificationsService.requestPermission,
+    );
+    if (!mounted) return;
+    setState(() => _pushAvailability = services.pushSubscriptionService.availability);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabled
+              ? 'Notifications activées sur cet appareil.'
+              : 'Notifications non autorisées — modifiable dans les réglages de votre navigateur.',
+        ),
+      ),
+    );
+  }
+
+  /// État réel du push sur cet appareil, au-dessus des 3 catégories : les interrupteurs ne font
+  /// que filtrer ce qu'on reçoit, ils ne servent à rien tant que la permission n'est pas accordée
+  /// — et une app mobile offre toujours ce chemin de retour explicite dans ses réglages.
+  Widget _pushStatus(TextTheme textTheme) {
+    return switch (_pushAvailability) {
+      PushAvailability.canAsk => Padding(
+        padding: const EdgeInsets.only(top: BraiseSpacing.sm),
+        child: ElevatedButton(
+          onPressed: _enablePush,
+          child: const Text('Activer les notifications sur cet appareil'),
+        ),
+      ),
+      PushAvailability.needsInstall => Text(
+        'Sur iPhone : ajoutez d\'abord Bresonne à l\'écran d\'accueil (Partager, puis « Sur '
+        'l\'écran d\'accueil ») et ouvrez-la depuis cette icône.',
+        style: textTheme.bodyMedium,
+      ),
+      PushAvailability.denied => Text(
+        'Bloquées pour Bresonne dans les réglages de votre navigateur ou de votre téléphone.',
+        style: textTheme.bodyMedium,
+      ),
+      PushAvailability.unsupported => Text(
+        'Non disponibles sur ce navigateur.',
+        style: textTheme.bodyMedium,
+      ),
+      _ => const SizedBox.shrink(),
+    };
   }
 
   void _pulseExportSuccess() {
@@ -61,9 +113,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _notifMatch = prefs.getBool(NotificationPrefs.match) ?? true;
-      _notifQuestion = prefs.getBool(NotificationPrefs.question) ?? true;
-      _notifMessages = prefs.getBool(NotificationPrefs.messages) ?? false;
+      _notifMatch =
+          prefs.getBool(NotificationPrefs.match) ?? NotificationPrefs.defaultFor(NotificationPrefs.match);
+      _notifQuestion =
+          prefs.getBool(NotificationPrefs.question) ??
+          NotificationPrefs.defaultFor(NotificationPrefs.question);
+      _notifMessages =
+          prefs.getBool(NotificationPrefs.messages) ??
+          NotificationPrefs.defaultFor(NotificationPrefs.messages);
       _loadingPrefs = false;
     });
   }
@@ -266,6 +323,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   'Reçues même quand l\'application est fermée, sur cet appareil.',
                   style: textTheme.bodyMedium,
                 ),
+                _pushStatus(textTheme),
                 const SizedBox(height: BraiseSpacing.sm),
                 _SettingsCard(
                   children: [

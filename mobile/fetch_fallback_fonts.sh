@@ -22,8 +22,12 @@ if [ ! -f "$DATA" ]; then
   exit 0
 fi
 
+# Roboto (police par défaut que le moteur charge toujours au démarrage) n'est pas dans la liste
+# de secours : son chemin vit dans fonts.dart du moteur CanvasKit, ajouté ici.
+ROBOTO="$(dirname "$DATA")/canvaskit/fonts.dart"
+
 mkdir -p "$DEST"
-grep -o "[a-z0-9]*/v[0-9]*/[A-Za-z0-9_.-]*\.woff2\?" "$DATA" | sort -u | while read -r path; do
+cat "$DATA" "$ROBOTO" 2>/dev/null | grep -o "[a-z0-9]*/v[0-9]*/[A-Za-z0-9_.-]*\.woff2\?" | sort -u | while read -r path; do
   [ -s "$DEST/$path" ] || echo "$path"
 done | xargs -r -P 8 -I{} sh -c 'mkdir -p "$(dirname "$0/{}")" && curl -sfL --retry 2 -o "$0/{}" "https://fonts.gstatic.com/s/{}" || echo "échec : {}" >&2' "$DEST"
 

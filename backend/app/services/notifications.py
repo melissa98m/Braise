@@ -1,15 +1,18 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import urlparse
 
+import redis
 from fastapi import HTTPException, status
 from pywebpush import WebPushException, webpush
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.models.daily_question import DailyQuestion
 from app.models.match import Match
 from app.models.profile import PublicProfile
 from app.models.push_subscription import PushSubscription
@@ -101,7 +104,13 @@ _CATEGORY_COLUMNS = {
 
 
 def send_push_to_user(
-    user_id: uuid.UUID, *, title: str, body: str, category: str, url: str | None = None
+    user_id: uuid.UUID,
+    *,
+    title: str,
+    body: str,
+    category: str,
+    url: str | None = None,
+    tag: str | None = None,
 ) -> None:
     """N'échoue jamais vers l'appelant (comme services/question_llm.py) : un envoi push cassé ne
     doit jamais faire échouer la création d'un match ou l'envoi d'un message. Ouvre sa propre
@@ -125,7 +134,9 @@ def send_push_to_user(
                         "endpoint": sub.endpoint,
                         "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
                     },
-                    data=json.dumps({"title": title, "body": body, "category": category, "url": url}),
+                    data=json.dumps(
+                        {"title": title, "body": body, "category": category, "url": url, "tag": tag}
+                    ),
                     vapid_private_key=settings.vapid_private_key,
                     vapid_claims={"sub": settings.vapid_subject},
                     timeout=5,
@@ -137,6 +148,11 @@ def send_push_to_user(
                     dead_ids.append(sub.id)
                 else:
                     logger.warning("Envoi push échoué pour l'abonnement %s : %s", sub.id, exc)
+            except Exception:
+                # Clés illisibles, erreur de chiffrement... : un seul abonnement corrompu ne doit
+                # jamais interrompre l'envoi aux autres (le rappel quotidien boucle sur tout le
+                # monde) — journalisé, la ligne reste, comme pour une erreur transitoire.
+                logger.exception("Envoi push impossible pour l'abonnement %s", sub.id)
         if dead_ids:
             db.query(PushSubscription).filter(PushSubscription.id.in_(dead_ids)).delete(
                 synchronize_session=False
@@ -150,15 +166,32 @@ def notify_new_match(swiper_id: uuid.UUID, recipient_id: uuid.UUID) -> None:
     with SessionLocal() as db:
         profile = db.get(PublicProfile, swiper_id)
         name = profile.display_name if profile and profile.display_name else "quelqu'un"
+        match = (
+            db.query(Match)
+            .filter(
+                or_(
+                    and_(Match.user_a_id == swiper_id, Match.user_b_id == recipient_id),
+                    and_(Match.user_a_id == recipient_id, Match.user_b_id == swiper_id),
+                )
+            )
+            .one_or_none()
+        )
+        match_id = match.id if match else None
     send_push_to_user(
         recipient_id,
         title="Braise commune !",
         body=f"Vous avez matché avec {name}.",
         category="match",
+        url=match_url(match_id),
     )
 
 
-def notify_new_message(match_id: uuid.UUID, sender_id: uuid.UUID, body: str) -> None:
+def notify_new_message(match_id: uuid.UUID, sender_id: uuid.UUID) -> None:
+    """Jamais le contenu du message (choix produit) : une notification s'affiche sur un écran
+    verrouillé, potentiellement sous les yeux de quelqu'un d'autre — pour une app de rencontre,
+    même un extrait peut révéler une relation ou une orientation. Le prénom suffit à donner envie
+    d'ouvrir l'app. `tag` par conversation : les messages suivants remplacent la notification
+    précédente au lieu de s'empiler (le Service Worker la re-signale, voir web/push_worker.js)."""
     if not get_settings().push_enabled:
         return
     with SessionLocal() as db:
@@ -168,10 +201,89 @@ def notify_new_message(match_id: uuid.UUID, sender_id: uuid.UUID, body: str) -> 
         recipient_id = match.user_b_id if match.user_a_id == sender_id else match.user_a_id
         profile = db.get(PublicProfile, sender_id)
         name = profile.display_name if profile and profile.display_name else "quelqu'un"
-    send_push_to_user(
-        recipient_id,
-        title=f"Nouveau message de {name}",
-        body=body[:120],
-        category="messages",
-        url=f"/matches/{match_id}",
-    )
+    send_push_to_user(recipient_id, **message_push(name, match_id))
+
+
+def message_push(sender_name: str, match_id: uuid.UUID) -> dict:
+    # Ne reçoit jamais le message lui-même : impossible, par construction, d'en faire fuiter un
+    # extrait dans une notification (tests/test_notifications.py).
+    return {
+        "title": f"Nouveau message de {sender_name}",
+        "body": "Ouvrez Bresonne pour le lire.",
+        "category": "messages",
+        "url": match_url(match_id),
+        "tag": f"match-{match_id}",
+    }
+
+
+def match_url(match_id: uuid.UUID | None) -> str:
+    # Lien ouvert au clic sur la notification : l'app lit `?match=` au démarrage (ou le reçoit du
+    # Service Worker si elle est déjà ouverte) et ouvre directement cette conversation — voir
+    # web/push_worker.js et lib/push/open_match_listener.dart.
+    return f"/?match={match_id}" if match_id else "/"
+
+
+# Une seule fois par personne et par jour, même si le planificateur tourne deux fois (redémarrage,
+# deux instances) : verrou Redis SET NX expirant, partagé entre instances, sans table de plus.
+_DAILY_REMINDER_LOCK_TTL_SECONDS = 36 * 3600
+
+
+def users_to_remind_for_daily_question(db: Session, today: date) -> list[uuid.UUID]:
+    """Personnes à qui rappeler la question du jour : au moins un match encore voilé (le jeu des
+    flammes n'a de sens qu'avant le déblocage) dont elles n'ont pas encore répondu à la question
+    du jour, et au moins un abonnement push qui accepte la catégorie « question ». Comptes bannis
+    ou supprimés exclus. Le jour est celui de services/messaging.py (`date.today()`, même horloge),
+    pour qu'« pas encore répondu » désigne bien la même question que celle que l'app affiche."""
+    answered_today = {
+        (row.match_id, row.for_user_id)
+        for row in db.query(DailyQuestion.match_id, DailyQuestion.for_user_id).filter(
+            DailyQuestion.question_date == today, DailyQuestion.answered.is_(True)
+        )
+    }
+    subscribed = {
+        user_id
+        for (user_id,) in db.query(PushSubscription.user_id)
+        .filter(PushSubscription.notify_question.is_(True))
+        .distinct()
+    }
+    if not subscribed:
+        return []
+    eligible_users = {
+        user_id
+        for (user_id,) in db.query(User.id).filter(
+            User.id.in_(subscribed), User.is_banned.is_(False), User.deleted_at.is_(None)
+        )
+    }
+    to_remind: set[uuid.UUID] = set()
+    for match in db.query(Match).filter(Match.unlocked_at.is_(None)):
+        for user_id in (match.user_a_id, match.user_b_id):
+            if user_id in eligible_users and (match.id, user_id) not in answered_today:
+                to_remind.add(user_id)
+    return sorted(to_remind)
+
+
+def send_daily_question_reminders(today: date | None = None) -> list[uuid.UUID]:
+    """Appelé une fois par jour par scripts/push_scheduler.py. Renvoie les personnes réellement
+    rappelées (hors doublons évités par le verrou)."""
+    if not get_settings().push_enabled:
+        return []
+    today = today or date.today()
+    with SessionLocal() as db:
+        user_ids = users_to_remind_for_daily_question(db, today)
+    sent: list[uuid.UUID] = []
+    client = redis.Redis.from_url(get_settings().redis_url, socket_timeout=2)
+    with client:
+        for user_id in user_ids:
+            key = f"bresonne:push:daily-question:{today.isoformat()}:{user_id}"
+            if not client.set(key, "1", nx=True, ex=_DAILY_REMINDER_LOCK_TTL_SECONDS):
+                continue
+            send_push_to_user(
+                user_id,
+                title="Votre question du jour vous attend",
+                body="Une bonne réponse, et c'est une flamme de plus pour vous deux.",
+                category="question",
+                url="/",
+                tag="daily-question",
+            )
+            sent.append(user_id)
+    return sent

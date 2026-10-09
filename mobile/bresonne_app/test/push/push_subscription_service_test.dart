@@ -14,6 +14,7 @@ import 'package:bresonne_app/push/push_subscription_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 http.Response _json(Object data, int status) {
   return http.Response(
@@ -154,5 +155,47 @@ void main() {
     );
 
     await service.disable(api);
+  });
+
+  test('enable never subscribes when the permission prompt is refused', () async {
+    final service = PushSubscriptionService(
+      isPermissionGranted: () => false,
+      registerServiceWorker: () async => fail('no registration after a refusal'),
+    );
+    final api = NotificationsApi(
+      ApiClient(tokenProvider: () => null, httpClient: MockClient((_) async {
+        fail('no HTTP call after a refusal');
+      })),
+    );
+
+    expect(await service.enable(api, () async => false), isFalse);
+  });
+
+  test('syncFromPrefs sends the stored preferences, defaulting all three to on', () async {
+    SharedPreferences.setMockInitialValues({'braise_notif_match': false});
+    Map<String, dynamic>? sent;
+    final service = PushSubscriptionService(
+      isPermissionGranted: () => true,
+      registerServiceWorker: () async {},
+      subscribe: (_) async => (endpoint: 'https://fcm.googleapis.com/x', p256dh: 'p', auth: 'a'),
+    );
+    final api = NotificationsApi(
+      ApiClient(
+        tokenProvider: () => null,
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/notifications/vapid-public-key') {
+            return _json({'public_key': 'fake-key'}, 200);
+          }
+          sent = jsonDecode(request.body) as Map<String, dynamic>;
+          return _json({'endpoint': 'x'}, 200);
+        }),
+      ),
+    );
+
+    await service.syncFromPrefs(api);
+
+    expect(sent!['notify_match'], isFalse);
+    expect(sent!['notify_question'], isTrue);
+    expect(sent!['notify_messages'], isTrue);
   });
 }

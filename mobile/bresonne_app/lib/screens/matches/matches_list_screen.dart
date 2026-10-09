@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../api/api_exception.dart';
 import '../../models/discovery.dart';
+import '../../push/push_opt_in_card.dart';
 import '../../state/app_services.dart';
 import '../../theme/braise_tokens.dart';
 import '../../widgets/braise_page_route.dart';
@@ -65,38 +66,44 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
                   ),
                 ],
               )
-            : ListView.separated(
+            : ListView.builder(
                 padding: const EdgeInsets.all(BraiseSpacing.lg),
-                itemCount: _matches.length,
-                separatorBuilder: (_, _) => const SizedBox(height: BraiseSpacing.sm),
-                itemBuilder: (context, index) {
+                // +1 : la carte d'activation des notifications en tête de liste (elle se masque
+                // d'elle-même une fois activées, refusées ou reportées).
+                itemCount: _matches.length + 1,
+                itemBuilder: (context, position) {
+                  if (position == 0) return const PushOptInCard();
+                  final index = position - 1;
                   final match = _matches[index];
                   return _StaggeredEntrance(
                     index: index,
-                    child: ListTile(
-                      tileColor: tokens.surface1,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(BraiseRadii.card),
-                        side: BorderSide(color: tokens.borderHairline),
-                      ),
-                      title: Text(match.otherDisplayName, style: textTheme.titleMedium),
-                      subtitle: Text(
-                        match.isUnlocked ? 'Profil privé débloqué' : 'Profil privé · ${match.unlockPct}%',
-                        style: textTheme.bodyMedium,
-                      ),
-                      trailing: _UnreadBadgePop(
-                        count: match.unreadCount,
-                        child: Badge.count(
-                          count: match.unreadCount,
-                          isLabelVisible: match.unreadCount > 0,
-                          alignment: AlignmentDirectional.topStart,
-                          offset: const Offset(-4, -4),
-                          child: FlameDiamonds(filled: match.flameCount, total: match.unlockThreshold),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: BraiseSpacing.sm),
+                      child: ListTile(
+                        tileColor: tokens.surface1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(BraiseRadii.card),
+                          side: BorderSide(color: tokens.borderHairline),
                         ),
+                        title: Text(match.otherDisplayName, style: textTheme.titleMedium),
+                        subtitle: Text(
+                          match.isUnlocked ? 'Profil privé débloqué' : 'Profil privé · ${match.unlockPct}%',
+                          style: textTheme.bodyMedium,
+                        ),
+                        trailing: _UnreadBadgePop(
+                          count: match.unreadCount,
+                          child: Badge.count(
+                            count: match.unreadCount,
+                            isLabelVisible: match.unreadCount > 0,
+                            alignment: AlignmentDirectional.topStart,
+                            offset: const Offset(-4, -4),
+                            child: FlameDiamonds(filled: match.flameCount, total: match.unlockThreshold),
+                          ),
+                        ),
+                        onTap: () => Navigator.of(
+                          context,
+                        ).push(braiseRoute(context, ConversationScreen(match: match))),
                       ),
-                      onTap: () => Navigator.of(
-                        context,
-                      ).push(braiseRoute(context, ConversationScreen(match: match))),
                     ),
                   );
                 },

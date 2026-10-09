@@ -1174,6 +1174,22 @@ techniques : cahier des charges sections A, B, C, D.
   réécrit (LWS, DNS + Resend, `infra/deploy/build_web.sh`). Pas encore exécuté sur le vrai VPS
   (pas encore loué) : `provision.sh` reste relu mais non vérifié.
 
+- [x] **P25 — Notifications push terminées (Web Push).** Chantier commencé avant ce palier,
+  terminé ici : notification de message sans contenu (choix produit : discrétion sur écran
+  verrouillé), une notification regroupée par conversation, clic qui ouvre directement la bonne
+  conversation (app fermée ou déjà ouverte), rappel quotidien de la question du jour à 18 h
+  (nouveau service `push-scheduler`, au plus une fois par jour et par personne, juste aussi les
+  nuits de changement d'heure), et activation pensée comme dans une app mobile (demandé
+  directement) : pré-permission dans Échanges, bouton explicite dans Paramètres, guidage « Sur
+  l'écran d'accueil » sur iPhone où le Web Push n'existe pas autrement. Messages activés par
+  défaut. Trois défauts corrigés en route : le Service Worker de Flutter et celui du push se
+  disputaient la même portée (corrigé en P24, vérifié ici : un seul worker enregistré), un
+  abonnement corrompu pouvait interrompre tous les rappels, et la tâche d'envoi depuis le
+  WebSocket n'était tenue que par une référence faible. Vérifié dans un vrai Chrome avec un vrai
+  abonnement FCM (voir `CLAUDE.md`). Politique de confidentialité (+ copie in-app) et DPIA
+  mises à jour : services de push des navigateurs nommés, contenu chiffré, transferts hors UE
+  (la section transferts disait encore « aucun » malgré Resend depuis P23 — corrigé).
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

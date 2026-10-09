@@ -6,11 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api_exception.dart';
 import '../notifications/notification_prefs.dart';
+import '../push/push_availability.dart';
 import '../state/app_services.dart';
 import '../theme/braise_tokens.dart';
+import '../widgets/braise_page_route.dart';
 import '../widgets/sign_shapes.dart';
 import 'discovery/discovery_screen.dart';
 import 'matches/matches_list_screen.dart';
+import 'messaging/conversation_screen.dart';
 import 'profile/profile_trust_screen.dart';
 
 /// Barre d'onglets à 3 entrées : Découvrir / Échanges / Moi. La maquette montre 4 onglets
@@ -31,6 +34,7 @@ class _RootShellState extends State<RootShell> {
 
   int _index = 0;
   int _totalUnread = 0;
+  StreamSubscription<String>? _openMatchSubscription;
 
   static const _screens = [
     DiscoveryScreen(),
@@ -43,6 +47,49 @@ class _RootShellState extends State<RootShell> {
     super.initState();
     unawaited(_maybeNotifyDailyQuestion());
     unawaited(_refreshUnreadBadge());
+    final push = context.read<AppServices>().pushSubscriptionService;
+    unawaited(_resyncPushIfGranted());
+    // Toucher une notification (web/push_worker.js) : soit l'app était fermée et s'ouvre sur
+    // `?match=<id>`, soit elle était ouverte et le Service Worker lui envoie la demande.
+    _openMatchSubscription = push.openMatchRequests.listen(_openMatch);
+    final initialMatch = push.takeInitialOpenMatch();
+    if (initialMatch != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openMatch(initialMatch));
+    }
+  }
+
+  @override
+  void dispose() {
+    _openMatchSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Permission déjà accordée sur cet appareil (activée lors d'une session précédente, ou depuis
+  /// la carte d'Échanges) : réabonne en silence à chaque arrivée dans l'app connectée. Couvre
+  /// une reconnexion (la déconnexion désabonne, voir SettingsScreen) et un abonnement que le
+  /// navigateur aurait renouvelé — sans jamais déclencher d'invite.
+  Future<void> _resyncPushIfGranted() async {
+    final services = context.read<AppServices>();
+    if (services.pushSubscriptionService.availability != PushAvailability.granted) return;
+    await services.pushSubscriptionService.syncFromPrefs(services.notificationsApi);
+  }
+
+  Future<void> _openMatch(String matchId) async {
+    final services = context.read<AppServices>();
+    try {
+      final matches = await services.discoveryApi.getMatches();
+      final match = matches.where((m) => m.matchId == matchId).firstOrNull;
+      // Match inconnu (supprimé, ou notification d'un autre compte sur un appareil partagé) :
+      // on reste simplement sur l'app, sans erreur.
+      if (match == null || !mounted) return;
+      setState(() => _index = 1);
+      final navigator = Navigator.of(context);
+      navigator.popUntil((route) => route.isFirst);
+      unawaited(navigator.push(braiseRoute(context, ConversationScreen(match: match))));
+    } on ApiException {
+      // Même règle que le badge : ouvrir depuis une notification est un raccourci, son échec ne
+      // doit jamais casser l'écran principal.
+    }
   }
 
   /// P9.2 : badge global sur l'onglet "Échanges" — `MatchesListScreen`/`ProfileTrustScreen`

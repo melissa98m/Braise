@@ -56,6 +56,16 @@ ni numéro de téléphone. Trois modes, choisis dans `.env` :
 Donner le rôle staff à un compte : `docker compose run --rm backend python scripts/grant_staff.py
 prenom@exemple.fr`.
 
+## Notifications push
+
+Web Push réel (gratuit, sans Firebase) : `PUSH_ENABLED=true` + une paire de clés VAPID dans `.env`
+(commande de génération dans `.env.example`). Le rappel quotidien de la question du jour (18 h,
+heure de Paris) est envoyé par un service à part, à démarrer en dev avec
+`docker compose --profile push up -d push-scheduler` (toujours démarré en bêta/prod), ou à
+déclencher une fois à la main : `docker compose run --rm backend python scripts/push_scheduler.py --once`.
+Les notifications exigent un contexte sécurisé : `localhost` ou HTTPS, jamais une IP de réseau
+local en `http://`. Sur iPhone, uniquement depuis l'app ajoutée à l'écran d'accueil.
+
 ## Bêta-test entre proches sur le réseau local
 
 Pas de VPS ni de domaine (voir `docs/V2_FEATURES.md`) : pour qu'un·e proche sur le même Wi-Fi/LAN

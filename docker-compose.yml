@@ -97,6 +97,21 @@ services:
       redis:
         condition: service_healthy
 
+  # Rappel quotidien de la question du jour en notification push (backend/scripts/push_scheduler.py).
+  # Même image que `backend`, une simple boucle qui dort jusqu'à 18 h (Paris). Profil "push" en
+  # dev (inutile sans PUSH_ENABLED=true et de vraies clés VAPID) ; toujours démarré en bêta/prod
+  # (docker-compose.prod.yml retire le profil).
+  push-scheduler:
+    build: ./backend
+    env_file: .env
+    profiles: ["push"]
+    command: ["python", "scripts/push_scheduler.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Boîte de réception de test (optionnelle, profil "mail") : attrape tous les emails envoyés en
   # SMTP par le backend sans jamais les délivrer à l'extérieur — pour vérifier le vrai chemin
   # d'envoi du code OTP en local (EMAIL_BACKEND=smtp, voir .env.example) sans compte Resend.

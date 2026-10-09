@@ -119,10 +119,13 @@ const _privacySections = <_LegalSection>[
   ),
   _LegalSection(
     'Notifications et stockage local',
-    'Les notifications ne s\'activent que sur votre action explicite, avec la permission de '
-        'votre navigateur — jamais sans confirmation, et seulement quand l\'app est ouverte. '
-        'Seuls votre jeton de connexion et vos préférences d\'affichage sont stockés sur votre '
-        'appareil, jamais de cookie publicitaire ni de traceur tiers.',
+    'Les notifications ne s\'activent que sur votre action explicite, puis la permission de '
+        'votre navigateur ou téléphone — jamais d\'office, désactivables à tout moment. Elles '
+        'arrivent même app fermée, via le service de notification de votre navigateur (Google, '
+        'Mozilla ou Apple), chiffrées de bout en bout : il les achemine sans pouvoir les lire. '
+        'Jamais le contenu de vos messages, seulement un prénom et le type d\'événement. Seuls '
+        'votre jeton de connexion et vos préférences sont stockés sur votre appareil, jamais de '
+        'cookie publicitaire ni de traceur tiers.',
   ),
 ];
 

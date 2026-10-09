@@ -1,8 +1,7 @@
-// Service Worker dédié au Web Push (voir lib/push/, docs/V2_FEATURES.md §6) — un fichier séparé,
-// pas une extension du flutter_service_worker.js généré par `flutter build web` : celui-ci s'auto-
-// désenregistre au démarrage dans cette version du SDK Flutter (mécanisme de mise en cache déjà
-// déprécié), donc rien à y étendre. Minimal et délibérément sans mise en cache/offline — ce n'est
-// pas son rôle ici.
+// Service Worker dédié au Web Push (voir lib/push/, docs/V2_FEATURES.md §6) — le seul worker de
+// l'app : web/flutter_bootstrap.js n'enregistre plus celui de Flutter (déprécié), qui occupait la
+// même portée « / » et remplaçait celui-ci à chaque chargement. Minimal et délibérément sans mise
+// en cache/offline — ce n'est pas son rôle ici.
 //
 // Le filtrage par catégorie (match/question/messages) se fait côté serveur (voir
 // backend/app/services/notifications.py) : ce worker n'a donc besoin d'aucun stockage local
@@ -39,14 +38,38 @@ async function handlePush(event) {
     return;
   }
 
-  await self.registration.showNotification(data.title || 'Bresonne', {
+  const options = {
     body: data.body || '',
+    icon: '/icons/Icon-192.png',
+    badge: '/icons/Icon-192.png',
     data: { url: data.url || '/' },
-  });
+  };
+  if (data.tag) {
+    // Un tag par conversation : un nouveau message remplace la notification précédente de la même
+    // conversation au lieu d'en empiler une par message ; `renotify` la fait quand même vibrer.
+    options.tag = data.tag;
+    options.renotify = true;
+  }
+  await self.registration.showNotification(data.title || 'Bresonne', options);
 }
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
-  event.waitUntil(self.clients.openWindow(url));
+  event.waitUntil(openFromNotification(event.notification.data && event.notification.data.url));
 });
+
+// Réutilise l'app déjà ouverte (onglet ou app installée sur l'écran d'accueil) plutôt que d'en
+// ouvrir une seconde : on la remet au premier plan et on lui demande d'ouvrir la conversation
+// (lib/push/, message « open-match »). Sinon, ouverture sur `/?match=<id>`, lu au démarrage.
+async function openFromNotification(rawUrl) {
+  const url = new URL(rawUrl || '/', self.location.origin);
+  const matchId = url.searchParams.get('match');
+  const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const existing = clientsList.find((c) => new URL(c.url).origin === self.location.origin);
+  if (existing) {
+    await existing.focus();
+    if (matchId) existing.postMessage({ type: 'open-match', matchId });
+    return;
+  }
+  await self.clients.openWindow(url.href);
+}

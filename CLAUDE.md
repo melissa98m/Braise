@@ -589,8 +589,47 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
 - Payments/subscriptions: real free/premium logic exists (Phase 5), but activation is
   `POST /subscriptions/debug-activate` rather than a real purchase — no StoreKit/Play Billing
   integration until there's an actual store build to attach it to (cahier des charges D.8).
-- Push notifications: still not real push (no Firebase/APNs, no Service Worker registered — see
-  `notifications/` below for what P9.1 added instead, which is a different, more limited thing).
+- Push notifications: real Web Push since P25 (VAPID + the browser's own push service, free, no
+  Firebase SDK) — see the paragraph below. Native FCM/APNs would only replace `lib/push/
+  push_platform_*.dart`, the UI and backend stay.
+
+**Web Push (P25)** (`models/push_subscription.py`, `services/notifications.py`,
+`api/v1/notifications.py`, `scripts/push_scheduler.py`, `mobile/bresonne_app/lib/push/`,
+`web/push_worker.js`): one `PushSubscription` row per browser endpoint, category filtering
+(`notify_match`/`_question`/`_messages`) done server-side, endpoint host allow-listed to the 3 real
+push services (anti-SSRF), 404/410 from the push service purges the row. Payload rules: a message
+push never carries message content (`message_push()` doesn't even receive it — "Nouveau message de
+Léa", choice made for lock-screen discretion), carries `tag: match-<id>` (one grouped notification
+per conversation, `renotify`) and `url: /?match=<id>`. `send_push_to_user` isolates *any*
+per-subscription exception, not just `WebPushException` — one corrupt key used to be able to abort
+the whole daily reminder loop. The chat WS keeps a strong reference to its fire-and-forget push
+task (`_background_tasks`), per asyncio's own warning that weakly-referenced tasks can be GC'd
+mid-run. Daily reminder: `push-scheduler` Compose service (`push` profile in dev, profile cleared
+with `!reset []` in the prod overlay) sleeps until 18:00 Europe/Paris — delay computed in UTC,
+since subtracting two Europe/Paris datetimes compares wall time and would be an hour off on the
+DST night — then `send_daily_question_reminders()` targets users with a still-veiled match whose
+question they haven't answered today (same `date.today()` clock as `services/messaging.py`), at
+most once per user per day via a Redis `SET NX EX` lock (safe across restarts/duplicate
+schedulers). Client: `web/push_worker.js` skips display when an app window is visible (no
+duplicate with the in-app P9.1 notification), and on click focuses the existing window and
+`postMessage`s `{type: open-match}` or opens `/?match=<id>`; `RootShell` handles both
+(`PushSubscriptionService.openMatchRequests`/`takeInitialOpenMatch`, the latter also strips the
+query so a reload doesn't reopen it). Opt-in follows native-app practice (requested directly:
+"think of it as a mobile app"): a soft-ask `PushOptInCard` at the top of Échanges (so only once
+there's a match) triggers the system prompt only on "Activer"; "Plus tard" snoozes 7 days;
+Settings always shows the real `PushAvailability` with an explicit enable button. `needsInstall`
+(iPhone/iPad Safari outside an installed home-screen app — PushManager doesn't exist there before
+iOS 16.4's "Sur l'écran d'accueil") guides the install instead of offering an impossible
+permission. Permission already granted → `RootShell` silently re-subscribes on every signed-in
+start (sign-out unsubscribes). All 3 categories default on (`NotificationPrefs.defaults`, messages
+turned on in P25). Verified in real Chrome: subscription with a real FCM endpoint stored
+server-side, FCM accepting real sends; delivery checked via DevTools'
+`ServiceWorker.deliverPushMessage` (headless Chrome holds no push-service connection, so it can't
+receive a real push): visible app → nothing shown, closed app + 2 messages → exactly 1 grouped,
+content-free notification; `?match=` cold start and worker `open-match` both open the right
+conversation. Testing trap worth knowing: copying a helper script into `backend/scripts/` makes
+uvicorn `--reload` restart mid-test and silently kill in-flight push tasks — run ad-hoc scripts
+from a mounted scratch dir instead.
 
 **Infra** (`docker-compose.yml` + `infra/`): Postgres, MinIO (+ a one-shot `minio-init` container
 that runs `infra/minio/init.sh` to create the `bresonne-photos` bucket via `mc`), the FastAPI

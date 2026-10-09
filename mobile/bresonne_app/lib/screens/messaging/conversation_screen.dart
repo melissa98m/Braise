@@ -138,7 +138,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// navigateur n'a jamais été accordée. `defaultValue: false` reprend celui de `SettingsScreen`
   /// (seule des 3 préférences désactivée par défaut).
   Future<void> _maybeNotifyNewMessage(AppServices services, ChatMessage message) async {
-    if (!await NotificationPrefs.isEnabled(NotificationPrefs.messages, defaultValue: false)) {
+    if (!await NotificationPrefs.isEnabled(
+      NotificationPrefs.messages,
+      defaultValue: NotificationPrefs.defaultFor(NotificationPrefs.messages),
+    )) {
       return;
     }
     if (!mounted) return;

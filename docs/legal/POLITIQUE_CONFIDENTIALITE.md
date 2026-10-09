@@ -154,10 +154,20 @@ de filtres (voir article 3).
 
 ## 10. Notifications
 
-Si vous activez les notifications dans Paramètres, votre navigateur vous demandera une permission
-explicite — jamais activées sans votre action. Elles ne fonctionnent que lorsque l'application est
-ouverte dans un onglet (pas de notification si l'application est complètement fermée pendant la
-phase de bêta).
+Les notifications (nouveau match, nouveau message, rappel quotidien de la question du jour) ne
+s'activent que sur votre action explicite — d'abord dans l'application, puis par la permission de
+votre navigateur ou de votre téléphone ; jamais d'office. Vous choisissez les catégories dans
+Paramètres et pouvez tout désactiver à tout moment, y compris depuis les réglages de votre
+appareil ; vous déconnecter désactive les notifications sur cet appareil.
+
+Elles arrivent même application fermée. Pour cela, votre navigateur fournit une adresse
+d'abonnement technique propre à votre appareil, que nous conservons tant que les notifications
+restent actives (supprimée à la déconnexion, à la suppression du compte, ou dès que votre
+navigateur la déclare invalide). Chaque notification transite par le service de notification de
+votre navigateur — Google (Chrome, Edge, Android), Mozilla (Firefox) ou Apple (Safari, iPhone) —
+**chiffrée de bout en bout** (norme Web Push) : ce service l'achemine sans pouvoir la lire. Son
+contenu est de toute façon volontairement minimal : un prénom et un type d'événement, **jamais le
+contenu de vos messages**, pour rester discret sur un écran verrouillé.
 
 ## 11. Cookies et stockage local
 
@@ -168,10 +178,16 @@ utilisés qu'après recueil de ce consentement.
 
 ## 12. Transferts internationaux
 
-Certains prestataires techniques pourraient être amenés à traiter des données depuis des pays
-situés en dehors de l'Espace économique européen. Aucun n'est utilisé à ce jour pendant la bêta
-(voir article 5) ; si cela devenait le cas, les garanties requises par la réglementation seraient
-mises en place et cette politique serait mise à jour en conséquence.
+Deux catégories de prestataires peuvent traiter des données depuis des pays situés en dehors de
+l'Espace économique européen :
+- **Resend** (États-Unis), pour l'envoi des emails de connexion (adresse email et code uniquement,
+  voir article 5) — envoi configuré sur sa région européenne, transfert encadré par les clauses
+  contractuelles types de la Commission européenne prévues par son accord de traitement ;
+- le **service de notification de votre navigateur** (Google, Mozilla ou Apple, voir article 10),
+  seulement si vous activez les notifications — il ne reçoit qu'un message chiffré qu'il ne peut
+  pas lire, et l'adresse d'abonnement technique de votre appareil.
+
+Toute autre évolution sera reflétée ici avant d'être mise en œuvre.
 
 ## 13. Modifications
 

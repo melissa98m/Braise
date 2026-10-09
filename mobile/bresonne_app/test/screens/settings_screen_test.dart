@@ -6,6 +6,7 @@
 import 'dart:convert';
 
 import 'package:bresonne_app/notifications/notifications_service.dart';
+import 'package:bresonne_app/push/push_availability.dart';
 import 'package:bresonne_app/push/push_subscription_service.dart';
 import 'package:bresonne_app/screens/onboarding/otp_screen.dart';
 import 'package:bresonne_app/screens/settings/settings_screen.dart';
@@ -74,7 +75,7 @@ void main() {
     expect(switches.length, 3);
     expect(switches[0].value, isTrue); // Nouveau match
     expect(switches[1].value, isTrue); // Question du jour
-    expect(switches[2].value, isFalse); // Messages
+    expect(switches[2].value, isTrue); // Messages (activés par défaut depuis P25)
   });
 
   testWidgets('the email is masked, keeping the first letter and the domain', (tester) async {
@@ -97,6 +98,8 @@ void main() {
 
   testWidgets('toggling a notification preference persists it', (tester) async {
     await _useTallViewport(tester);
+    // Messages activés par défaut depuis P25 : on part d'un état éteint pour tester l'allumage.
+    SharedPreferences.setMockInitialValues({'braise_notif_messages': false});
     final client = MockClient((_) async => http.Response('not found', 404));
 
     await tester.pumpWidget(_harness(AppServices(httpClient: client)));
@@ -116,6 +119,8 @@ void main() {
     // all 3 labels/descriptions merged into one block, with no way to tell which switch was
     // which — found by inspecting the live app's accessibility tree, not by reading the code.
     await _useTallViewport(tester);
+    // Messages activés par défaut depuis P25 : on part d'un état éteint (états mixtes à tester).
+    SharedPreferences.setMockInitialValues({'braise_notif_messages': false});
     final client = MockClient((_) async => http.Response('not found', 404));
 
     await tester.pumpWidget(_harness(AppServices(httpClient: client)));
@@ -158,6 +163,8 @@ void main() {
     // introuvables par tabulation. Trouvé en parcourant l'ordre de tabulation réel de l'app, pas
     // en supposant que le correctif sémantique précédent suffisait à lui seul.
     await _useTallViewport(tester);
+    // Messages activés par défaut depuis P25 : on part d'un état éteint (états mixtes à tester).
+    SharedPreferences.setMockInitialValues({'braise_notif_messages': false});
     final client = MockClient((_) async => http.Response('not found', 404));
 
     await tester.pumpWidget(_harness(AppServices(httpClient: client)));
@@ -180,6 +187,8 @@ void main() {
     tester,
   ) async {
     await _useTallViewport(tester);
+    // Messages activés par défaut depuis P25 : on part d'un état éteint pour tester l'allumage.
+    SharedPreferences.setMockInitialValues({'braise_notif_messages': false});
     final client = MockClient((_) async => http.Response('not found', 404));
     var permissionRequested = false;
     final services = AppServices(
@@ -230,6 +239,8 @@ void main() {
     tester,
   ) async {
     await _useTallViewport(tester);
+    // Messages activés par défaut depuis P25 : on part d'un état éteint pour tester l'allumage.
+    SharedPreferences.setMockInitialValues({'braise_notif_messages': false});
     Map<String, dynamic>? postedBody;
     final client = MockClient((request) async {
       if (request.url.path == '/notifications/vapid-public-key') {
@@ -402,5 +413,53 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(OtpScreen), findsOneWidget);
+  });
+
+  testWidgets('push not yet allowed: an explicit "enable" button requests permission then subscribes', (
+    tester,
+  ) async {
+    await _useTallViewport(tester);
+    var permissionAsked = false;
+    var subscribed = false;
+    final client = MockClient((request) async {
+      if (request.url.path == '/notifications/vapid-public-key') {
+        return _json({'public_key': 'fake-key'}, 200);
+      }
+      if (request.url.path == '/notifications/subscribe') {
+        subscribed = true;
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['notify_messages'], isTrue);
+        return _json({'endpoint': body['endpoint']}, 200);
+      }
+      return http.Response('not found', 404);
+    });
+    var granted = false;
+    final services = AppServices(
+      httpClient: client,
+      notificationsService: NotificationsService(
+        requestPermission: () async {
+          permissionAsked = true;
+          granted = true;
+          return true;
+        },
+        notify: ({required String title, String? body}) {},
+      ),
+      pushSubscriptionService: PushSubscriptionService(
+        availability: () => granted ? PushAvailability.granted : PushAvailability.canAsk,
+        isPermissionGranted: () => granted,
+        registerServiceWorker: () async {},
+        subscribe: (_) async => (endpoint: 'https://fcm.googleapis.com/x', p256dh: 'p', auth: 'a'),
+      ),
+    );
+
+    await tester.pumpWidget(_harness(services));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Activer les notifications sur cet appareil'));
+    await tester.pumpAndSettle();
+
+    expect(permissionAsked, isTrue);
+    expect(subscribed, isTrue);
+    expect(find.text('Notifications activées sur cet appareil.'), findsOneWidget);
+    expect(find.text('Activer les notifications sur cet appareil'), findsNothing);
   });
 }

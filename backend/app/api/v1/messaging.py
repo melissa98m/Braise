@@ -28,6 +28,8 @@ from app.ws.connection_manager import manager
 
 router = APIRouter(prefix="/messaging", tags=["messaging"])
 
+_background_tasks: set[asyncio.Task] = set()
+
 
 @router.get("/matches/{match_id}/messages", response_model=list[MessageOut])
 def list_messages(
@@ -140,9 +142,14 @@ async def chat_ws(websocket: WebSocket, match_id: uuid.UUID, token: str = Query(
             # d'envoi push ne doit jamais retarder la livraison du message sur le socket déjà
             # ouvert, qui est le mécanisme de livraison principal, le push n'étant qu'un rattrapage
             # pour l'onglet fermé.
-            asyncio.create_task(
-                asyncio.to_thread(notifications_service.notify_new_message, match_id, user_id, saved_body)
+            push_task = asyncio.create_task(
+                asyncio.to_thread(notifications_service.notify_new_message, match_id, user_id)
             )
+            # Référence forte jusqu'à la fin de la tâche : la boucle asyncio ne garde qu'une
+            # référence faible aux tâches, une tâche « lancée et oubliée » peut être collectée en
+            # plein envoi (avertissement explicite de la doc Python d'asyncio.create_task).
+            _background_tasks.add(push_task)
+            push_task.add_done_callback(_background_tasks.discard)
             await manager.broadcast(
                 match_id,
                 {

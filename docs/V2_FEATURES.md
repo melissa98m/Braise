@@ -136,7 +136,12 @@ Google Play (payant, frais unique) — aucun des deux n'existe pour ce projet Fl
    côté serveur — sans ça, `Subscription.expires_at` ne se met à jour que quand l'utilisateur
    rouvre l'app, ce qui est fragile pour un abonnement récurrent.
 
-## 6. Push notifications réelles *(Stub → réel, différent de P9.1)*
+## 6. Push notifications réelles *(Stub → réel — livré en Web Push, voir `docs/ROADMAP.md` P25)*
+
+Livré via l'option 1 ci-dessous (Web Push + VAPID, gratuit, sans Firebase) : rappel quotidien de la
+question du jour, regroupement par conversation, ouverture directe de la conversation au clic,
+pré-permission « à la mobile » et cas iPhone (ajout à l'écran d'accueil). Une app native ne
+remplacerait que `lib/push/push_platform_*.dart`. Sketch d'origine conservé ci-dessous.
 
 **État actuel** : P9.1 a ajouté de vraies notifications navigateur (`Notification` API,
 `notifications/`) mais **seulement au premier plan** — la page doit être ouverte. Aucun Service

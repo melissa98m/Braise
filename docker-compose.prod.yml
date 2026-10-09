@@ -47,6 +47,12 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
               "--proxy-headers", "--forwarded-allow-ips", "*"]
 
+  push-scheduler:
+    restart: unless-stopped
+    # Toujours démarré en prod (rappel quotidien de la question du jour), contrairement au dev où
+    # il reste derrière le profil "push" — !reset retire ce profil hérité du fichier de base.
+    profiles: !reset []
+
   adminer:
     restart: unless-stopped
     # Jamais public — un outil d'inspection de base de données ouvert à Internet est exactement
