@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/moderation/ban_appeal_screen.dart';
@@ -21,6 +22,11 @@ void main() {
   // que l'app contient autre chose. Ne jamais appeler `.dispose()` dessus : ce serait redésactiver
   // l'arbre (trouvé en inspectant l'arbre réel via Playwright, pas en lisant le code).
   SemanticsBinding.instance.ensureSemantics();
+  // Polices embarquées dans l'app (assets/google_fonts/, licence OFL), jamais téléchargées depuis
+  // fonts.gstatic.com au lancement : chaque chargement envoyait sinon l'adresse IP de la personne
+  // à Google, en contradiction avec la politique de confidentialité (« pas de Google ») — et
+  // bloqué de toute façon par la CSP stricte servie en bêta/prod (infra/deploy/Caddyfile).
+  GoogleFonts.config.allowRuntimeFetching = false;
   runApp(const BraiseApp());
 }
 

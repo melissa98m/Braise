@@ -1159,6 +1159,21 @@ techniques : cahier des charges sections A, B, C, D.
   et DPIA mises à jour (Resend nommé comme seul sous-traitant, DPA et région UE à confirmer à la
   souscription). 149/149 tests backend, 129/129 tests Flutter, `ruff`/`flutter analyze` propres.
 
+- [x] **P24 — HTTPS sur une origine unique (Caddy) et app web sans aucune ressource tierce.**
+  Choix produit : VPS chez LWS (hébergeur déjà nommé dans les mentions légales) plutôt qu'un
+  tunnel, dont le fournisseur déchiffre le trafic. Un seul domaine sert l'app (`/`), l'API
+  (`/api`, WebSocket compris), le tableau de bord staff (`/api/staff/`) et les photos (lectures
+  signées uniquement) : plus de CORS, un certificat, un enregistrement DNS. En-têtes de sécurité
+  et CSP stricte. Écrire cette CSP a révélé que l'app chargeait CanvasKit et toutes ses polices
+  depuis les serveurs de Google à chaque ouverture, contrairement à ce qu'affirme la politique de
+  confidentialité : tout est désormais servi par nous (polices de la charte embarquées, polices
+  de secours téléchargées au build). Le bootstrap personnalisé corrige au passage un conflit
+  entre le Service Worker de Flutter et celui des notifications push, sur la même portée. Vérifié
+  sur la vraie configuration Caddy en local : parcours complet dans Chrome sans aucune requête
+  externe ni erreur de console, IP `X-Forwarded-For` falsifiée ignorée. `docs/DEPLOYMENT.md`
+  réécrit (LWS, DNS + Resend, `infra/deploy/build_web.sh`). Pas encore exécuté sur le vrai VPS
+  (pas encore loué) : `provision.sh` reste relu mais non vérifié.
+
 ## Backlog V2 (hors périmètre MVP)
 
 Liste complète, avec pour chaque point le pourquoi et une piste d'implémentation concrète :

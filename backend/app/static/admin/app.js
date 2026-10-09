@@ -48,11 +48,17 @@ class ApiError extends Error {
   }
 }
 
+// Racine de l'API déduite de l'adresse de cette page plutôt que codée en dur : `/staff/` en dev
+// (API à la racine, localhost:8010) mais `/api/staff/` derrière le reverse proxy de bêta/prod
+// (infra/deploy/Caddyfile, une seule origine — l'API y vit sous /api). Dans les deux cas, l'API
+// est ce qui précède "staff/" dans le chemin.
+const API_ROOT = window.location.pathname.replace(/staff(\/.*)?$/, "");
+
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body) headers["Content-Type"] = "application/json";
   if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetch(API_ROOT + path.replace(/^\//, ""), { ...options, headers });
   if (response.status === 204) return null;
   const data = await response.json().catch(() => null);
   if (!response.ok) {

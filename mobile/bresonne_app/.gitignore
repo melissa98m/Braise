@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Polices de secours du moteur Flutter web, téléchargées au build (mobile/fetch_fallback_fonts.sh,
+# ~22 Mo) — régénérables, jamais commitées.
+/web/fonts-fallback/

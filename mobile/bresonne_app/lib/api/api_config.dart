@@ -24,6 +24,11 @@
 /// ce cas : une origine complète (`--dart-define=API_BASE_URL=https://dw8461v4-8010.uks1.devtunnels.ms`,
 /// le tunnel forwardé pour le port 8010 du backend, pas celui de la page elle-même) ; le WS en est
 /// dérivé en substituant juste le schéma (http→ws, https→wss).
+///
+/// `API_BASE_URL` peut aussi être un simple chemin (`/api`) : l'API est alors sur la même origine
+/// que la page, derrière le reverse proxy de bêta/prod (infra/deploy/Caddyfile, une seule origine
+/// pour l'app, l'API et les photos — plus de CORS, un seul certificat). C'est ce que fait
+/// infra/deploy/build_web.sh ; l'origine (et donc http/https, ws/wss) vient de la page elle-même.
 class ApiConfig {
   static const String _dartDefineHost = String.fromEnvironment('API_HOST');
   static const String _dartDefineBaseUrl = String.fromEnvironment('API_BASE_URL');
@@ -36,7 +41,9 @@ class ApiConfig {
   static String get _baseUrl {
     final override = _dartDefineBaseUrl;
     if (override.isEmpty) return 'http://$_host:8010';
-    return override.endsWith('/') ? override.substring(0, override.length - 1) : override;
+    final trimmed = override.endsWith('/') ? override.substring(0, override.length - 1) : override;
+    if (trimmed.startsWith('/')) return '${Uri.base.origin}$trimmed';
+    return trimmed;
   }
 
   static String get httpBaseUrl => _baseUrl;

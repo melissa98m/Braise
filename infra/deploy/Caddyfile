@@ -1,29 +1,82 @@
 # Reverse proxy + TLS automatique (Let's Encrypt, renouvellement géré par Caddy lui-même — pas de
-# certbot à opérer à la main). Les domaines et l'email ACME viennent de .env (voir
-# .env.prod.example) via la substitution {$VAR} native de Caddy — rien à éditer ici. Caddy refuse
-# de démarrer proprement tant que ces domaines ne pointent pas déjà vers ce serveur (challenge
-# ACME) : voir docs/DEPLOYMENT.md, étape DNS, avant le premier démarrage.
+# certbot à opérer à la main). Le domaine et l'email ACME viennent de .env (voir
+# .env.prod.example) via la substitution {$VAR} native de Caddy — rien à éditer ici. Caddy ne
+# délivre un certificat qu'une fois le domaine pointé vers ce serveur en DNS (challenge ACME) :
+# voir docs/DEPLOYMENT.md, étape DNS, avant le premier démarrage.
+#
+# Une seule origine pour tout (app, API, WebSocket, photos) plutôt que trois sous-domaines :
+#   https://{$APP_DOMAIN}/                 → app web Flutter (build statique)
+#   https://{$APP_DOMAIN}/api/...          → backend FastAPI, préfixe /api retiré (WebSocket compris)
+#   https://{$APP_DOMAIN}/api/staff/       → tableau de bord de modération (servi par le backend)
+#   https://{$APP_DOMAIN}/{$MINIO_BUCKET}/ → photos privées, URLs pré-signées MinIO uniquement
+# Aucun CORS nécessaire (tout est same-origin), un seul certificat, un seul enregistrement DNS, et
+# le Service Worker des notifications push couvre toute l'app sans configuration de portée.
 {
 	email {$ACME_EMAIL}
 }
 
-# API backend — la seule chose qu'un client mobile/web appelle directement.
-{$API_DOMAIN} {
-	reverse_proxy backend:8000
-}
-
-# Stockage objet MinIO — uniquement les URLs pré-signées générées par le backend
-# (services/storage.py::presigned_get_url) transitent ici ; jamais d'accès direct au bucket.
-{$OBJECTS_DOMAIN} {
-	reverse_proxy minio:9000
-}
-
-# App web Flutter — build statique (`flutter build web`), pas le conteneur `mobile` de dev
-# (celui-ci lance `flutter create`/`flutter run`, jamais utilisé en prod). Voir docs/DEPLOYMENT.md
-# pour la commande de build ; le résultat doit être déposé dans ./mobile/bresonne_app/build/web sur
-# l'hôte avant `docker compose up`, monté en lecture seule (voir docker-compose.prod.yml).
 {$APP_DOMAIN} {
-	root * /srv/bresonne-web
-	file_server
-	try_files {path} /index.html
+	encode zstd gzip
+
+	header {
+		# HTTPS uniquement pendant un an, sous-domaines compris. Pas de `preload` tant que le
+		# domaine n'est pas définitif : une inscription dans la liste HSTS des navigateurs se
+		# retire en mois, pas en minutes.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Seule la géolocalisation sert (bouton « Utiliser ma position », P9.3), et seulement
+		# depuis cette origine.
+		Permissions-Policy "geolocation=(self), camera=(), microphone=(), payment=(), usb=()"
+		-Server
+	}
+
+	# --- API (et tableau de bord staff, servi par le backend sur /staff) ---
+	# Le tableau de bord charge style.css/app.js en chemins relatifs : sans la barre finale, ils
+	# seraient résolus contre /api/ au lieu de /api/staff/.
+	redir /api/staff /api/staff/ 308
+	handle_path /api/* {
+		# Caddy remplace (n'accepte jamais tel quel) l'en-tête X-Forwarded-For envoyé par le
+		# client : le backend lit donc une vraie IP pour son plafond OTP par IP, impossible à
+		# usurper. uvicorn lui fait confiance via --proxy-headers (docker-compose.prod.yml),
+		# sans risque puisque le backend n'est joignable que depuis ce proxy.
+		reverse_proxy backend:8000
+	}
+
+	# --- Photos privées ---
+	# Uniquement des lectures signées : les URLs pré-signées MinIO (services/storage.py, signées
+	# pour cet hôte en path-style, l'en-tête Host d'origine est conservé par Caddy donc la
+	# signature reste valide). Jamais d'écriture ni de listing depuis l'extérieur — les envois
+	# passent par le backend.
+	@photos {
+		path /{$MINIO_BUCKET}/*
+		method GET HEAD
+		query X-Amz-Signature=*
+	}
+	handle @photos {
+		reverse_proxy minio:9000
+	}
+	handle /{$MINIO_BUCKET}/* {
+		respond 404
+	}
+
+	# --- App web Flutter ---
+	handle {
+		# CSP stricte, rendue possible par un build sans aucune ressource tierce (CanvasKit et
+		# polices embarqués, voir infra/deploy/build_web.sh et lib/main.dart) :
+		# - 'wasm-unsafe-eval' : compilation du WebAssembly de CanvasKit (aucun eval JS permis) ;
+		# - style-src 'unsafe-inline' : styles injectés à l'exécution par le moteur Flutter web ;
+		# - wss:// explicite en plus de 'self' pour la messagerie (Safari ancien ne l'inclut pas
+		#   toujours dans 'self') ;
+		# - blob:/data: pour les images décodées et les photos choisies avant envoi.
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://{$APP_DOMAIN}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		header X-Frame-Options "DENY"
+		# Le bootstrap et le Service Worker doivent toujours être revérifiés, sinon une mise à
+		# jour de l'app peut rester invisible jusqu'à expiration du cache navigateur.
+		@always_fresh path / /index.html /flutter_bootstrap.js /flutter_service_worker.js /push_worker.js /version.json
+		header @always_fresh Cache-Control "no-cache"
+		root * /srv/bresonne-web
+		try_files {path} /index.html
+		file_server
+	}
 }

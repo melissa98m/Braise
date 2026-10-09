@@ -19,6 +19,10 @@ cd /app/bresonne_app
 # build élimine cette course, et n'a jamais échoué en pratique (vécu en diagnostiquant ce bug).
 flutter pub get
 
+# Polices de secours servies par nous (web/fonts-fallback/, voir web/flutter_bootstrap.js) :
+# téléchargées une seule fois (idempotent), conservées entre redémarrages par le bind mount.
+bash /app/fetch_fallback_fonts.sh
+
 # MOBILE_MODE=serve (bêta-test réseau local, voir README) : `flutter run -d web-server` est un
 # serveur de *développement* — il ouvre une connexion WebSocket de debug vers l'outil Flutter pour
 # le hot reload, connexion qui échoue silencieusement quand la page est chargée depuis une autre
@@ -30,10 +34,14 @@ flutter pub get
 # API_BASE_URL (optionnel) : origine complète du backend (ex. un tunnel devtunnels/ngrok forwardé
 # sur le port 8010, distinct du tunnel de cette page) quand l'hôte de la page ne suffit pas à la
 # déduire — voir lib/api/api_config.dart pour pourquoi l'IP LAN seule ne marche pas dans ce cas.
+# --no-web-resources-cdn : CanvasKit servi depuis build/web/canvaskit/ plutôt que téléchargé depuis
+# www.gstatic.com à chaque chargement (l'adresse IP de chaque visiteur partait chez Google, et la
+# CSP stricte de bêta/prod le bloque de toute façon — voir infra/deploy/Caddyfile).
 if [ "${MOBILE_MODE:-dev}" = "serve" ]; then
-  flutter build web --dart-define=API_BASE_URL="${API_BASE_URL:-}"
+  flutter build web --no-web-resources-cdn --dart-define=API_BASE_URL="${API_BASE_URL:-}"
   echo "Bêta (build de production) servie sur http://0.0.0.0:5000 — build/web"
   exec python3 -m http.server 5000 --bind 0.0.0.0 --directory build/web
 fi
 
-flutter run -d web-server --web-port 5000 --web-hostname 0.0.0.0 --dart-define=API_BASE_URL="${API_BASE_URL:-}"
+flutter run -d web-server --web-port 5000 --web-hostname 0.0.0.0 --no-web-resources-cdn \
+  --dart-define=API_BASE_URL="${API_BASE_URL:-}"

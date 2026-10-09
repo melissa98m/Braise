@@ -26,8 +26,8 @@ services:
 
   minio:
     restart: unless-stopped
-    # Le port objet (9000) reste accessible uniquement via Caddy (voir Caddyfile) : MinIO n'écoute
-    # plus directement sur l'hôte. La console d'admin (9001) ne doit jamais être publique.
+    # Le port objet (9000) reste accessible uniquement via Caddy (voir Caddyfile, lectures signées
+    # seulement) : MinIO n'écoute plus directement sur l'hôte. La console d'admin (9001) ne doit jamais être publique.
     # !override (pas !reset) : on remplace la liste de base par une nouvelle valeur, on ne la
     # vide pas — !reset n'accepte qu'un remplacement vide, voir docs/DEPLOYMENT.md.
     ports: !override
@@ -40,7 +40,12 @@ services:
     restart: unless-stopped
     volumes: !reset []
     ports: !reset []
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # --proxy-headers : l'IP du client vient de X-Forwarded-For (posé par Caddy, jamais celui
+    # envoyé par le client) — sans ça, toutes les requêtes sembleraient venir de Caddy et le
+    # plafond OTP par IP (services/otp.py) bloquerait tout le monde d'un coup. Confiance à toutes
+    # les IP (*) sans risque : le backend ne publie aucun port, seul Caddy peut le joindre.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--forwarded-allow-ips", "*"]
 
   adminer:
     restart: unless-stopped

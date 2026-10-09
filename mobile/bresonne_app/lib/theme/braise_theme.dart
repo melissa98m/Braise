@@ -68,6 +68,10 @@ ThemeData buildBraiseTheme(Brightness brightness) {
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    // Police par défaut des styles que `textTheme` ci-dessus ne redéfinit pas (labelLarge des
+    // boutons, etc.) : sans elle, ces styles tombaient sur Roboto, que Flutter web va chercher
+    // chez Google au premier affichage — Manrope est déjà embarquée (assets/google_fonts/).
+    fontFamily: GoogleFonts.manrope().fontFamily,
     scaffoldBackgroundColor: tokens.surfaceRoot,
     canvasColor: tokens.surfaceRoot,
     primaryColor: tokens.braiseInk,

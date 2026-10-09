@@ -76,6 +76,11 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
     try {
       final auth = context.read<AuthController>();
       final debugCode = await auth.requestOtp(_emailController.text.trim());
+      // Rendre le focus avant que le champ adresse ne passe en `enabled: false` : désactiver un
+      // champ qui a encore le focus faisait lever au moteur Flutter web une erreur interne
+      // (« Null check operator », text_editing.dart applyConfiguration) — sans effet visible,
+      // mais du bruit dans la console qui masquerait une vraie erreur.
+      FocusManager.instance.primaryFocus?.unfocus();
       setState(() {
         _codeSent = true;
         _debugCode = debugCode;

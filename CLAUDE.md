@@ -675,8 +675,40 @@ prod file is an *overlay*, always used with the base (`-f docker-compose.yml -f
 docker-compose.prod.yml`), never standalone. It locks every admin-facing service (`db`, MinIO
 console, Adminer, Uptime Kuma) to `127.0.0.1`-only (SSH-tunnel access, never public) and adds
 `caddy` as the one thing that touches ports 80/443 — automatic Let's Encrypt TLS, config in
-`infra/deploy/Caddyfile` using Caddy's native `{$VAR}` substitution (`API_DOMAIN`/
-`OBJECTS_DOMAIN`/`APP_DOMAIN`/`ACME_EMAIL`, from `.env`) rather than hardcoded domains. Two
+`infra/deploy/Caddyfile` using Caddy's native `{$VAR}` substitution (`APP_DOMAIN`/`ACME_EMAIL`/
+`MINIO_BUCKET`, from `.env`) rather than hardcoded domains. **Single origin (P24)**: one domain
+serves the Flutter build at `/`, the backend at `/api/*` (`handle_path` strips the prefix, so the
+backend's own routes are unchanged; WebSocket included), the staff dashboard at `/api/staff/`
+(`static/admin/app.js` derives its API root from its own path — `/` in dev, `/api/` here — and
+Caddy redirects the slash-less `/api/staff` since its assets are relative), and MinIO at
+`/<bucket>/*` restricted to signed `GET`/`HEAD` (`query X-Amz-Signature=*`; unsigned, `PUT` and
+listing all 404). Presigned URLs stay valid because `MINIO_PUBLIC_ENDPOINT` is the app domain and
+Caddy forwards the original `Host`. No CORS needed, one certificate, one DNS record, and the push
+Service Worker's `/` scope covers the whole app. Caddy also sets HSTS (no `preload` until the domain
+is final), `nosniff`, `Referrer-Policy`, a `Permissions-Policy` allowing only same-origin
+geolocation, and a strict CSP on the app (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src
+'self' wss://<domain>`, `frame-ancestors 'none'`). That CSP is only possible because the web build
+loads *nothing* third-party — and it originally did, against the privacy policy's "no Google"
+promise: CanvasKit from `www.gstatic.com` (fixed with `--no-web-resources-cdn`), the theme fonts
+from `fonts.gstatic.com` via `google_fonts` runtime fetching (fixed by bundling the TTFs in
+`assets/google_fonts/` — matched by `<Family>-<Weight>.ttf` filename — and
+`GoogleFonts.config.allowRuntimeFetching = false` in `main()`; the theme also sets
+`fontFamily` to Manrope so unthemed styles never fall back to a downloaded Roboto), and the
+engine's own fallback fonts (Noto symbols/scripts/emoji) from `fonts.gstatic.com` (fixed by
+`web/flutter_bootstrap.js`'s `fontFallbackBaseUrl: "/fonts-fallback/"`, populated at build time by
+`mobile/fetch_fallback_fonts.sh` from the SDK's own `font_fallback_data.dart` list — ~22 MB, 725
+files, gitignored, idempotent, run by both `entrypoint.sh` and `infra/deploy/build_web.sh`). Any
+missing weight now fails loudly in the console instead of silently leaking a request. The custom
+bootstrap also drops Flutter's (deprecated) service worker, which registered on the same `/` scope
+as `web/push_worker.js` — one scope has one active worker, so the two kept replacing each other
+and a push could land on Flutter's worker, which can't display it. `infra/deploy/build_web.sh`
+pins `API_BASE_URL=/api` (`ApiConfig` treats a value starting with `/` as same-origin) and
+`--no-web-resources-cdn`. uvicorn runs with `--proxy-headers --forwarded-allow-ips *` in the prod
+overlay (safe: the backend publishes no port), and Caddy overwrites any client-sent
+`X-Forwarded-For`, so the OTP per-IP limit sees the real, unspoofable IP. Verified locally on this
+exact Caddyfile (`https://localhost:8443`, Caddy internal CA): full Chrome run — login, chat over
+WSS with emoji, signed photo, staff dashboard — with zero external requests and zero CSP/console
+errors; a spoofed `X-Forwarded-For` was ignored. Host: LWS (already named in `docs/legal/`). Two
 non-obvious Compose merge behaviors this file depends on, confirmed by testing (`docker compose
 ... config`), not assumed: list fields like `ports`/`volumes` don't merge across `-f` files by
 default (an override of `ports: []` leaves the base list untouched), so clearing one needs the

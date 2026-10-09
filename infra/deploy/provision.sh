@@ -59,7 +59,7 @@ fi
 
 echo "==> Fait. Prochaines étapes (docs/DEPLOYMENT.md) :"
 echo "  1. Vérifier l'accès SSH par clé pour '$DEPLOY_USER' AVANT de fermer cette session root."
-echo "  2. Pointer les domaines (API_DOMAIN/OBJECTS_DOMAIN/APP_DOMAIN) vers l'IP de ce serveur."
+echo "  2. Pointer le domaine de l'app (APP_DOMAIN, un seul enregistrement A) vers l'IP de ce serveur."
 echo "  3. En tant que '$DEPLOY_USER' : cloner le dépôt, copier .env.prod.example en .env,"
 echo "     générer les vrais secrets, puis :"
 echo "       docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
