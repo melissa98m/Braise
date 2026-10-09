@@ -12,6 +12,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.ban_appeal import BanAppeal, BanAppealStatus
+from app.models.client_error import ClientError
+from app.models.feedback import Feedback
 from app.models.match import Match
 from app.models.moderation_action import ModerationAction
 from app.models.profile import PublicProfile
@@ -63,6 +65,8 @@ def queue_counts(db: Session) -> dict:
         "flagged_ratings_pending": db.query(Rating)
         .filter(Rating.suspected_rancor.is_(True), Rating.moderation_reviewed_at.is_(None))
         .count(),
+        "feedback_new": db.query(Feedback).filter(Feedback.status == "new").count(),
+        "client_errors_new": db.query(ClientError).filter(ClientError.status == "new").count(),
     }
 
 

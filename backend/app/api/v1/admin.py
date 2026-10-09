@@ -11,6 +11,8 @@ from app.schemas.admin import (
     BanAppealDetailOut,
     BanAppealListItemOut,
     BanAppealResolveIn,
+    ClientErrorItemOut,
+    FeedbackItemOut,
     FlaggedRatingDetailOut,
     FlaggedRatingListItemOut,
     QueueCountsOut,
@@ -18,8 +20,10 @@ from app.schemas.admin import (
     ReportDetailOut,
     ReportListItemOut,
     ReportResolveIn,
+    TriageIn,
     UserSummaryOut,
 )
+from app.services import admin_beta as beta_service
 from app.services import admin_moderation as service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -134,3 +138,45 @@ def whoami(staff: User = Depends(get_current_staff_user), db: Session = Depends(
     utilisateur non-staff qui l'appelle. Ce endpoint est lui-même déjà 403 pour un non-staff, donc
     son seul fait de répondre 200 EST la confirmation."""
     return service.user_summary(db, staff.id)
+
+
+@router.get("/feedback", response_model=list[FeedbackItemOut])
+def list_feedback(
+    status: Literal["new", "done"] = "new",
+    limit: int = 20,
+    offset: int = 0,
+    staff: User = Depends(get_current_staff_user),
+    db: Session = Depends(get_db),
+):
+    return beta_service.list_feedback(db, status, limit, offset)
+
+
+@router.post("/feedback/{feedback_id}/status", response_model=FeedbackItemOut)
+def triage_feedback(
+    feedback_id: uuid.UUID,
+    payload: TriageIn,
+    staff: User = Depends(get_current_staff_user),
+    db: Session = Depends(get_db),
+):
+    return beta_service.triage_feedback(db, staff, feedback_id, payload.status)
+
+
+@router.get("/client-errors", response_model=list[ClientErrorItemOut])
+def list_client_errors(
+    status: Literal["new", "done"] = "new",
+    limit: int = 20,
+    offset: int = 0,
+    staff: User = Depends(get_current_staff_user),
+    db: Session = Depends(get_db),
+):
+    return beta_service.list_client_errors(db, status, limit, offset)
+
+
+@router.post("/client-errors/{error_id}/status", response_model=ClientErrorItemOut)
+def triage_client_error(
+    error_id: uuid.UUID,
+    payload: TriageIn,
+    staff: User = Depends(get_current_staff_user),
+    db: Session = Depends(get_db),
+):
+    return beta_service.triage_client_error(db, error_id, payload.status)

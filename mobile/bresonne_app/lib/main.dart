@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -11,6 +12,7 @@ import 'screens/root_shell.dart';
 import 'state/app_services.dart';
 import 'state/auth_controller.dart';
 import 'state/theme_controller.dart';
+import 'telemetry/client_error_reporter.dart';
 import 'theme/braise_theme.dart';
 
 void main() {
@@ -27,15 +29,24 @@ void main() {
   // à Google, en contradiction avec la politique de confidentialité (« pas de Google ») — et
   // bloqué de toute façon par la CSP stricte servie en bêta/prod (infra/deploy/Caddyfile).
   GoogleFonts.config.allowRuntimeFetching = false;
-  runApp(const BraiseApp());
+  final services = AppServices();
+  // Build de release uniquement (celui que reçoivent les testeur·se·s) : en dev, les erreurs
+  // s'affichent déjà dans la console et ne doivent pas remplir la file « Erreurs » du staff.
+  if (kReleaseMode) {
+    ClientErrorReporter(send: services.feedbackApi.reportError).install();
+  }
+  runApp(BraiseApp(services: services));
 }
 
 class BraiseApp extends StatelessWidget {
-  const BraiseApp({super.key});
+  const BraiseApp({super.key, required this.services});
+
+  // Créés une fois dans main() plutôt que dans build() : un rebuild de la racine aurait sinon
+  // recréé tous les clients API et le contrôleur d'authentification (session perdue).
+  final AppServices services;
 
   @override
   Widget build(BuildContext context) {
-    final services = AppServices();
     final themeController = ThemeController()..restore();
 
     return MultiProvider(

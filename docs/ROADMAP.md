@@ -1178,7 +1178,7 @@ techniques : cahier des charges sections A, B, C, D.
   terminé ici : notification de message sans contenu (choix produit : discrétion sur écran
   verrouillé), une notification regroupée par conversation, clic qui ouvre directement la bonne
   conversation (app fermée ou déjà ouverte), rappel quotidien de la question du jour à 18 h
-  (nouveau service `push-scheduler`, au plus une fois par jour et par personne, juste aussi les
+  (nouveau service `scheduler`, au plus une fois par jour et par personne, juste aussi les
   nuits de changement d'heure), et activation pensée comme dans une app mobile (demandé
   directement) : pré-permission dans Échanges, bouton explicite dans Paramètres, guidage « Sur
   l'écran d'accueil » sur iPhone où le Web Push n'existe pas autrement. Messages activés par
@@ -1189,6 +1189,22 @@ techniques : cahier des charges sections A, B, C, D.
   abonnement FCM (voir `CLAUDE.md`). Politique de confidentialité (+ copie in-app) et DPIA
   mises à jour : services de push des navigateurs nommés, contenu chiffré, transferts hors UE
   (la section transferts disait encore « aucun » malgré Resend depuis P23 — corrigé).
+
+- [x] **P26 — Outils pour apprendre de la bêta : retours, erreurs, rétention réelle.** Trois
+  manques qui auraient rendu un test utilisateur aveugle, comblés sans aucun service tiers :
+  bouton « Envoyer un retour » dans Paramètres (bug/idée/autre) ; remontée automatique des
+  erreurs de l'app en build de release (dédoublonnées, plafonnées, regroupées par empreinte
+  côté serveur avec compteur d'occurrences, réouvertes si elles réapparaissent après avoir été
+  marquées traitées) ; une ligne par personne et par jour d'activité, qui remplace enfin
+  l'approximation de rétention de `compute_kpis.py` par une vraie rétention J1/J7/J30 par
+  cohorte et un décompte d'actifs 1/7/30 jours (calcul vérifié sur données synthétiques). Les
+  deux premiers alimentent deux nouvelles files du tableau de bord staff (« Retours bêta »,
+  « Erreurs de l'app »), séparées de la modération : aucun effet sur un compte. RGPD : export et
+  suppression de compte couverts, purges automatiques (erreurs 90 jours, activité 13 mois) dans
+  le planificateur, renommé `scheduler` (tâches quotidiennes). Vérifié de bout en bout dans Chrome
+  (retour envoyé depuis l'app → visible et traité dans `/staff`). Au passage : `AppServices` est
+  désormais créé une seule fois dans `main()` (il l'était dans `build()` de la racine), et les
+  catégories du retour sont annoncées comme des boutons radio, pas comme des cases à cocher.
 
 ## Backlog V2 (hors périmètre MVP)
 

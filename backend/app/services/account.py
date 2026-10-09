@@ -3,12 +3,15 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.models.client_error import ClientError
+from app.models.feedback import Feedback
 from app.models.match import Match
 from app.models.message import Message
 from app.models.profile import PrivateProfile, PublicProfile
 from app.models.rating import Rating
 from app.models.report import Report
 from app.models.user import User
+from app.models.user_activity import UserActivity
 from app.services import notifications as notifications_service
 from app.services import otp as otp_service
 from app.services import storage
@@ -41,6 +44,10 @@ def export_my_data(db: Session, user: User) -> dict:
     ratings_given = db.query(Rating).filter(Rating.rater_id == user.id).all()
     ratings_received = db.query(Rating).filter(Rating.ratee_id == user.id).all()
     reports_filed = db.query(Report).filter(Report.reporter_id == user.id).all()
+    feedback_sent = db.query(Feedback).filter(Feedback.user_id == user.id).all()
+    active_days = (
+        db.query(UserActivity.day).filter(UserActivity.user_id == user.id).order_by(UserActivity.day)
+    )
 
     return {
         "account": {
@@ -105,6 +112,11 @@ def export_my_data(db: Session, user: User) -> dict:
             {"reason": r.reason, "status": r.status, "created_at": r.created_at.isoformat()}
             for r in reports_filed
         ],
+        "feedback_sent": [
+            {"category": f.category, "message": f.message, "created_at": f.created_at.isoformat()}
+            for f in feedback_sent
+        ],
+        "active_days": [day.isoformat() for (day,) in active_days],
     }
 
 
@@ -137,6 +149,13 @@ def delete_my_account(db: Session, user: User) -> None:
     # ligne de raisonnement que la purge des photos privées ci-dessus, pas une donnée à laisser
     # orpheline.
     notifications_service.delete_all_subscriptions_for_user(db, user.id)
+
+    # Retours (texte libre, peut contenir n'importe quoi) et jours d'activité : supprimés, pas
+    # anonymisés — ils ne portent les droits de personne d'autre, contrairement aux messages.
+    # Une erreur remontée par l'app reste (utile au produit) mais n'est plus rattachée à ce compte.
+    db.query(Feedback).filter(Feedback.user_id == user.id).delete()
+    db.query(UserActivity).filter(UserActivity.user_id == user.id).delete()
+    db.query(ClientError).filter(ClientError.last_user_id == user.id).update({"last_user_id": None})
 
     now = datetime.now(timezone.utc)
     otp_service.delete_challenge(db, user.email)

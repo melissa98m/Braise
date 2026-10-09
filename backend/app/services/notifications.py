@@ -263,7 +263,7 @@ def users_to_remind_for_daily_question(db: Session, today: date) -> list[uuid.UU
 
 
 def send_daily_question_reminders(today: date | None = None) -> list[uuid.UUID]:
-    """Appelé une fois par jour par scripts/push_scheduler.py. Renvoie les personnes réellement
+    """Appelé une fois par jour par scripts/scheduler.py. Renvoie les personnes réellement
     rappelées (hors doublons évités par le verrou)."""
     if not get_settings().push_enabled:
         return []

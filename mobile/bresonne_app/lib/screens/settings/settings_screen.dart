@@ -12,6 +12,7 @@ import '../../theme/braise_tokens.dart';
 import '../../widgets/braise_page_route.dart';
 import '../legal/legal_screen.dart';
 import '../onboarding/otp_screen.dart';
+import 'feedback_screen.dart';
 
 /// Écran Paramètres — regroupe compte, apparence, confidentialité RGPD et notifications, qui
 /// n'avaient sinon aucun écran dédié : l'export/suppression de données vivait avant dans
@@ -274,6 +275,17 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: BraiseSpacing.xxl),
+                _SectionLabel('BÊTA'),
+                _SettingsCard(
+                  children: [
+                    _SettingsActionRow(
+                      label: 'Envoyer un retour',
+                      onTap: () =>
+                          Navigator.of(context).push(braiseRoute(context, const FeedbackScreen())),
                     ),
                   ],
                 ),

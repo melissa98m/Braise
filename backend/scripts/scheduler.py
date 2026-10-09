@@ -1,15 +1,16 @@
-"""Planificateur des notifications push récurrentes — aujourd'hui, le rappel de la question du jour.
+"""Tâches quotidiennes : rappel push de la question du jour, puis purges de rétention RGPD
+(erreurs remontées par l'app après 90 jours, jours d'activité après 13 mois).
 
-Tourne en continu dans son propre conteneur (`push-scheduler`, docker-compose.yml) : dort jusqu'au
-prochain DAILY_REMINDER_HOUR (heure de Paris), envoie les rappels, recommence. Pas de cron dans
+Tourne en continu dans son propre conteneur (`scheduler`, docker-compose.yml) : dort jusqu'au
+prochain DAILY_REMINDER_HOUR (heure de Paris), exécute les tâches, recommence. Pas de cron dans
 l'image ni de bibliothèque de planification : une boucle de quelques lignes suffit pour un seul
 envoi quotidien, même choix que le service `backup` (infra/backup/backup.sh). Envoyer deux fois
 le même jour est impossible même si ce conteneur redémarre ou tourne en double : chaque rappel
 prend un verrou Redis par personne et par jour (services/notifications.py).
 
 Usage :
-    docker compose run --rm backend python scripts/push_scheduler.py           # boucle
-    docker compose run --rm backend python scripts/push_scheduler.py --once    # un envoi immédiat
+    docker compose run --rm backend python scripts/scheduler.py           # boucle
+    docker compose run --rm backend python scripts/scheduler.py --once    # une exécution immédiate
 """
 
 import argparse
@@ -24,6 +25,9 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import get_settings  # noqa: E402
+from app.db.session import SessionLocal  # noqa: E402
+from app.services.activity import purge_old_activity  # noqa: E402
+from app.services.client_errors import purge_old_client_errors  # noqa: E402
 from app.services.notifications import send_daily_question_reminders  # noqa: E402
 
 PARIS = ZoneInfo("Europe/Paris")
@@ -31,7 +35,7 @@ PARIS = ZoneInfo("Europe/Paris")
 DAILY_REMINDER_HOUR = int(os.environ.get("DAILY_REMINDER_HOUR", "18"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger("push_scheduler")
+logger = logging.getLogger("scheduler")
 
 
 def seconds_until_next_run(now: datetime) -> float:
@@ -45,11 +49,22 @@ def seconds_until_next_run(now: datetime) -> float:
 
 
 def run_once() -> None:
-    if not get_settings().push_enabled:
-        logger.info("PUSH_ENABLED=false : aucun rappel envoyé.")
-        return
-    reminded = send_daily_question_reminders()
-    logger.info("Rappels de la question du jour envoyés : %d", len(reminded))
+    # Chaque tâche isolée : un rappel push qui échoue ne doit jamais empêcher les purges RGPD.
+    try:
+        if get_settings().push_enabled:
+            reminded = send_daily_question_reminders()
+            logger.info("Rappels de la question du jour envoyés : %d", len(reminded))
+        else:
+            logger.info("PUSH_ENABLED=false : aucun rappel envoyé.")
+    except Exception:
+        logger.exception("Échec des rappels de la question du jour")
+    purges = (("erreurs remontées", purge_old_client_errors), ("jours d'activité", purge_old_activity))
+    for name, purge in purges:
+        try:
+            with SessionLocal() as db:
+                logger.info("Purge %s : %d lignes", name, purge(db))
+        except Exception:
+            logger.exception("Échec de la purge %s", name)
 
 
 def main() -> None:
@@ -61,14 +76,11 @@ def main() -> None:
         return
     while True:
         delay = seconds_until_next_run(datetime.now(PARIS))
-        logger.info("Prochain rappel dans %.0f min (%dh, heure de Paris).", delay / 60, DAILY_REMINDER_HOUR)
+        logger.info("Prochaines tâches dans %.0f min (%dh, heure de Paris).", delay / 60, DAILY_REMINDER_HOUR)
         time.sleep(delay)
-        try:
-            run_once()
-        except Exception:
-            # Une erreur un jour (base momentanément injoignable...) ne doit jamais arrêter la
-            # boucle : on journalise et on attend le lendemain.
-            logger.exception("Échec de l'envoi des rappels quotidiens")
+        # run_once isole déjà chaque tâche : une erreur un jour (base momentanément injoignable...)
+        # ne doit jamais arrêter la boucle, on journalise et on attend le lendemain.
+        run_once()
         time.sleep(60)
 
 

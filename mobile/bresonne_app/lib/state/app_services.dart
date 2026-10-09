@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../api/api_client.dart';
 import '../api/auth_api.dart';
 import '../api/discovery_api.dart';
+import '../api/feedback_api.dart';
 import '../api/messaging_api.dart';
 import '../api/moderation_api.dart';
 import '../api/notifications_api.dart';
@@ -42,6 +43,7 @@ class AppServices {
       moderationApi: ModerationApi(apiClient),
       subscriptionsApi: SubscriptionsApi(apiClient),
       notificationsApi: NotificationsApi(apiClient),
+      feedbackApi: FeedbackApi(apiClient),
       notificationsService: notificationsService ?? NotificationsService(),
       pushSubscriptionService: pushSubscriptionService ?? PushSubscriptionService(),
     );
@@ -56,6 +58,7 @@ class AppServices {
     required this.moderationApi,
     required this.subscriptionsApi,
     required this.notificationsApi,
+    required this.feedbackApi,
     required this.notificationsService,
     required this.pushSubscriptionService,
   });
@@ -68,6 +71,7 @@ class AppServices {
   final ModerationApi moderationApi;
   final SubscriptionsApi subscriptionsApi;
   final NotificationsApi notificationsApi;
+  final FeedbackApi feedbackApi;
   final NotificationsService notificationsService;
   final PushSubscriptionService pushSubscriptionService;
 }

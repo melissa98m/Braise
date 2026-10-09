@@ -69,7 +69,13 @@ def test_staff_user_can_reach_queue_counts():
     response = client.get("/admin/queue-counts", headers=staff)
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"reports_pending", "ban_appeals_pending", "flagged_ratings_pending"}
+    assert set(body) == {
+        "reports_pending",
+        "ban_appeals_pending",
+        "flagged_ratings_pending",
+        "feedback_new",
+        "client_errors_new",
+    }
 
 
 # ---------------------------------------------------------------------------

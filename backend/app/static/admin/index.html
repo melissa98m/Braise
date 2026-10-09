@@ -58,7 +58,7 @@
       </div>
     </header>
 
-    <nav class="tablist" role="tablist" aria-label="Files de modération">
+    <nav class="tablist" role="tablist" aria-label="Files de travail">
       <button role="tab" id="tab-reports" aria-controls="panel-reports" aria-selected="true"
               tabindex="0" data-queue="reports">
         Signalements <span class="badge" id="count-reports">0</span>
@@ -71,12 +71,22 @@
               tabindex="-1" data-queue="flagged_ratings">
         Notes signalées <span class="badge" id="count-flagged_ratings">0</span>
       </button>
+      <button role="tab" id="tab-feedback" aria-controls="panel-feedback" aria-selected="false"
+              tabindex="-1" data-queue="feedback">
+        Retours bêta <span class="badge" id="count-feedback">0</span>
+      </button>
+      <button role="tab" id="tab-client_errors" aria-controls="panel-client_errors" aria-selected="false"
+              tabindex="-1" data-queue="client_errors">
+        Erreurs de l'app <span class="badge" id="count-client_errors">0</span>
+      </button>
     </nav>
 
     <main id="main">
       <section id="panel-reports" class="tabpanel" role="tabpanel" aria-labelledby="tab-reports" tabindex="0"></section>
       <section id="panel-ban_appeals" class="tabpanel" role="tabpanel" aria-labelledby="tab-ban_appeals" tabindex="0" hidden></section>
       <section id="panel-flagged_ratings" class="tabpanel" role="tabpanel" aria-labelledby="tab-flagged_ratings" tabindex="0" hidden></section>
+      <section id="panel-feedback" class="tabpanel" role="tabpanel" aria-labelledby="tab-feedback" tabindex="0" hidden></section>
+      <section id="panel-client_errors" class="tabpanel" role="tabpanel" aria-labelledby="tab-client_errors" tabindex="0" hidden></section>
     </main>
   </div>
 

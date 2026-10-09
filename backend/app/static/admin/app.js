@@ -196,9 +196,11 @@ function logout() {
 // Tableau de bord — onglets
 // ---------------------------------------------------------------------------
 
-const QUEUES = ["reports", "ban_appeals", "flagged_ratings"];
+const QUEUES = ["reports", "ban_appeals", "flagged_ratings", "feedback", "client_errors"];
 /** Vue courante par file : "list" (par défaut) ou l'id d'un item en détail. */
-const panelState = { reports: { view: "list" }, ban_appeals: { view: "list" }, flagged_ratings: { view: "list" } };
+const panelState = Object.fromEntries(QUEUES.map((q) => [q, { view: "list" }]));
+/** Retours et erreurs n'ont pas d'endpoint de détail : la fiche réutilise l'élément de la liste. */
+const itemCache = { feedback: {}, client_errors: {} };
 
 function wireTabs() {
   const tabs = QUEUES.map((q) => document.getElementById(`tab-${q}`));
@@ -231,6 +233,8 @@ async function refreshCounts() {
       ["reports_pending", "count-reports"],
       ["ban_appeals_pending", "count-ban_appeals"],
       ["flagged_ratings_pending", "count-flagged_ratings"],
+      ["feedback_new", "count-feedback"],
+      ["client_errors_new", "count-client_errors"],
     ]) {
       const badge = document.getElementById(id);
       badge.textContent = String(counts[key]);
@@ -277,7 +281,27 @@ const QUEUE_CONFIG = {
     columns: (item) => [relativeDate(item.created_at), String(item.score), item.comment],
     headers: ["Date", "Note", "Commentaire"],
   },
+  // Bêta (P26) : pas de la modération — un simple suivi « à traiter / traité », aucun effet sur
+  // un compte, rien dans le journal des décisions.
+  feedback: {
+    label: "retour",
+    labelPlural: "retours",
+    listPath: (status) => `/admin/feedback?status=${status}&limit=50`,
+    statuses: ["new", "done"],
+    columns: (item) => [relativeDate(item.created_at), FEEDBACK_CATEGORIES[item.category] || item.category, item.message],
+    headers: ["Date", "Type", "Message"],
+  },
+  client_errors: {
+    label: "erreur",
+    labelPlural: "erreurs",
+    listPath: (status) => `/admin/client-errors?status=${status}&limit=50`,
+    statuses: ["new", "done"],
+    columns: (item) => [relativeDate(item.last_seen_at), `${item.occurrences} ×`, item.message],
+    headers: ["Dernière fois", "Occurrences", "Erreur"],
+  },
 };
+
+const FEEDBACK_CATEGORIES = { bug: "Bug", idea: "Idée", other: "Autre" };
 
 function statusLabel(queue, status) {
   const labels = {
@@ -286,6 +310,8 @@ function statusLabel(queue, status) {
     unfounded: "Non fondé",
     upheld: "Maintenu",
     overturned: "Annulé",
+    new: "À traiter",
+    done: "Traité",
   };
   return labels[status] || status;
 }
@@ -295,7 +321,7 @@ async function renderList(queue) {
   const panel = document.getElementById(`panel-${queue}`);
   clear(panel);
 
-  let currentStatus = "pending";
+  let currentStatus = config.statuses ? config.statuses[0] : "pending";
   const controls = el("div", { class: "list-controls" });
   if (config.statuses) {
     const select = el("select", {
@@ -315,6 +341,7 @@ async function renderList(queue) {
     body.append(el("p", { class: "loading-state" }, ["Chargement en cours."]));
     try {
       const items = await api(config.listPath(currentStatus));
+      if (itemCache[queue]) for (const item of items) itemCache[queue][item.id] = item;
       clear(body);
       if (items.length === 0) {
         body.append(el("p", { class: "empty-state" }, [`Aucun élément dans cette file pour le moment.`]));
@@ -426,8 +453,16 @@ async function renderDetail(queue, id) {
     reports: () => api(`/admin/reports/${id}`),
     ban_appeals: () => api(`/admin/ban-appeals/${id}`),
     flagged_ratings: () => api(`/admin/flagged-ratings/${id}`),
+    feedback: async () => itemCache.feedback[id] || Promise.reject(new ApiError(404)),
+    client_errors: async () => itemCache.client_errors[id] || Promise.reject(new ApiError(404)),
   };
-  const renderers = { reports: renderReportDetail, ban_appeals: renderBanAppealDetail, flagged_ratings: renderFlaggedRatingDetail };
+  const renderers = {
+    reports: renderReportDetail,
+    ban_appeals: renderBanAppealDetail,
+    flagged_ratings: renderFlaggedRatingDetail,
+    feedback: renderFeedbackDetail,
+    client_errors: renderClientErrorDetail,
+  };
 
   try {
     const detail = await loaders[queue]();
@@ -545,6 +580,56 @@ function renderFlaggedRatingDetail(detail) {
     },
   }));
   return card;
+}
+
+function triageButton(queue, item) {
+  const paths = { feedback: `/admin/feedback/${item.id}/status`, client_errors: `/admin/client-errors/${item.id}/status` };
+  const next = item.status === "new" ? "done" : "new";
+  return el("div", { class: "action-row" }, [
+    el("button", {
+      class: next === "done" ? "primary" : "",
+      onclick: async (event) => {
+        event.target.disabled = true;
+        try {
+          await api(paths[queue], { method: "POST", body: JSON.stringify({ status: next }) });
+          toast(next === "done" ? "Marqué comme traité." : "Remis à traiter.", "success");
+          backToList(queue);
+          refreshCounts();
+        } catch (err) {
+          event.target.disabled = false;
+          toast(err.message || "Échec de la mise à jour.", "error");
+        }
+      },
+    }, [next === "done" ? "Marquer comme traité" : "Remettre à traiter"]),
+  ]);
+}
+
+function renderFeedbackDetail(item) {
+  return el("div", { class: "detail-card" }, [
+    el("h2", {}, [`Retour — ${FEEDBACK_CATEGORIES[item.category] || item.category}`]),
+    el("p", {}, [`Envoyé le ${relativeDate(item.created_at)} · Statut : ${statusLabel("feedback", item.status)}`]),
+    el("div", { class: "comment-block" }, [item.message]),
+    el("p", {}, [`Depuis : ${item.context || "—"} · Appareil : ${item.user_agent || "—"}`]),
+    el("div", { class: "detail-grid" }, [userSummaryCard("Envoyé par", item.author)]),
+    triageButton("feedback", item),
+  ]);
+}
+
+function renderClientErrorDetail(item) {
+  return el("div", { class: "detail-card" }, [
+    el("h2", {}, [`Erreur de l'app — ${item.occurrences} occurrence${item.occurrences > 1 ? "s" : ""}`]),
+    el("p", {}, [
+      `Vue pour la première fois ${relativeDate(item.first_seen_at)}, dernière fois ${relativeDate(item.last_seen_at)}`,
+      ` · Source : ${item.source} · Page : ${item.path || "—"} · Statut : ${statusLabel("client_errors", item.status)}`,
+    ]),
+    el("div", { class: "comment-block" }, [item.message]),
+    el("details", {}, [el("summary", {}, ["Pile d'appels"]), el("div", { class: "comment-block" }, [item.stack || "—"])]),
+    el("p", {}, [`Dernier appareil : ${item.user_agent || "—"}`]),
+    item.last_user
+      ? el("div", { class: "detail-grid" }, [userSummaryCard("Dernière personne touchée", item.last_user)])
+      : el("p", {}, ["Survenue hors connexion (aucun compte rattaché)."]),
+    triageButton("client_errors", item),
+  ]);
 }
 
 async function submitDecision(queue, id, verb, payload) {

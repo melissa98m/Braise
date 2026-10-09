@@ -582,6 +582,30 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   `seed_beta_tester._auth`: neither ever called `POST /auth/consent`, invisible while the personas
   already existed with an old consent, a hard 403 once they were recreated from scratch.
 
+- **Beta learning tools (P26)** (`models/feedback.py`, `models/client_error.py`,
+  `models/user_activity.py`, `services/{feedback,client_errors,activity,admin_beta}.py`,
+  `api/v1/feedback.py`, `mobile/.../screens/settings/feedback_screen.dart`,
+  `mobile/.../telemetry/client_error_reporter.dart`): no third-party tool, on purpose. Feedback:
+  authenticated `POST /feedback`, 20/day/person. Client errors: `POST /client-errors` takes an
+  *optional* user (`api/deps.get_optional_user` — the only place that resolves a token without
+  failing, since an error can happen before login or because of an expired token), Redis per-IP
+  cap (60/h), truncated (not refused) when long, query string stripped from `path`, grouped by a
+  fingerprint that normalizes numbers/UUIDs/hex so one recurring bug is one row with
+  `occurrences`; a `done` error that recurs flips back to `new`. The app only installs the
+  reporter in `kReleaseMode` (dev errors stay in the console), dedupes per session and caps at 10,
+  and swallows its own send failures. Activity: `api/deps.get_current_user` (HTTP only, not the
+  WS) calls `activity.record_activity`, which costs one Redis `SET NX` per request and one
+  `INSERT ... ON CONFLICT DO NOTHING` per person per day. `scripts/compute_kpis.py`'s `retention()`
+  is classic day-N retention on signup cohorts *after* the first tracked day (older accounts
+  can't have traces and would bias it down). Staff dashboard: two extra tabs reuse the list
+  machinery; they have no detail endpoint, the detail view reads the cached list item. Account
+  deletion deletes feedback and activity (free text / no third-party rights) and detaches errors;
+  export includes feedback and active days. `scripts/scheduler.py` (renamed from
+  `push_scheduler.py`, Compose service `scheduler`, profile `scheduler` in dev) runs the daily
+  push reminder plus the retention purges (errors 90 days, activity 13 months), each isolated so
+  one failure never skips the others. `AppServices` is now built once in `main()` and passed to
+  `BraiseApp` (it used to be created inside the root's `build()`).
+
 **Stubs for what would normally cost money** (intentional, not TODOs to "fix" casually — see
 `docs/ROADMAP.md` for when each graduates to the real thing):
 - OTP: email, not SMS (see P23 above) — free locally (`EMAIL_BACKEND=console`, the code is logged
@@ -594,7 +618,7 @@ picking a new one — don't assume the defaults below (8000, 8080, 5432) are fre
   push_platform_*.dart`, the UI and backend stay.
 
 **Web Push (P25)** (`models/push_subscription.py`, `services/notifications.py`,
-`api/v1/notifications.py`, `scripts/push_scheduler.py`, `mobile/bresonne_app/lib/push/`,
+`api/v1/notifications.py`, `scripts/scheduler.py`, `mobile/bresonne_app/lib/push/`,
 `web/push_worker.js`): one `PushSubscription` row per browser endpoint, category filtering
 (`notify_match`/`_question`/`_messages`) done server-side, endpoint host allow-listed to the 3 real
 push services (anti-SSRF), 404/410 from the push service purges the row. Payload rules: a message
@@ -604,7 +628,7 @@ per conversation, `renotify`) and `url: /?match=<id>`. `send_push_to_user` isola
 per-subscription exception, not just `WebPushException` — one corrupt key used to be able to abort
 the whole daily reminder loop. The chat WS keeps a strong reference to its fire-and-forget push
 task (`_background_tasks`), per asyncio's own warning that weakly-referenced tasks can be GC'd
-mid-run. Daily reminder: `push-scheduler` Compose service (`push` profile in dev, profile cleared
+mid-run. Daily reminder: `scheduler` Compose service (`scheduler` profile in dev, profile cleared
 with `!reset []` in the prod overlay) sleeps until 18:00 Europe/Paris — delay computed in UTC,
 since subtracting two Europe/Paris datetimes compares wall time and would be an hour off on the
 DST night — then `send_daily_question_reminders()` targets users with a still-veiled match whose

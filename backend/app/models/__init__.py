@@ -12,3 +12,6 @@ from app.models.photo_access_log import PhotoAccessLog  # noqa: F401
 from app.models.moderation_action import ModerationAction  # noqa: F401
 from app.models.push_subscription import PushSubscription  # noqa: F401
 from app.models.otp_challenge import OtpChallenge  # noqa: F401
+from app.models.feedback import Feedback  # noqa: F401
+from app.models.client_error import ClientError  # noqa: F401
+from app.models.user_activity import UserActivity  # noqa: F401

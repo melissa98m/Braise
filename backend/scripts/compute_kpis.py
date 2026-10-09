@@ -15,7 +15,7 @@ Usage :
 import argparse
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 # `python scripts/compute_kpis.py` puts scripts/ (not /app) on sys.path[0], so `import app.*`
 # fails unless invoked as `python -m scripts.compute_kpis` — inserting the backend root
@@ -33,8 +33,8 @@ from app.models.message import Message
 from app.models.profile import PublicProfile
 from app.models.report import Report
 from app.models.subscription import Subscription
-from app.models.swipe import Swipe
 from app.models.user import User
+from app.models.user_activity import UserActivity
 
 
 def _pct(numerator: int, denominator: int) -> str:
@@ -100,27 +100,44 @@ def engagement_matches_reaching_three_days(db) -> tuple[int, int]:
     return reaching_three_days, total_matches
 
 
-def retention_proxy(db, days: int) -> tuple[int, int]:
-    """Proxy, pas une vraie rétention : aucun événement de connexion/session n'est journalisé
-    dans ce projet (pas de table d'audit de login). On approxime "actif à J+N" par "a swipé au
-    moins une fois au moins N jours après son inscription" — le swipe est l'action récurrente la
-    plus proche d'un signal de session active dont on dispose. À remplacer par un vrai suivi de
-    session avant de citer ce chiffre en dehors d'un contexte de debug interne.
-    """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    eligible = db.query(func.count(User.id)).filter(User.created_at <= cutoff).scalar()
+def retention(db, days: int) -> tuple[int, int]:
+    """Rétention classique à J+N : parmi les personnes inscrites depuis au moins N jours, la part
+    active précisément le N-ième jour après leur inscription (`user_activity`, une ligne par
+    personne et par jour d'utilisation — services/activity.py). Cohorte limitée aux inscriptions
+    postérieures au premier jour suivi : un compte créé avant l'existence de ce suivi n'a aucune
+    trace possible et fausserait le taux vers le bas. Comptes supprimés exclus (leurs jours
+    d'activité sont effacés avec eux)."""
+    first_tracked = db.query(func.min(UserActivity.day)).scalar()
+    if first_tracked is None:
+        return 0, 0
+    signup_day = func.date(User.created_at)
+    cohort = db.query(User.id).filter(
+        signup_day >= first_tracked,
+        signup_day <= date.today() - timedelta(days=days),
+        User.deleted_at.is_(None),
+    )
+    eligible = cohort.count()
     if eligible == 0:
         return 0, 0
     retained = (
-        db.query(func.count(func.distinct(Swipe.from_user_id)))
-        .join(User, User.id == Swipe.from_user_id)
+        db.query(func.count(func.distinct(User.id)))
+        .join(UserActivity, UserActivity.user_id == User.id)
         .filter(
-            User.created_at <= cutoff,
-            Swipe.created_at >= User.created_at + timedelta(days=days),
+            User.id.in_(cohort.subquery().select()),
+            UserActivity.day == signup_day + days,
         )
         .scalar()
     )
     return retained, eligible
+
+
+def active_users(db, days: int) -> int:
+    """Personnes distinctes actives sur les `days` derniers jours, aujourd'hui compris
+    (1 = DAU, 7 = WAU, 30 = MAU)."""
+    since = date.today() - timedelta(days=days - 1)
+    return (
+        db.query(func.count(func.distinct(UserActivity.user_id))).filter(UserActivity.day >= since).scalar()
+    )
 
 
 def trust_report_founded_rate(db) -> tuple[int, int]:
@@ -169,12 +186,6 @@ def main() -> None:
         help="Restreint le taux de réponse à la question quotidienne aux N derniers jours "
         "(par défaut : toute la période).",
     )
-    parser.add_argument(
-        "--retention-days",
-        type=int,
-        default=7,
-        help="Fenêtre de la rétention proxy en jours (défaut : 7, cf. --retention-days 30).",
-    )
     args = parser.parse_args()
     since = (
         datetime.now(timezone.utc) - timedelta(days=args.recent_days)
@@ -210,9 +221,14 @@ def main() -> None:
         reaching, matches = engagement_matches_reaching_three_days(db)
         print(f"Taux de match -> 3 jours d'échange : {_pct(reaching, matches)} — objectif > 40 %")
 
-        print("\n--- Rétention (proxy, voir docstring retention_proxy) ---")
-        retained, eligible = retention_proxy(db, args.retention_days)
-        print(f"Rétention proxy à J{args.retention_days} : {_pct(retained, eligible)}")
+        print("\n--- Rétention (jours d'activité réels, voir docstring retention) ---")
+        for days in (1, 7, 30):
+            retained, eligible = retention(db, days)
+            print(f"Rétention à J{days} : {_pct(retained, eligible)}")
+        print(
+            f"Actifs aujourd'hui / 7 j / 30 j : {active_users(db, 1)} / {active_users(db, 7)} / "
+            f"{active_users(db, 30)}"
+        )
 
         print("\n--- Confiance ---")
         founded, reviewed = trust_report_founded_rate(db)

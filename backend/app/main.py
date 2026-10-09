@@ -8,6 +8,7 @@ from app.api.v1 import (
     admin,
     auth,
     discovery,
+    feedback,
     health,
     messaging,
     moderation,
@@ -46,6 +47,7 @@ app.include_router(moderation.router)
 app.include_router(subscriptions.router)
 app.include_router(admin.router)
 app.include_router(notifications.router)
+app.include_router(feedback.router)
 
 # Tableau de bord staff (interface de revue de modération humaine, C.1/C.2) : HTML/CSS/JS statique
 # servi par ce même conteneur, sur /staff — pas /admin, déjà pris par le routeur API ci-dessus.

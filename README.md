@@ -60,9 +60,14 @@ prenom@exemple.fr`.
 
 Web Push réel (gratuit, sans Firebase) : `PUSH_ENABLED=true` + une paire de clés VAPID dans `.env`
 (commande de génération dans `.env.example`). Le rappel quotidien de la question du jour (18 h,
-heure de Paris) est envoyé par un service à part, à démarrer en dev avec
-`docker compose --profile push up -d push-scheduler` (toujours démarré en bêta/prod), ou à
-déclencher une fois à la main : `docker compose run --rm backend python scripts/push_scheduler.py --once`.
+heure de Paris) est envoyé par le service des tâches quotidiennes (qui fait aussi les purges de
+rétention RGPD), à démarrer en dev avec
+`docker compose --profile scheduler up -d scheduler` (toujours démarré en bêta/prod), ou à
+déclencher une fois à la main : `docker compose run --rm backend python scripts/scheduler.py --once`.
+
+Retours des testeur·se·s (Paramètres → Envoyer un retour) et erreurs remontées par l'app (build
+de release) arrivent dans deux files du tableau de bord staff, `/staff` en dev. Rétention réelle
+J1/J7/J30 : `docker compose run --rm backend python scripts/compute_kpis.py`.
 Les notifications exigent un contexte sécurisé : `localhost` ou HTTPS, jamais une IP de réseau
 local en `http://`. Sur iPhone, uniquement depuis l'app ajoutée à l'écran d'accueil.
 

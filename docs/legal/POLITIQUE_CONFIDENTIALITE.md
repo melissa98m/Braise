@@ -169,6 +169,22 @@ votre navigateur — Google (Chrome, Edge, Android), Mozilla (Firefox) ou Apple 
 contenu est de toute façon volontairement minimal : un prénom et un type d'événement, **jamais le
 contenu de vos messages**, pour rester discret sur un écran verrouillé.
 
+## 10 bis. Retours, erreurs et mesure d'usage pendant la bêta
+
+- **Vos retours** (Paramètres → Envoyer un retour) sont lus par l'équipe pour améliorer
+  l'application. Conservés tant que votre compte existe, supprimés avec lui.
+- **Les erreurs techniques** de l'application (message d'erreur, emplacement dans le code, type
+  d'appareil et de navigateur) nous sont transmises automatiquement pour corriger les plantages,
+  sans aucun outil tiers. Elles ne contiennent ni vos messages ni vos photos ; elles sont
+  conservées 90 jours au plus.
+- **Vos jours d'utilisation** : une simple date par jour où vous ouvrez l'application, sans heure
+  ni détail de ce que vous y faites, pour mesurer si l'application donne envie de revenir.
+  Conservés 13 mois au plus, supprimés avec votre compte. Aucun traceur, aucun tiers.
+
+Ces trois traitements reposent sur notre intérêt légitime à faire fonctionner et améliorer le
+service ; vous pouvez vous y opposer en nous écrivant (voir article 1). Retours et jours
+d'utilisation figurent dans l'export de vos données.
+
 ## 11. Cookies et stockage local
 
 L'application stocke uniquement votre jeton de connexion et vos préférences d'affichage (thème

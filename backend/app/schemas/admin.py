@@ -23,6 +23,8 @@ class QueueCountsOut(BaseModel):
     reports_pending: int
     ban_appeals_pending: int
     flagged_ratings_pending: int
+    feedback_new: int
+    client_errors_new: int
 
 
 class ReportListItemOut(BaseModel):
@@ -97,3 +99,38 @@ class FlaggedRatingDetailOut(BaseModel):
 class RatingReviewIn(BaseModel):
     decision: RatingReviewDecision
     note: str | None = Field(default=None, max_length=1000)
+
+
+# --- Retours des testeur·se·s et erreurs remontées par l'app (bêta, P26) ---------------------
+# Pas de la modération : aucune décision n'agit sur un compte, seulement « traité » / « à
+# traiter » pour s'y retrouver. Même tableau de bord que la modération, files séparées.
+
+
+class FeedbackItemOut(BaseModel):
+    id: uuid.UUID
+    category: str
+    message: str
+    context: str | None
+    user_agent: str | None
+    status: str
+    created_at: datetime
+    handled_at: datetime | None
+    author: UserSummaryOut
+
+
+class ClientErrorItemOut(BaseModel):
+    id: uuid.UUID
+    message: str
+    stack: str | None
+    source: str
+    path: str | None
+    user_agent: str | None
+    occurrences: int
+    status: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    last_user: UserSummaryOut | None
+
+
+class TriageIn(BaseModel):
+    status: Literal["new", "done"]

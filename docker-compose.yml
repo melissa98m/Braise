@@ -97,15 +97,15 @@ services:
       redis:
         condition: service_healthy
 
-  # Rappel quotidien de la question du jour en notification push (backend/scripts/push_scheduler.py).
-  # Même image que `backend`, une simple boucle qui dort jusqu'à 18 h (Paris). Profil "push" en
-  # dev (inutile sans PUSH_ENABLED=true et de vraies clés VAPID) ; toujours démarré en bêta/prod
-  # (docker-compose.prod.yml retire le profil).
-  push-scheduler:
+  # Tâches quotidiennes (backend/scripts/scheduler.py) : rappel push de la question du jour, purges
+  # de rétention RGPD. Même image que `backend`, une simple boucle qui dort jusqu'à 18 h (Paris).
+  # Profil "scheduler" en dev (rien d'utile sans vrais utilisateurs) ; toujours démarré en
+  # bêta/prod (docker-compose.prod.yml retire le profil).
+  scheduler:
     build: ./backend
     env_file: .env
-    profiles: ["push"]
-    command: ["python", "scripts/push_scheduler.py"]
+    profiles: ["scheduler"]
+    command: ["python", "scripts/scheduler.py"]
     depends_on:
       db:
         condition: service_healthy

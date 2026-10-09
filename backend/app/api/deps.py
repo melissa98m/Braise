@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.user import User
+from app.services import activity as activity_service
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/verify-otp", auto_error=False)
 
@@ -52,7 +53,27 @@ def user_from_token(token: str | None, db: Session) -> User:
 def get_current_user(
     token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> User:
-    return user_from_token(token, db)
+    user = user_from_token(token, db)
+    # Ici (requêtes HTTP authentifiées) plutôt que dans user_from_token : le WebSocket de
+    # messagerie s'en sert aussi, mais une conversation ouverte implique déjà des appels HTTP le
+    # même jour — inutile de payer ce coût par connexion WS. Au plus une écriture par jour et par
+    # personne (services/activity.py).
+    activity_service.record_activity(db, user.id)
+    return user
+
+
+def get_optional_user(
+    token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User | None:
+    """La personne connectée si le jeton est valide, sinon `None` — jamais une erreur. Réservé à
+    `POST /client-errors` : une erreur peut survenir avant la connexion, ou justement à cause
+    d'un jeton expiré, et doit pouvoir être remontée quand même."""
+    if token is None:
+        return None
+    try:
+        return user_from_token(token, db)
+    except HTTPException:
+        return None
 
 
 def get_current_user_even_if_banned(

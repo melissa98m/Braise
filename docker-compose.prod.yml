@@ -47,10 +47,10 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
               "--proxy-headers", "--forwarded-allow-ips", "*"]
 
-  push-scheduler:
+  scheduler:
     restart: unless-stopped
-    # Toujours démarré en prod (rappel quotidien de la question du jour), contrairement au dev où
-    # il reste derrière le profil "push" — !reset retire ce profil hérité du fichier de base.
+    # Toujours démarré en prod (rappel push quotidien, purges RGPD), contrairement au dev où il
+    # reste derrière le profil "scheduler" — !reset retire ce profil hérité du fichier de base.
     profiles: !reset []
 
   adminer:

@@ -118,6 +118,15 @@ const _privacySections = <_LegalSection>[
         '(cnil.fr).',
   ),
   _LegalSection(
+    'Retours, erreurs et mesure d\'usage',
+    'Vos retours (Paramètres → Envoyer un retour) sont lus par l\'équipe et supprimés avec '
+        'votre compte. Les erreurs techniques de l\'app (message, emplacement dans le code, type '
+        'd\'appareil) nous sont transmises automatiquement, sans outil tiers, jamais avec vos '
+        'messages ni vos photos, et gardées 90 jours au plus. Une simple date par jour '
+        'd\'utilisation, sans heure ni détail, sert à mesurer si l\'app donne envie de revenir : '
+        'gardée 13 mois au plus. Opposition possible en nous écrivant.',
+  ),
+  _LegalSection(
     'Notifications et stockage local',
     'Les notifications ne s\'activent que sur votre action explicite, puis la permission de '
         'votre navigateur ou téléphone — jamais d\'office, désactivables à tout moment. Elles '
